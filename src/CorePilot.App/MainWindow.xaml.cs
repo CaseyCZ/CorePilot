@@ -436,9 +436,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     },
                     StringComparer.OrdinalIgnoreCase);
 
-            return _lastOnlineSourceSnapshot.Sources.Count(x =>
-                requiredIds.Contains(x.Id) &&
-                (!x.Success || !x.Live));
+            return requiredIds.Count(id =>
+            {
+                var source = _lastOnlineSourceSnapshot.Sources.FirstOrDefault(x =>
+                    x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+                return source is null ||
+                       !source.Success ||
+                       !source.Live;
+            });
         }
 
         return _lastOnlineSourceSnapshot.CriticalFailures;
