@@ -869,11 +869,11 @@ var windowsPhrase =
     WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
         windowsTestImage);
-var windowsOlderPcPhrase =
+var windowsCompatibilityPhrase =
     WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
         windowsTestImage,
-        WindowsMediaOptions.OlderPc);
+        WindowsMediaOptions.Compatibility);
 var linuxPhrase =
     LinuxRawUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
@@ -885,13 +885,13 @@ Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        !windowsPhrase.Contains("WINDOWS11-COMPAT", StringComparison.Ordinal),
     "standard Windows writer confirmation must bind the exact disk identity and prepared target");
 
-Assert(windowsOlderPcPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
-       windowsOlderPcPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
-       windowsOlderPcPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
-       windowsOlderPcPhrase.Contains("WINDOWS11-COMPAT", StringComparison.Ordinal),
-    "older-PC Windows writer confirmation must explicitly bind the compatibility mode");
+Assert(windowsCompatibilityPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("WINDOWS11-COMPAT", StringComparison.Ordinal),
+    "Windows compatibility writer confirmation must explicitly bind the compatibility mode");
 
-Assert(WindowsMediaOptions.OlderPc.ExtendedHardwareCompatibility &&
+Assert(WindowsMediaOptions.Compatibility.ExtendedHardwareCompatibility &&
        !WindowsMediaOptions.Standard.ExtendedHardwareCompatibility,
     "Windows media options must keep standard and Windows 11 compatibility paths distinct");
 
