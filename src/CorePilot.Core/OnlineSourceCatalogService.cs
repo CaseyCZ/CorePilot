@@ -573,12 +573,14 @@ public sealed class OnlineSourceCatalogService
             ?? throw new InvalidDataException(
                 "Execution-critical OpCore Simplify source is missing.");
 
-        if (!source.Repository?.Equals(
+        if (source.Repository is null ||
+            !source.Repository.Equals(
                 "lzhoang2801/OpCore-Simplify",
-                StringComparison.OrdinalIgnoreCase) ?? true ||
-            !source.Branch?.Equals(
+                StringComparison.OrdinalIgnoreCase) ||
+            source.Branch is null ||
+            !source.Branch.Equals(
                 "main",
-                StringComparison.OrdinalIgnoreCase) ?? true ||
+                StringComparison.OrdinalIgnoreCase) ||
             source.Strategy != "githubBranchHead" ||
             !source.RequireVerifiedCommit ||
             !source.Critical)
