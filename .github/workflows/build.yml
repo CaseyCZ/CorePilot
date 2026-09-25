@@ -86,6 +86,10 @@ jobs:
             }
           }
 
+          if ($windowsWriter.Contains("BypassRAMCheck")) {
+            throw "Automatic Windows media must not bypass the Windows 11 minimum RAM requirement."
+          }
+
           $linuxWriterPath = "src/CorePilot.Linux/LinuxRawUsbWriter.cs"
           $linuxWriter = Get-Content $linuxWriterPath -Raw
           foreach ($needle in @(
