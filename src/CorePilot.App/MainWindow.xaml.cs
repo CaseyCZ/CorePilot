@@ -16,6 +16,7 @@ namespace CorePilot.App;
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly HardwareScanner _scanner = new();
+    private readonly OnlineSourceCatalogService _onlineSources = new();
     private readonly HardwareSnifferBridge _hardwareSniffer = new();
     private readonly HardwareSnifferReportParser _hardwareSnifferParser = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
@@ -51,6 +52,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
+    private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
 
     private string _scanStatus = "Not scanned";
@@ -216,7 +218,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void Verify_OnClick(object sender, RoutedEventArgs e)
     {
-        if (SystemCombo.SelectedItem is not ISystemModule ||
+        if (SystemCombo.SelectedItem is not ISystemModule module ||
             VariantCombo.SelectedItem is not SystemVariant target)
         {
             PlanStatus = "Choose a system and version first.";
@@ -224,9 +226,47 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _verificationCompleted = false;
+        _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
-        PlanStatus = $"Verifying {target.DisplayName} against this computer…";
 
+        try
+        {
+            ActivityLog.Start(
+                "Online sources",
+                $"Refreshing current {module.DisplayName} sources…");
+
+            _lastOnlineSourceSnapshot =
+                await _onlineSources.ResolveForSystemAsync(module.Id);
+
+            foreach (var source in _lastOnlineSourceSnapshot.Sources)
+            {
+                var state = source.Live && source.Success
+                    ? "LIVE"
+                    : source.Success
+                        ? "CACHE"
+                        : "FAILED";
+
+                var version = string.IsNullOrWhiteSpace(source.Version)
+                    ? ""
+                    : $" · {source.Version}";
+
+                ActivityLog.Info(
+                    "Online source",
+                    $"{state} · {source.Name}{version} · {source.SourceUrl ?? source.Repository ?? "no URL"}");
+            }
+
+            ActivityLog.Progress(
+                "Verification",
+                $"Online sources refreshed: {_lastOnlineSourceSnapshot.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.");
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Info(
+                "Online sources",
+                $"Online source refresh could not complete: {ex.Message}");
+        }
+
+        PlanStatus = $"Verifying {target.DisplayName} against this computer…";
         await ScanHardwareAsync();
 
         if (_compatibilityReport is null)
@@ -245,9 +285,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _hardwareReport is not null &&
                 MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
 
-            PlanStatus = nativeApple
+            var sourceSuffix = _lastOnlineSourceSnapshot is null
+                ? " Online source status unavailable."
+                : _lastOnlineSourceSnapshot.CriticalFailures == 0
+                    ? $" Online sources: {_lastOnlineSourceSnapshot.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live."
+                    : $" Online source warning: {_lastOnlineSourceSnapshot.CriticalFailures} critical source(s) were not refreshed live.";
+
+            PlanStatus = (nativeApple
                 ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
-                : $"Verified ✅ {_compatibilityReport.Summary}. USB was not required for this check.";
+                : $"Verified ✅ {_compatibilityReport.Summary}. USB was not required for this check.")
+                + sourceSuffix;
 
             ActivityLog.Success("Verification", PlanStatus);
         }
@@ -463,7 +510,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _compatibilityReport,
                     _automationProfile,
                     _usbSafetyReport,
-                    _opCoreStage));
+                    _opCoreStage,
+                    _lastOnlineSourceSnapshot));
 
             PlanStatus =
                 $"Support bundle ready ✅ {result.FileCount} files · " +

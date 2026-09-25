@@ -1,3 +1,4 @@
+using CorePilot.Core;
 using CorePilot.MacOS;
 
 static void Assert(bool condition, string message)
@@ -333,3 +334,60 @@ Assert(!appleSonoma.CanProceed,
     "2017 MacBook Pro Sonoma path must not be treated as natively supported until OCLP integration exists");
 
 Console.WriteLine("CorePilot genuine-Apple Ventura compatibility smoke test OK");
+
+
+var sourceCatalog = OnlineSourceCatalogService.LoadBundledCatalog();
+var sourceIds = sourceCatalog.Sources
+    .Select(x => x.Id)
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+var requiredOnlineSources = new[]
+{
+    "macos.apple-download-install",
+    "macos.dortania-guide",
+    "macos.opencore",
+    "macos.opcore-simplify",
+    "macos.macrecoveryx",
+    "macos.usbtoolbox",
+    "macos.propertree",
+    "macos.ocat",
+    "macos.hackintool",
+    "macos.gensmbios",
+    "macos.oclp",
+    "macos.oclp-mod-kgp",
+    "macos.kext.lilu",
+    "macos.kext.virtualsmc",
+    "macos.kext.whatevergreen",
+    "macos.kext.applealc",
+    "windows.microsoft-windows11",
+    "windows.rufus",
+    "linux.ubuntu",
+    "linux.fedora",
+    "linux.debian",
+    "linux.mint"
+};
+
+foreach (var sourceId in requiredOnlineSources)
+    Assert(sourceIds.Contains(sourceId),
+        $"online source catalog is missing {sourceId}");
+
+Assert(sourceCatalog.Sources
+        .Where(x => x.Strategy == "webPage")
+        .All(x => Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) &&
+                  uri.Scheme == Uri.UriSchemeHttps),
+    "all web catalog sources must use HTTPS");
+
+var opCoreSimplifySource = sourceCatalog.Sources.Single(x =>
+    x.Id == "macos.opcore-simplify");
+
+Assert(opCoreSimplifySource.Strategy == "githubBranchHead" &&
+       opCoreSimplifySource.RequireVerifiedCommit,
+    "OpCore Simplify must resolve a current verified GitHub branch head");
+
+Assert(sourceCatalog.Sources
+        .Where(x => x.Role == "kext")
+        .All(x => x.Strategy == "githubRelease" &&
+                  !string.IsNullOrWhiteSpace(x.Repository)),
+    "kext sources must resolve from upstream GitHub releases");
+
+Console.WriteLine("CorePilot online source catalog smoke test OK");
