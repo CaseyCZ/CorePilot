@@ -45,6 +45,80 @@ public sealed record UsbDriveInfo(string DeviceId, string Model, long SizeBytes,
     public string DisplayName => $"{Model} — {SizeText}";
 }
 
+public enum UsbTargetSafetyLevel
+{
+    SafeCandidate,
+    StrongConfirmation,
+    Blocked,
+    Unknown
+}
+
+public sealed record UsbVolumeInfo(
+    string DriveLetter,
+    string Label,
+    string FileSystem,
+    long SizeBytes,
+    long FreeBytes,
+    bool IsBootVolume,
+    bool IsSystemVolume,
+    bool HasPageFile);
+
+public sealed record UsbPartitionInfo(
+    string DeviceId,
+    int Index,
+    string Type,
+    long SizeBytes,
+    bool IsBootPartition,
+    bool IsPrimaryPartition,
+    IReadOnlyList<UsbVolumeInfo> Volumes);
+
+public sealed record UsbTargetSafetyReport(
+    string DeviceId,
+    int DiskIndex,
+    string Model,
+    string SerialNumber,
+    string InterfaceType,
+    string MediaType,
+    string PnpDeviceId,
+    long SizeBytes,
+    bool IsUsb,
+    bool IsRemovableMedia,
+    string IdentityFingerprint,
+    UsbTargetSafetyLevel Level,
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<UsbPartitionInfo> Partitions)
+{
+    public string LevelText => Level switch
+    {
+        UsbTargetSafetyLevel.SafeCandidate => "SAFE CANDIDATE",
+        UsbTargetSafetyLevel.StrongConfirmation => "STRONG CONFIRMATION",
+        UsbTargetSafetyLevel.Blocked => "BLOCKED",
+        _ => "UNKNOWN"
+    };
+
+    public bool IsBlocked => Level is UsbTargetSafetyLevel.Blocked or UsbTargetSafetyLevel.Unknown;
+
+    public string Summary
+    {
+        get
+        {
+            var size = SizeBytes <= 0
+                ? "unknown size"
+                : $"{SizeBytes / 1024d / 1024d / 1024d:0.#} GB";
+
+            var serial = string.IsNullOrWhiteSpace(SerialNumber)
+                ? "serial unavailable"
+                : $"serial {SerialNumber}";
+
+            var reason = Reasons.Count == 0
+                ? ""
+                : " · " + string.Join("; ", Reasons);
+
+            return $"{LevelText} · Disk {DiskIndex} · {Model} · {size} · {InterfaceType} · {serial}{reason}";
+        }
+    }
+}
+
 public sealed record HardwareReport(
     string ComputerName,
     string Manufacturer,
