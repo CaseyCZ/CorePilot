@@ -635,7 +635,11 @@ try
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    "{\\\"sha\\\":\\\"" + verifiedSha + "\\\",\\\"commit\\\":{\\\"verification\\\":{\\\"verified\\\":true}}}")
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        sha = verifiedSha,
+                        commit = new { verification = new { verified = true } }
+                    }))
             };
         }
 
@@ -676,7 +680,11 @@ try
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    "{\\\"sha\\\":\\\"" + new string('e', 40) + "\\\",\\\"commit\\\":{\\\"verification\\\":{\\\"verified\\\":false}}}")
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        sha = new string('e', 40),
+                        commit = new { verification = new { verified = false } }
+                    }))
             };
         }
 
