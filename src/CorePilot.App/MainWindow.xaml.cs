@@ -900,6 +900,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _compatibilityReport = null;
         _automationProfile = null;
         _autoResolution = null;
+        _preparationResult = null;
+        _preparationFailure = null;
         _opCoreStage = null;
         _lastEfiBuild = null;
         _lastRecovery = null;
