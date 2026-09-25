@@ -72,12 +72,33 @@ This covers:
 
 Physical-disk writes remain disabled.
 
+## Support Bundle
+
+The development build now has a **Support bundle** button next to **Open log**.
+
+It creates:
+
+`%LocalAppData%\CorePilot\support\CorePilot-Support-YYYYMMDD-HHmmss.zip`
+
+The ZIP can include:
+
+- current session log
+- workflow phase/generation/expiry snapshot
+- sanitized hardware summary
+- compatibility findings
+- automation profile
+- sanitized USB safety result
+- CorePilot-generated workspace/build/recovery/manifest/dry-run/preflight/confirmation/simulation metadata
+
+CorePilot does not copy arbitrary user files or documents into the bundle.
+
+Before packaging, it redacts known computer/user names and local profile paths, USB serial numbers, target identity fingerprints and destructive confirmation phrases.
+
 ## Next
 
-1. Add a one-click support bundle with session log, workflow snapshot, hardware report and non-sensitive manifests.
-2. Optionally auto-open/focus Activity Log on ERROR.
-3. Add dedicated FAT32 strategy handling for larger USB media.
-4. Continue simulation coverage before considering a real physical-disk writer.
+1. Optionally auto-open/focus Activity Log on ERROR.
+2. Add dedicated FAT32 strategy handling for larger USB media.
+3. Continue simulation coverage before considering a real physical-disk writer.
 
 ## Build
 
