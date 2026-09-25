@@ -10,10 +10,6 @@ permissions:
   contents: write
   actions: read
 
-concurrency:
-  group: corepilot-latest-release
-  cancel-in-progress: true
-
 jobs:
   publish-latest:
     if: >
@@ -114,6 +110,16 @@ jobs:
           $sha = "artifacts/release/CorePilot-latest-win-x64.sha256"
           $notes = "artifacts/release/latest-notes.md"
 
+          $currentMain = gh api "repos/$env:GITHUB_REPOSITORY/branches/main" --jq ".commit.sha"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to re-resolve main immediately before Latest publication."
+          }
+
+          if ($currentMain -ne $env:BUILD_SHA) {
+            Write-Host "Main advanced while this release was being prepared. This build will not replace Latest."
+            exit 0
+          }
+
           gh release view latest --repo "$env:GITHUB_REPOSITORY" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh api `
@@ -160,3 +166,10 @@ jobs:
               throw "Unable to create the Latest release."
             }
           }
+
+          $publishedTag = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/latest" --jq ".object.sha"
+          if ($LASTEXITCODE -ne 0 -or $publishedTag -ne $env:BUILD_SHA) {
+            throw "Latest tag verification failed. Expected $env:BUILD_SHA but found '$publishedTag'."
+          }
+
+          Write-Host "Verified latest tag -> $publishedTag"
