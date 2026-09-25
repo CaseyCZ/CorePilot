@@ -754,8 +754,12 @@ Assert(!otherMac.CanProceed &&
            x.State == CompatibilityState.Blocked),
     "Other computer macOS must stay blocked until target hardware is available");
 
-Assert(Enum.IsDefined(InstallationTargetMode.ThisComputer) &&
-       Enum.IsDefined(InstallationTargetMode.OtherComputer),
+Assert(Enum.IsDefined(
+           typeof(InstallationTargetMode),
+           InstallationTargetMode.ThisComputer) &&
+       Enum.IsDefined(
+           typeof(InstallationTargetMode),
+           InstallationTargetMode.OtherComputer),
     "Target computer mode must expose both This computer and Other computer states");
 
 Console.WriteLine("CorePilot target-computer mode smoke test OK");
