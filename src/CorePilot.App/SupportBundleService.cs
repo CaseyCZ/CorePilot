@@ -17,7 +17,8 @@ public sealed record SupportBundleContext(
     CompatibilityReport? Compatibility,
     MacOSAutomationProfile? AutomationProfile,
     UsbTargetSafetyReport? UsbSafety,
-    OpCoreStagingResult? Workspace);
+    OpCoreStagingResult? Workspace,
+    OnlineSourceSnapshot? OnlineSources);
 
 public sealed record SupportBundleResult(
     string BundlePath,
@@ -92,6 +93,11 @@ public sealed class SupportBundleService
             await WriteUsbSafetyAsync(
                 tempRoot,
                 context.UsbSafety,
+                cancellationToken);
+            await WriteJsonAsync(
+                tempRoot,
+                "online-sources.json",
+                context.OnlineSources,
                 cancellationToken);
             await CopySanitizedSessionLogAsync(
                 tempRoot,

@@ -142,3 +142,39 @@ For **MacBookPro14,1 / 14,2 / 14,3 (2017)** with **macOS Ventura 13**:
 - firmware/graphics are evaluated as part of the known Apple platform instead of generic PC rules.
 
 Newer macOS targets on the 2017 MacBook Pro are not marked natively supported; they stay blocked until the dedicated OpenCore Legacy Patcher path is integrated.
+
+
+## Online source catalog
+
+CorePilot no longer treats the versions of OpenCore, kexts and helper tools as permanently bundled application data.
+
+At **Verify** time it first tries to refresh the catalog from:
+
+`https://raw.githubusercontent.com/CaseyCZ/CorePilot/main/src/CorePilot.Core/Data/source-catalog.json`
+
+If the network/catalog is temporarily unavailable, CorePilot can use the cached or bundled catalog for diagnostics, but it reports that the source was not refreshed live.
+
+The catalog currently covers:
+
+- Apple macOS download/install + version sources
+- Dortania OpenCore Install Guide
+- Acidanthera OpenCorePkg
+- OpCore-Simplify
+- MacRecoveryX
+- USBToolBox
+- ProperTree
+- OpenCore Auxiliary Tools (OCAT)
+- Hackintool
+- GenSMBIOS
+- official OpenCore Legacy Patcher
+- kgp OCLP mod as an explicitly experimental secondary source
+- Acidanthera kext upstreams such as Lilu, VirtualSMC, WhateverGreen, AppleALC, IntelMausi, AirportBrcmFixup, NVMeFix and RestrictEvents
+- Microsoft Windows download sources
+- Rufus official/upstream sources
+- Ubuntu, Fedora, Debian and Linux Mint official download sources
+
+GitHub release sources resolve the current stable release. Branch-based tools resolve the current upstream branch head. The OpCore-Simplify execution path additionally requires the resolved GitHub commit to be **verified** before CorePilot will execute it.
+
+The OpCore-Simplify staging cache is keyed by the online-resolved commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest.
+
+This lets source URLs and component metadata be updated from the online catalog without requiring a new CorePilot application release.

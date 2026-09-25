@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
+using CorePilot.Core;
 
 namespace CorePilot.MacOS;
 
@@ -26,21 +27,24 @@ public sealed record OpCoreStagingResult(
 
 public sealed class OpCoreSimplifyStager
 {
-    // Pinned to the upstream revision reviewed for CorePilot v0.4.
-    public const string UpstreamCommit = "e5d8a9f551b1e2a96e2f968696b460b65a7dad2e";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
     };
 
     private readonly HttpClient _http;
+    private readonly OnlineSourceCatalogService _sourceCatalog;
 
-    public OpCoreSimplifyStager(HttpClient? httpClient = null)
+    public OpCoreSimplifyStager(
+        HttpClient? httpClient = null,
+        OnlineSourceCatalogService? sourceCatalog = null)
     {
         _http = httpClient ?? new HttpClient();
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("CorePilot/0.4");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("CorePilot/opcore-stager");
+
+        _sourceCatalog = sourceCatalog
+            ?? new OnlineSourceCatalogService(_http);
     }
 
     public async Task<OpCoreStagingResult> StageAsync(
@@ -57,13 +61,24 @@ public sealed class OpCoreSimplifyStager
             throw new DirectoryNotFoundException(
                 $"Deep Scan ACPI directory is missing: {acpiDirectory}");
 
+        progress?.Report("Resolving current verified OpCore Simplify upstream…");
+
+        var upstream = await _sourceCatalog.ResolveRequiredSourceAsync(
+            "macos.opcore-simplify",
+            requireLive: true,
+            cancellationToken);
+
+        var upstreamCommit = upstream.ResolvedRef
+            ?? throw new InvalidOperationException(
+                "OpCore Simplify source did not resolve to a commit.");
+
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var toolCache = Path.Combine(
             appData,
             "CorePilot",
             "tools",
             "opcore-simplify",
-            UpstreamCommit);
+            upstreamCommit);
 
         var archivePath = Path.Combine(toolCache, "source.zip");
         var extractedRoot = Path.Combine(toolCache, "source");
@@ -72,10 +87,11 @@ public sealed class OpCoreSimplifyStager
 
         if (!File.Exists(archivePath))
         {
-            progress?.Report("Downloading pinned OpCore Simplify source…");
+            progress?.Report(
+                $"Downloading current OpCore Simplify {upstreamCommit[..8]}…");
 
             var archiveUri = new Uri(
-                $"https://github.com/lzhoang2801/OpCore-Simplify/archive/{UpstreamCommit}.zip");
+                $"https://github.com/lzhoang2801/OpCore-Simplify/archive/{upstreamCommit}.zip");
 
             await DownloadHttpsAsync(archiveUri, archivePath, cancellationToken);
         }
@@ -107,7 +123,7 @@ public sealed class OpCoreSimplifyStager
             Directory.Delete(tempExtract, recursive: true);
             await File.WriteAllTextAsync(
                 Path.Combine(extractedRoot, ".corepilot-ready"),
-                UpstreamCommit,
+                upstreamCommit,
                 cancellationToken);
         }
 
@@ -139,7 +155,10 @@ public sealed class OpCoreSimplifyStager
             upstream = new
             {
                 repository = "lzhoang2801/OpCore-Simplify",
-                commit = UpstreamCommit,
+                commit = upstreamCommit,
+                verifiedCommit = upstream.VerifiedCommit,
+                resolvedOnlineAt = upstream.CheckedAt,
+                sourceUrl = upstream.SourceUrl,
                 archiveSha256
             },
             input = new
@@ -161,7 +180,7 @@ public sealed class OpCoreSimplifyStager
         return new(
             workspace,
             extractedRoot,
-            UpstreamCommit,
+            upstreamCommit,
             archiveSha256,
             stagedReport,
             stagedAcpi,
@@ -216,7 +235,7 @@ public sealed class OpCoreSimplifyStager
 
         if (missing.Length > 0)
             throw new InvalidDataException(
-                "Pinned OpCore Simplify source is incomplete: " +
+                "Resolved OpCore Simplify source is incomplete: " +
                 string.Join(", ", missing));
     }
 
