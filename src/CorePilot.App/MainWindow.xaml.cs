@@ -1825,6 +1825,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var items = new List<PreparationItem>();
+
+        foreach (var finding in _compatibilityReport.Findings.Where(x =>
+                     x.State is CompatibilityState.Blocked or CompatibilityState.Unknown))
+        {
+            items.Add(new(
+                PreparationItemState.Unresolved,
+                finding.Component,
+                finding.Title,
+                finding.SuggestedAction ?? finding.Details,
+                finding.Reference));
+        }
+
         if (_autoResolution is not null)
         {
             foreach (var item in _autoResolution.Items)
@@ -1855,6 +1867,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Automatic preparation failed",
                 _preparationFailure));
         }
+
+        items = items
+            .GroupBy(
+                x => $"{x.State}|{x.Category}|{x.Problem}|{x.Resolution}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
 
         var genuineApple =
             _hardwareReport is not null &&
