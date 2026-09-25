@@ -105,6 +105,56 @@
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="VariantCombo_OnSelectionChanged"/>
 
+                        <TextBlock Text="Target computer"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <Grid Margin="0,4,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="ThisComputerButton"
+                                    Grid.Column="0"
+                                    Content="This computer"
+                                    Click="ThisComputer_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0"/>
+                            <Button x:Name="OtherComputerButton"
+                                    Grid.Column="2"
+                                    Content="Other computer"
+                                    Click="OtherComputer_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0"/>
+                        </Grid>
+                        <TextBlock Text="{Binding TargetModeStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,0,0,12"/>
+
+                        <Border x:Name="WindowsCompatibilityPanel"
+                                Visibility="Collapsed"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10"
+                                Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Windows 11 compatibility"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrush}"/>
+                                <Button x:Name="WindowsOlderPcButton"
+                                        Content="Older PC compatibility: OFF"
+                                        Click="WindowsOlderPc_OnClick"
+                                        IsEnabled="{Binding CanChangeInputs}"
+                                        Margin="0,8,0,6"/>
+                                <TextBlock Text="{Binding WindowsCompatibilityStatus}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource MutedBrush}"/>
+                            </StackPanel>
+                        </Border>
+
                         <Button Content="Verify"
                                 Click="Verify_OnClick"
                                 IsEnabled="{Binding CanVerify}"
