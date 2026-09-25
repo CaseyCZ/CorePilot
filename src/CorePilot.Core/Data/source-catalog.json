@@ -671,6 +671,27 @@
       "useFor": [
         "installation-reference"
       ]
+    },
+    {
+      "id": "windows.fido",
+      "name": "Fido Windows ISO resolver",
+      "systems": [
+        "windows"
+      ],
+      "role": "official-iso-resolver",
+      "trust": "upstream",
+      "strategy": "githubBranchHead",
+      "repository": "pbatard/Fido",
+      "branch": "master",
+      "critical": true,
+      "resolveOnVerify": true,
+      "requireVerifiedCommit": true,
+      "useFor": [
+        "installation",
+        "media-resolver",
+        "media-writer"
+      ],
+      "notes": "Used only to resolve current official Microsoft retail ISO URLs. CorePilot stages the script from the exact GitHub-verified commit returned by this source."
     }
   ]
 }
