@@ -8,7 +8,7 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.9 ✅
+### v0.1–v0.10 ✅
 
 CorePilot currently provides:
 
@@ -19,43 +19,41 @@ CorePilot currently provides:
 - upstream `ocvalidate`
 - independent EFI structure audit
 - verified Apple Recovery download
-- final installer manifest with SHA-256 for every EFI/recovery file
-- immediate manifest re-verification
-- fail-closed USB target safety inspection
-- boot/system/pagefile protection checks
-- stable SHA-256 USB target identity fingerprint
+- SHA-256 installer manifest for every EFI/recovery file
+- fail-closed USB target inspection including boot/system/pagefile protection
+- stable USB target identity fingerprint
+- manifest-bound, SHA-256 protected USB dry-run plan
 
-### v0.10 — Manifest-bound USB dry-run plan 🚧
+### v0.11 — Atomic execution preflight 🚧
 
-CorePilot can now create the exact future macOS USB operation plan **without executing any physical disk command**.
+Immediately before any future destructive confirmation, CorePilot now creates a short-lived execution preflight gate.
 
-The dry-run plan is bound to:
+The gate revalidates together:
 
-- exact physical disk number and Windows device path
-- target model, serial, size and SHA-256 identity fingerprint
-- current USB safety classification
-- exact `CorePilotInstallerManifest.json` SHA-256
-- the already-verified EFI + Apple Recovery payload
+- the currently attached physical USB target
+- physical disk number and device path
+- exact USB identity fingerprint
+- current USB safety level
+- complete installer manifest and every referenced file
+- installer-manifest SHA-256
+- complete dry-run plan
+- dry-run plan SHA-256
+- required future typed confirmation phrase
 
-The planned recovery USB layout follows the current OpenCore/Dortania Windows workflow:
+The generated files are:
 
-- GPT partition table
-- one primary FAT32 installer partition
-- volume label `EFI`
-- `EFI/` at the partition root
-- `com.apple.recovery.boot/` at the partition root
-- verified recovery `.dmg` and `.chunklist` inside `com.apple.recovery.boot/`
+- `CorePilotUsbExecutionPreflight.json`
+- `CorePilotUsbExecutionPreflight.sha256`
 
-For USB media larger than the practical Windows built-in FAT32 formatting limit, CorePilot plans a smaller FAT32 installer partition instead of pretending Windows can format the entire large device as FAT32.
+Important properties:
 
-The generated workspace files are:
+- preflight lifetime: **2 minutes**
+- `ReadyForConfirmationOnly=true`
+- `PhysicalDiskWritesEnabled=false`
+- any changed target identity, plan hash, manifest hash or blocked safety state invalidates the gate
+- the UI re-inspects the USB again when running preflight
 
-- `CorePilotUsbWritePlan.json`
-- `CorePilotUsbWritePlan.sha256`
-
-The plan includes future destructive actions as **descriptions/command previews only**. It is marked `DryRunOnly=true`; CorePilot does not execute diskpart, clean, format, dismount or raw-disk writes.
-
-Before creating the plan, CorePilot re-inspects the selected USB and rejects the operation if its identity fingerprint changed.
+This stage still contains **no physical-disk writer**.
 
 ## Safety model
 
@@ -63,22 +61,23 @@ Before creating the plan, CorePilot re-inspects the selected USB and rejects the
 2. Deep Scan
 3. Plan
 4. Stage
-5. Build EFI
-6. Validate EFI
-7. Download + verify Apple Recovery
-8. Create + verify installer manifest
-9. Inspect exact USB target read-only
-10. Create + verify manifest-bound USB dry-run plan
-11. Re-inspect target immediately before any future execution
-12. **Destructive USB write — still disabled**
+5. Build + validate EFI
+6. Download + verify Apple Recovery
+7. Create + verify installer manifest
+8. Inspect USB target
+9. Create + verify USB dry-run plan
+10. Run short-lived atomic execution preflight
+11. Typed destructive confirmation — next
+12. **Physical USB writer — still disabled**
 
 ## Next
 
-1. Add an execution preflight object that revalidates target fingerprint + manifest + dry-run plan hash in one atomic gate.
-2. Add explicit typed destructive confirmation containing disk number and fingerprint.
-3. Implement a disk-operation abstraction with a permanent dry-run backend first.
-4. Only after those tests pass, add the real GPT/FAT32 writer.
-5. Continue Windows/Linux media engines after the common disk-safety layer is stable.
+1. Add a confirmation gate that accepts only the exact phrase stored in the valid, unexpired preflight.
+2. Confirmation must never extend preflight expiry and must be invalidated by any target refresh/change.
+3. Add a disk-operation abstraction whose only implementation is a logging/dry-run backend.
+4. Exercise the full workflow without a single destructive API.
+5. Only after that add a real GPT/FAT32 backend behind the same gates.
+6. Continue Windows/Linux media engines once the common safety layer is stable.
 
 ## Build
 

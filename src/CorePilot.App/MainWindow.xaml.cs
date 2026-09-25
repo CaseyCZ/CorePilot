@@ -25,6 +25,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly InstallerManifestService _installerManifestService = new();
     private readonly UsbTargetSafetyInspector _usbSafetyInspector = new();
     private readonly MacOSUsbWritePlanService _usbWritePlanService = new();
+    private readonly MacOSUsbExecutionPreflightService _usbExecutionPreflightService = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private InstallerManifestResult? _lastInstallerManifest;
     private UsbTargetSafetyReport? _usbSafetyReport;
     private MacOSUsbWritePlanResult? _lastUsbWritePlan;
+    private MacOSUsbExecutionPreflightResult? _lastUsbExecutionPreflight;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -169,6 +171,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _usbSafetyReport = null;
         _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
         UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
             ? "USB target changed — safety inspection required."
             : "USB target not selected.";
@@ -188,6 +191,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var report = await _usbSafetyInspector.InspectAsync(usb);
             _usbSafetyReport = report;
             _lastUsbWritePlan = null;
+            _lastUsbExecutionPreflight = null;
             UsbSafetyStatus = report.Summary;
         }
         catch (Exception ex)
@@ -206,6 +210,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _usbSafetyReport = null;
             _lastUsbWritePlan = null;
+            _lastUsbExecutionPreflight = null;
             UsbSafetyStatus = "USB list refreshed — safety inspection required.";
 
             UsbDrives.Clear();
@@ -256,6 +261,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _lastRecovery = null;
         _lastInstallerManifest = null;
         _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -411,6 +417,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastRecovery = null;
             _lastInstallerManifest = null;
             _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
 
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
@@ -472,6 +479,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _lastInstallerManifest = manifest;
             _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
 
             PlanStatus =
                 $"Apple Recovery + installer manifest ready ✅ " +
@@ -545,6 +553,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 freshReport);
 
             _lastUsbWritePlan = plan;
+            _lastUsbExecutionPreflight = null;
 
             var confirmation = plan.RequiresStrongConfirmation
                 ? " · future strong confirmation required"
@@ -560,6 +569,60 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _lastUsbWritePlan = null;
             PlanStatus = $"USB dry-run failed: {ex.Message}";
+        }
+    }
+
+    private async void RunExecutionPreflight_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_opCoreStage is null ||
+            _lastInstallerManifest is null ||
+            _lastUsbWritePlan is null)
+        {
+            PlanStatus = "Create the verified installer manifest and USB dry-run plan first.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Select the same USB target used by the dry-run plan.";
+            return;
+        }
+
+        try
+        {
+            PlanStatus = "Running atomic execution preflight…";
+            var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
+
+            if (freshTarget.IsBlocked)
+            {
+                _lastUsbExecutionPreflight = null;
+                _usbSafetyReport = freshTarget;
+                UsbSafetyStatus = freshTarget.Summary;
+                PlanStatus = $"Execution preflight BLOCKED: {freshTarget.Summary}";
+                return;
+            }
+
+            _usbSafetyReport = freshTarget;
+            UsbSafetyStatus = freshTarget.Summary;
+
+            var result = await _usbExecutionPreflightService.CreateAsync(
+                _opCoreStage,
+                _lastInstallerManifest,
+                _lastUsbWritePlan,
+                freshTarget);
+
+            _lastUsbExecutionPreflight = result;
+
+            PlanStatus =
+                $"Execution preflight ready ✅ ID {result.PreflightId[..8]} · " +
+                $"expires {result.ExpiresAt.ToLocalTime():HH:mm:ss} · " +
+                $"next confirmation phrase: {result.RequiredConfirmationPhrase}. " +
+                "Ready for confirmation only — physical disk writing is still disabled.";
+        }
+        catch (Exception ex)
+        {
+            _lastUsbExecutionPreflight = null;
+            PlanStatus = $"Execution preflight failed: {ex.Message}";
         }
     }
 
