@@ -38,7 +38,8 @@ public sealed class HardwareScanner
             ReadSecureBoot(),
             LongValue(computer, "TotalPhysicalMemory"),
             devices.DistinctBy(x => $"{x.Category}|{x.Name}|{x.PnpDeviceId}", StringComparer.OrdinalIgnoreCase).ToArray(),
-            ScanDisks());
+            ScanDisks(),
+            ReadTpm20());
     }
 
     private static IReadOnlyList<UsbDriveInfo> ScanDisks()
@@ -199,6 +200,51 @@ public sealed class HardwareScanner
             return value is null ? null : Convert.ToInt32(value) == 1;
         }
         catch { return null; }
+    }
+
+    private static bool? ReadTpm20()
+    {
+        try
+        {
+            var scope = new ManagementScope(
+                @"\\.\root\CIMV2\Security\MicrosoftTpm");
+            scope.Connect();
+
+            using var searcher = new ManagementObjectSearcher(
+                scope,
+                new ObjectQuery(
+                    "SELECT SpecVersion, IsEnabled_InitialValue, IsActivated_InitialValue FROM Win32_Tpm"));
+
+            var found = false;
+
+            foreach (ManagementObject item in searcher.Get())
+            {
+                found = true;
+
+                var spec = Value(item, "SpecVersion");
+                var enabled = item["IsEnabled_InitialValue"] is null
+                    ? (bool?)null
+                    : Convert.ToBoolean(item["IsEnabled_InitialValue"]);
+                var activated = item["IsActivated_InitialValue"] is null
+                    ? (bool?)null
+                    : Convert.ToBoolean(item["IsActivated_InitialValue"]);
+
+                var is20 = spec
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Any(x =>
+                        x.Equals("2.0", StringComparison.OrdinalIgnoreCase) ||
+                        x.StartsWith("2.", StringComparison.OrdinalIgnoreCase));
+
+                if (is20 && enabled is not false && activated is not false)
+                    return true;
+            }
+
+            return found ? false : false;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string JoinNonEmpty(params string[] values) =>
