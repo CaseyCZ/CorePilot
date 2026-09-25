@@ -756,6 +756,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _workflowStateMachine.Current,
                     selectedSystem,
                     selectedVariant,
+                    _targetMode.ToString(),
+                    selectedSystem == "Windows"
+                        ? CurrentWindowsMediaOptions.ModeText
+                        : null,
                     _hardwareReport,
                     _compatibilityReport,
                     _automationProfile,
