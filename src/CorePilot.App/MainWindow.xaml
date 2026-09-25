@@ -15,7 +15,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · v0.3 integration preview"
+                <TextBlock Text="Universal OS installer · v0.5 EFI builder preview"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -49,6 +49,7 @@
                         <WrapPanel Margin="0,6,0,0">
                             <Button Content="Refresh drives" Click="RefreshDrives_OnClick"/>
                             <Button Content="Prepare plan" Click="PreparePlan_OnClick"/>
+                            <Button Content="Build EFI" Click="BuildEfi_OnClick"/>
                         </WrapPanel>
 
                         <Border Background="#12151A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
@@ -153,7 +154,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="CorePilot v0.3 preview · Hardware Sniffer bridge · USB writing remains disabled."
+        <TextBlock Grid.Row="3" Text="CorePilot v0.5 preview · Non-interactive EFI builder · USB writing remains disabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>

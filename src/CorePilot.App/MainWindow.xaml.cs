@@ -20,7 +20,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
     private readonly MacOSAutomationProfileStore _macProfileStore = new();
     private readonly OpCoreSimplifyStager _opCoreStager = new();
+    private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
     private HardwareSnifferExportResult? _deepScanExport;
+    private OpCoreStagingResult? _opCoreStage;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -292,6 +294,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _deepScanExport.ReportPath,
                 _deepScanExport.AcpiDirectory,
                 _automationProfile);
+            _opCoreStage = stage;
 
             var review = _automationProfile.RequiresReview
                 ? " Advanced review is required before EFI generation."
@@ -306,6 +309,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         PlanStatus = $"Plan ready: {variant.DisplayName} → {usb.DisplayName}. " +
                      $"Next milestone: OpenCore/EFI generation, downloads and guarded USB writing for {system.DisplayName}.";
+    }
+
+    private async void BuildEfi_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" })
+        {
+            PlanStatus = "EFI Builder is currently available only for the macOS module.";
+            return;
+        }
+
+        if (_automationProfile is null)
+        {
+            PlanStatus = "Run the hardware scan and select a macOS version first.";
+            return;
+        }
+
+        if (!_automationProfile.CanBuildEfi)
+        {
+            PlanStatus = "EFI build is blocked by the current compatibility profile.";
+            return;
+        }
+
+        if (_automationProfile.RequiresReview)
+        {
+            PlanStatus = "EFI build requires Advanced review before CorePilot can continue.";
+            return;
+        }
+
+        if (_opCoreStage is null)
+        {
+            PlanStatus = "Prepare the plan first. CorePilot needs a staged OpenCore workspace before building EFI.";
+            return;
+        }
+
+        try
+        {
+            var progress = new Progress<string>(message => PlanStatus = message);
+            var result = await _opCoreBuilder.BuildAsync(
+                _opCoreStage,
+                _automationProfile,
+                progress);
+
+            PlanStatus =
+                $"EFI build complete ✅ {result.EfiDirectory}. " +
+                $"SMBIOS {result.SmbiosModel} · {result.Kexts.Count} kexts · " +
+                $"{result.AcpiPatches.Count} ACPI selections · ocvalidate: {result.OcValidateStatus}.";
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"EFI build failed: {ex.Message}";
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

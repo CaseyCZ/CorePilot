@@ -2,7 +2,7 @@
 
 **CorePilot** is a hardware-aware boot media creator for Windows.
 
-The target workflow is intentionally simple:
+Target workflow:
 
 **Choose an operating system → choose a USB drive → CorePilot handles the rest.**
 
@@ -12,55 +12,54 @@ The target workflow is intentionally simple:
 Windows .NET 8/WPF app, local hardware inventory, USB discovery and modular OS architecture.
 
 ### v0.2 — macOS compatibility engine ✅
-Hardware compatibility findings plus kext, kernel patch and boot-argument planning.
+Hardware findings plus kext, kernel patch and boot-argument planning.
 
 ### v0.3 — Hardware Sniffer integration ✅
-Explicit Deep Scan, exact PCI/USB identities, Report.json + ACPI export and report import.
+Explicit Deep Scan, exact PCI/USB identities, Report.json + ACPI export and import.
 
-### v0.4 — macOS automation + EFI staging 🚧
+### v0.4 — macOS policy + staging ✅
+Deterministic automation profile, pinned OpCore Simplify source, SHA-256 workspace manifest and Python detection.
 
-CorePilot now prepares deterministic build inputs instead of driving upstream text menus:
+### v0.5 — Non-interactive EFI builder 🚧
 
-- automatic SMBIOS, GPU, Wi-Fi, audio and USB bootstrap policy
-- persisted `CorePilotAutomationProfile.json`
-- pinned OpCore Simplify source revision for reproducible builds
-- downloaded source archive SHA-256 recorded in the workspace
-- upstream source structure validated before use
-- Deep Scan `Report.json + ACPI` copied into an isolated workspace
-- Python runtime detection without silently installing anything
-- `CorePilotWorkspace.json` manifest records all inputs needed by the future EFI builder
+CorePilot now has a real EFI build path:
 
-The staging step **does not execute OpCore Simplify and does not write to a disk**.
+- embedded Python bridge extracted only into the isolated build workspace
+- directly imports the pinned OpCore Simplify internals
+- uses upstream compatibility checking and hardware customization
+- uses upstream ACPI selection, SMBIOS handling, kext selection and OpenCore file gathering
+- policy answers are supplied only for known prompts
+- **any unknown/new upstream prompt fails closed**
+- Tahoe audio does not silently enable OCLP/root patches
+- configurations requiring OCLP stop until explicit Advanced approval exists
+- downloads required OpenCore/kext components through the upstream gatherer
+- runs the upstream OpenCore EFI build
+- requires `EFI/BOOT/BOOTx64.efi`, `EFI/OC/OpenCore.efi` and `config.plist`
+- locates and runs upstream `ocvalidate.exe`
+- the EFI is considered successful only if `ocvalidate` returns success
+- writes `CorePilotEfiBuild.json` and a build log into the workspace
+
+The Windows UI now has a **Build EFI** action after Plan/Stage.
 
 ## Safety model
 
-CorePilot separates the pipeline into explicit phases:
-
 1. **Scan** — read-only local hardware inventory.
-2. **Deep Scan** — explicitly download/run Hardware Sniffer and import exact hardware data.
-3. **Plan** — resolve compatibility and automatic build choices.
-4. **Stage** — download pinned OpenCore tooling and prepare an isolated workspace.
-5. **Build EFI** — next milestone; no disk access.
-6. **Validate EFI** — must pass before media creation.
-7. **Write USB** — remains disabled until all prior stages are validated.
+2. **Deep Scan** — explicit Hardware Sniffer download/run.
+3. **Plan** — compatibility + automatic choices.
+4. **Stage** — pinned upstream source + isolated workspace.
+5. **Build EFI** — generates files only inside the workspace.
+6. **Validate EFI** — mandatory `ocvalidate`.
+7. **Write USB** — **still disabled**.
 
-## Architecture
-
-- **CorePilot.App** — Windows UI
-- **CorePilot.Core** — shared models and module contracts
-- **CorePilot.Hardware** — local scanner, disks, Hardware Sniffer integration and report parser
-- **CorePilot.MacOS** — compatibility, automation policy, staging and future EFI generation
-- **CorePilot.Windows** — Windows media workflow
-- **CorePilot.Linux** — Linux media workflow
+No build step writes to a physical disk.
 
 ## Next
 
-1. Add a non-interactive Python bridge that consumes `CorePilotAutomationProfile.json`.
-2. Reuse OpCore Simplify's compatibility, ACPI, SMBIOS, kext and config modules without text-menu input.
-3. Produce a staged EFI folder.
-4. Run structural/config validation.
-5. Download Apple recovery.
-6. Only then enable guarded USB writes.
+1. Add structural EFI validation beyond `ocvalidate` (required files, drivers, kext dependencies, config snapshot audit).
+2. Add Apple Recovery download using OpenCore/macRecovery.
+3. Add a final installer manifest with hashes.
+4. Only after those pass, implement guarded USB partition/write operations.
+5. Then add Windows/Linux media engines and multiboot.
 
 ## Build
 
@@ -72,4 +71,4 @@ dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
-GitHub Actions publishes a self-contained `CorePilot-win-x64` test artifact.
+GitHub Actions validates the Python bridge and publishes a self-contained `CorePilot-win-x64` test artifact.
