@@ -21,6 +21,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly HardwareSnifferReportParser _hardwareSnifferParser = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private readonly GenericCompatibilityAnalyzer _genericAnalyzer = new();
+    private readonly WindowsIsoPreparationService _windowsIsoPreparation;
+    private readonly LinuxIsoPreparationService _linuxIsoPreparation = new();
+    private readonly WindowsInstallerUsbWriter _windowsUsbWriter = new();
+    private readonly LinuxRawUsbWriter _linuxUsbWriter = new();
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
     private readonly MacOSAutoResolutionService _macAutoResolver;
     private readonly MacOSAutomationProfileStore _automationProfileStore = new();
@@ -55,6 +59,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private MacOSAutomationProfile? _automationProfile;
     private MacOSAutoResolutionResult? _autoResolution;
     private InstallationPreparationResult? _preparationResult;
+    private PreparedIsoImage? _preparedIso;
+    private GenericUsbWriteResult? _lastGenericUsbWrite;
     private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
@@ -159,6 +165,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
         _macAutoResolver = new MacOSAutoResolutionService(_onlineSources);
+        _windowsIsoPreparation = new WindowsIsoPreparationService(_onlineSources);
         DataContext = this;
         ActivityLog.Info("UI", "Main window initialized.");
         ActivityLog.PropertyChanged += ActivityLog_OnPropertyChanged;
@@ -197,6 +204,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _verificationCompleted = false;
         _preparationResult = null;
+        _preparedIso = null;
+        _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
@@ -280,6 +289,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ex);
             }
         }
+        else if (_compatibilityReport?.CanProceed == true)
+        {
+            try
+            {
+                await PrepareGenericIsoAsync(module, target);
+            }
+            catch (Exception ex)
+            {
+                _preparationFailure = ex.Message;
+                ActivityLog.Error(
+                    "Preparation",
+                    $"Automatic {module.DisplayName} media preparation stopped safely: {ex.Message}",
+                    ex);
+            }
+        }
 
         if (_compatibilityReport is null)
         {
@@ -338,11 +362,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" } ||
+        if (SystemCombo.SelectedItem is not ISystemModule module ||
             VariantCombo.SelectedItem is not SystemVariant variant)
         {
-            PlanStatus =
-                "Windows/Linux verification is available, but their physical media writer is not enabled in this build.";
+            PlanStatus = "Choose the prepared system and version first.";
+            return;
+        }
+
+        if (module.Id is "windows" or "linux")
+        {
+            await WritePreparedGenericMediaAsync(module, variant);
+            return;
+        }
+
+        if (module.Id != "macos")
+        {
+            PlanStatus = "This prepared media path does not have a writer.";
             return;
         }
 
@@ -863,6 +898,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _automationProfile = null;
         _autoResolution = null;
         _preparationResult = null;
+        _preparedIso = null;
+        _lastGenericUsbWrite = null;
         _preparationFailure = null;
         CompatibilitySummary = "Press Verify to prepare this system for the detected hardware.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
@@ -881,6 +918,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _automationProfile = null;
         _autoResolution = null;
         _preparationResult = null;
+        _preparedIso = null;
+        _lastGenericUsbWrite = null;
         _preparationFailure = null;
         CompatibilitySummary = "Press Verify to prepare this version for the detected hardware.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
@@ -901,6 +940,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _automationProfile = null;
         _autoResolution = null;
         _preparationResult = null;
+        _preparedIso = null;
+        _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _opCoreStage = null;
         _lastEfiBuild = null;
@@ -1161,6 +1202,158 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             "macOS payload is prepared. USB writing can now remain a separate destructive step.");
     }
 
+    private async Task PrepareGenericIsoAsync(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        if (_compatibilityReport?.CanProceed != true)
+            return;
+
+        ActivityLog.Progress(
+            "Preparation",
+            $"Resolving and preparing the current official {target.DisplayName} installer image…");
+
+        var progress = new Progress<string>(message =>
+        {
+            PlanStatus = message;
+            ActivityLog.Progress("Installer image", message);
+        });
+
+        _preparedIso = module.Id switch
+        {
+            "windows" => await _windowsIsoPreparation.PrepareAsync(
+                target,
+                progress),
+            "linux" => await _linuxIsoPreparation.PrepareAsync(
+                target,
+                progress),
+            _ => null
+        };
+
+        if (_preparedIso is null)
+            throw new InvalidOperationException(
+                $"No ISO preparation service exists for {module.DisplayName}.");
+
+        ActivityLog.Info(
+            "Installer image",
+            $"Prepared {_preparedIso.FileName} · {_preparedIso.SizeBytes / 1024d / 1024d / 1024d:0.00} GB · SHA-256 {_preparedIso.Sha256[..16]}… · {_preparedIso.Provenance}");
+    }
+
+    private async Task WritePreparedGenericMediaAsync(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        if (_preparedIso is null ||
+            !_preparedIso.SystemId.Equals(
+                module.Id,
+                StringComparison.OrdinalIgnoreCase) ||
+            !_preparedIso.TargetId.Equals(
+                target.Id,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            PlanStatus =
+                "Prepared installer image is missing or no longer matches the selection. Run Verify again.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo)
+            await RefreshDrivesAsync(silentNoUsb: true);
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Connect a USB drive, select it, then press Write to disk again.";
+            UsbSafetyStatus = "No USB target selected.";
+            return;
+        }
+
+        try
+        {
+            ActivityLog.Start(
+                "Write workflow",
+                $"Re-validating {target.DisplayName} preparation and USB target…");
+
+            var live = await _onlineSources.ResolveForSystemAsync(module.Id);
+            if (live.CriticalFailures != 0)
+                throw new InvalidOperationException(
+                    $"{live.CriticalFailures} critical online source(s) are not live. Writing was blocked.");
+
+            var inspected = await _usbSafetyInspector.InspectAsync(usb);
+            UsbSafetyStatus = inspected.Summary;
+
+            if (inspected.IsBlocked)
+                throw new InvalidOperationException(
+                    $"USB target is blocked: {inspected.Summary}");
+
+            var phrase = module.Id == "windows"
+                ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+                    inspected,
+                    _preparedIso)
+                : LinuxRawUsbWriter.RequiredConfirmationPhrase(
+                    inspected,
+                    _preparedIso);
+
+            var typed = Microsoft.VisualBasic.Interaction.InputBox(
+                "CorePilot is ready to ERASE the selected USB disk.\n\n" +
+                $"Disk: {inspected.DiskIndex} · {inspected.Model}\n" +
+                $"Size: {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
+                $"Prepared image: {_preparedIso.FileName}\n" +
+                $"SHA-256: {_preparedIso.Sha256[..16]}…\n\n" +
+                "Type this exact phrase to continue:\n\n" +
+                phrase,
+                $"CorePilot — confirm {module.DisplayName} USB erase",
+                "");
+
+            if (!typed.Equals(phrase, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Exact destructive confirmation phrase was not entered. Nothing was written.");
+
+            var finalTarget = await _usbSafetyInspector.InspectAsync(usb);
+
+            if (finalTarget.IsBlocked ||
+                !finalTarget.IdentityFingerprint.Equals(
+                    inspected.IdentityFingerprint,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "USB identity or safety state changed after confirmation.");
+
+            var progress = new Progress<string>(message =>
+            {
+                PlanStatus = message;
+                ActivityLog.Progress("Physical write", message);
+            });
+
+            _lastGenericUsbWrite = module.Id == "windows"
+                ? await _windowsUsbWriter.WriteAsync(
+                    _preparedIso,
+                    finalTarget,
+                    typed,
+                    progress)
+                : await _linuxUsbWriter.WriteAsync(
+                    _preparedIso,
+                    finalTarget,
+                    typed,
+                    progress);
+
+            if (!_lastGenericUsbWrite.Verified)
+                throw new InvalidOperationException(
+                    "Physical writer completed without a verified result.");
+
+            PlanStatus =
+                $"USB READY ✅ {target.DisplayName} · Disk {_lastGenericUsbWrite.TargetDiskIndex} · " +
+                $"verified write transcript {_lastGenericUsbWrite.TranscriptSha256[..16]}….";
+            ActivityLog.Success("Physical write", PlanStatus);
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"Write stopped safely: {ex.Message}";
+            ActivityLog.Error("Write workflow", PlanStatus, ex);
+        }
+        finally
+        {
+            RefreshActionAvailability();
+        }
+    }
+
     private InstallationPreparationResult BuildPreparationResult(
         ISystemModule system,
         SystemVariant target)
@@ -1171,30 +1364,61 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (system.Id != "macos")
         {
+            var imagePrepared =
+                _preparedIso is not null &&
+                _preparedIso.SystemId.Equals(
+                    system.Id,
+                    StringComparison.OrdinalIgnoreCase) &&
+                _preparedIso.TargetId.Equals(
+                    target.Id,
+                    StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(_preparedIso.IsoPath);
+
             var generic = InstallationPreparationBuilder.FromGenericCompatibility(
                 system.Id,
                 target,
                 _compatibilityReport,
                 _lastOnlineSourceSnapshot,
-                mediaWriterAvailable: false);
+                mediaWriterAvailable: imagePrepared);
+
+            var items = generic.Items.ToList();
+
+            if (imagePrepared)
+            {
+                items.Add(new(
+                    PreparationItemState.ResolvedAutomatically,
+                    "Installer image",
+                    _preparedIso!.FileName,
+                    _preparedIso.ExpectedSha256 is null
+                        ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
+                        : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
+                    _preparedIso.SourceUrl));
+            }
 
             if (!string.IsNullOrWhiteSpace(_preparationFailure))
             {
-                return generic with
-                {
-                    Items = generic.Items.Concat(new[]
-                    {
-                        new PreparationItem(
-                            PreparationItemState.Unresolved,
-                            "Preparation",
-                            "Automatic preparation failed",
-                            _preparationFailure)
-                    }).ToArray(),
-                    ConfigurationPrepared = false
-                };
+                items.Add(new(
+                    PreparationItemState.Unresolved,
+                    "Preparation",
+                    "Automatic preparation failed",
+                    _preparationFailure));
             }
 
-            return generic;
+            var unresolved = items.Any(x =>
+                x.State == PreparationItemState.Unresolved);
+            var manual = items.Any(x =>
+                x.State == PreparationItemState.ManualActionRequired);
+
+            return generic with
+            {
+                Items = items,
+                ConfigurationPrepared =
+                    generic.ConfigurationPrepared &&
+                    imagePrepared &&
+                    !unresolved &&
+                    !manual,
+                MediaWriterAvailable = imagePrepared
+            };
         }
 
         var items = new List<PreparationItem>();
