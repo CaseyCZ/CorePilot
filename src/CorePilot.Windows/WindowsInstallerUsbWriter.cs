@@ -25,8 +25,8 @@ public sealed class WindowsInstallerUsbWriter
             ? target.IdentityFingerprint[..12]
             : target.IdentityFingerprint;
 
-        var mode = options.ExtendedHardwareCompatibility || options.LegacyBiosCompatible
-            ? " OLDER-PC"
+        var mode = options.ExtendedHardwareCompatibility
+            ? " WINDOWS11-COMPAT"
             : "";
 
         return $"ERASE DISK {target.DiskIndex} {fingerprint} AND WRITE {image.DisplayName}{mode}".ToUpperInvariant();
@@ -117,25 +117,13 @@ public sealed class WindowsInstallerUsbWriter
             root,
             "CorePilot-Windows-UsbWrite.ps1");
 
-        var partitionScheme = options.LegacyBiosCompatible
-            ? new[]
-            {
-                "convert mbr",
-                $"create partition primary size={partitionMiB}",
-                "active"
-            }
-            : new[]
-            {
-                "convert gpt",
-                $"create partition primary size={partitionMiB}"
-            };
-
         var diskPartLines = new List<string>
         {
             $"select disk {freshTarget.DiskIndex}",
-            "clean"
+            "clean",
+            "convert gpt",
+            $"create partition primary size={partitionMiB}"
         };
-        diskPartLines.AddRange(partitionScheme);
         diskPartLines.Add("format fs=fat32 quick label=COREPILOT");
         diskPartLines.Add($"assign letter={driveLetter}");
         diskPartLines.Add("exit");
@@ -195,16 +183,12 @@ public sealed class WindowsInstallerUsbWriter
         var writtenExtended =
             resultRoot.TryGetProperty("extendedHardwareCompatibility", out var extendedNode) &&
             extendedNode.ValueKind == JsonValueKind.True;
-        var writtenLegacy =
-            resultRoot.TryGetProperty("legacyBiosCompatible", out var legacyNode) &&
-            legacyNode.ValueKind == JsonValueKind.True;
         var customizationSha256 =
             resultRoot.TryGetProperty("customizationSha256", out var customizationNode)
                 ? customizationNode.GetString() ?? ""
                 : "";
 
-        if (writtenExtended != options.ExtendedHardwareCompatibility ||
-            writtenLegacy != options.LegacyBiosCompatible)
+        if (writtenExtended != options.ExtendedHardwareCompatibility)
             throw new InvalidOperationException(
                 "Windows USB writer result does not match the media mode prepared by Verify.");
 
@@ -238,7 +222,6 @@ public sealed class WindowsInstallerUsbWriter
             sourceManifest = image.ManifestPath,
             windowsMediaMode = options.ModeText,
             extendedHardwareCompatibility = options.ExtendedHardwareCompatibility,
-            legacyBiosCompatible = options.LegacyBiosCompatible,
             customizationSha256 =
                 string.IsNullOrWhiteSpace(customizationSha256)
                     ? null
@@ -298,8 +281,7 @@ param(
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
     [Parameter(Mandatory=$true)][string]$DriveLetter,
-    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility,
-    [Parameter(Mandatory=$true)][int]$LegacyBiosCompatible
+    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility
 )
 
 $ErrorActionPreference = 'Stop'
@@ -468,17 +450,6 @@ try {
         $customizationSha256 = (Get-FileHash -LiteralPath $autoPath -Algorithm SHA256).Hash
     }
 
-    if ($LegacyBiosCompatible -eq 1) {
-        $bootsect = Join-Path $sourceRoot "boot\\bootsect.exe"
-        if (-not (Test-Path -LiteralPath $bootsect)) {
-            throw "Legacy BIOS compatibility requested but boot\\bootsect.exe is missing from the Windows ISO."
-        }
-
-        & $bootsect /nt60 ($DriveLetter + ":") /force /mbr
-        if ($LASTEXITCODE -ne 0) {
-            throw "bootsect failed while making the Windows USB Legacy BIOS compatible."
-        }
-    }
 
     $critical = @(
         "efi\\boot\\bootx64.efi",
@@ -503,7 +474,6 @@ try {
         splitInstallWim = $splitInstallWim
         verifiedBootFiles = $verified
         extendedHardwareCompatibility = ($ExtendedHardwareCompatibility -eq 1)
-        legacyBiosCompatible = ($LegacyBiosCompatible -eq 1)
         customizationSha256 = $customizationSha256
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
@@ -562,9 +532,7 @@ finally {
             "-DriveLetter",
             driveLetter.ToString(),
             "-ExtendedHardwareCompatibility",
-            (options.ExtendedHardwareCompatibility ? "1" : "0"),
-            "-LegacyBiosCompatible",
-            (options.LegacyBiosCompatible ? "1" : "0")
+            (options.ExtendedHardwareCompatibility ? "1" : "0")
         })
         {
             start.ArgumentList.Add(argument);
