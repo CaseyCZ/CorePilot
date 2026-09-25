@@ -153,17 +153,31 @@ public sealed class MacOSAutomationPlanner
             return "Blocked";
         }
 
-        foreach (var gpu in supported)
-            enabled.Add(gpu.Name);
+        if (supported.Count > 1)
+        {
+            var names = string.Join(" + ", supported.Select(x => x.Name));
+            decisions.Add(new(
+                "GPU",
+                "Multiple compatible graphics devices",
+                names,
+                "CorePilot will not silently choose between multiple compatible GPUs.",
+                RequiresReview: true));
 
-        var selected = string.Join(" + ", supported.Select(x => x.Name));
+            foreach (var gpu in supported)
+                enabled.Add(gpu.Name);
+
+            return names;
+        }
+
+        var selectedGpu = supported[0];
+        enabled.Add(selectedGpu.Name);
         decisions.Add(new(
             "GPU",
             "Primary macOS graphics",
-            selected,
+            selectedGpu.Name,
             "Supported AMD graphics candidate selected automatically."));
 
-        return selected;
+        return selectedGpu.Name;
     }
 
     private static string ResolveWifi(
@@ -171,11 +185,22 @@ public sealed class MacOSAutomationPlanner
         string darwin,
         ICollection<MacOSAutomationDecision> decisions)
     {
-        var intelWifi = hardware.DevicesByCategory("Network").FirstOrDefault(x =>
-            Vendor(x) == "Intel" &&
-            (x.Name.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase) ||
-             x.Name.Contains("Wireless", StringComparison.OrdinalIgnoreCase) ||
-             x.Name.Contains("AX", StringComparison.OrdinalIgnoreCase)));
+        var wifiDevices = hardware.DevicesByCategory("Network").Where(x =>
+            x.Name.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase) ||
+            x.Name.Contains("Wireless", StringComparison.OrdinalIgnoreCase) ||
+            x.Name.Contains("AX", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        if (wifiDevices.Length > 1)
+        {
+            decisions.Add(new(
+                "Wi-Fi",
+                "Multiple wireless adapters",
+                string.Join(" + ", wifiDevices.Select(x => x.Name)),
+                "Upstream device selection would be ambiguous.",
+                RequiresReview: true));
+        }
+
+        var intelWifi = wifiDevices.FirstOrDefault(x => Vendor(x) == "Intel");
 
         if (intelWifi is null)
             return "Auto";
