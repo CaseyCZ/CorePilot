@@ -20,26 +20,29 @@ Explicit Deep Scan, exact PCI/USB identities, Report.json + ACPI export and impo
 ### v0.4 — macOS policy + staging ✅
 Deterministic automation profile, pinned OpCore Simplify source, SHA-256 workspace manifest and Python detection.
 
-### v0.5 — Non-interactive EFI builder 🚧
+### v0.5 — Non-interactive EFI builder ✅
 
-CorePilot now has a real EFI build path:
+- deterministic bridge into pinned OpCore Simplify internals
+- strict fail-closed handling for upstream prompts
+- upstream compatibility, ACPI, SMBIOS, kext and config generation
+- workspace-only EFI generation
+- mandatory upstream `ocvalidate`
 
-- embedded Python bridge extracted only into the isolated build workspace
-- directly imports the pinned OpCore Simplify internals
-- uses upstream compatibility checking and hardware customization
-- uses upstream ACPI selection, SMBIOS handling, kext selection and OpenCore file gathering
-- policy answers are supplied only for known prompts
-- **any unknown/new upstream prompt fails closed**
-- Tahoe audio does not silently enable OCLP/root patches
-- configurations requiring OCLP stop until explicit Advanced approval exists
-- downloads required OpenCore/kext components through the upstream gatherer
-- runs the upstream OpenCore EFI build
-- requires `EFI/BOOT/BOOTx64.efi`, `EFI/OC/OpenCore.efi` and `config.plist`
-- locates and runs upstream `ocvalidate.exe`
-- the EFI is considered successful only if `ocvalidate` returns success
-- writes `CorePilotEfiBuild.json` and a build log into the workspace
+### v0.6 — EFI structure audit 🚧
 
-The Windows UI now has a **Build EFI** action after Plan/Stage.
+After `ocvalidate`, CorePilot now independently parses the generated XML `config.plist` and verifies every enabled file reference:
+
+- required `EFI/BOOT/BOOTx64.efi`
+- required `EFI/OC/OpenCore.efi`
+- `ACPI -> Add -> Path`
+- `Kernel -> Add -> BundlePath`
+- kext `PlistPath` and `ExecutablePath`
+- `UEFI -> Drivers -> Path`
+- `Misc -> Tools -> Path`
+- duplicate enabled references are surfaced as warnings
+- referenced paths are constrained to their expected EFI directory to reject traversal such as `../`
+
+The structural result is appended to `CorePilotEfiBuild.json`. EFI is accepted only when both `ocvalidate` and the CorePilot structure audit succeed.
 
 ## Safety model
 
@@ -48,17 +51,17 @@ The Windows UI now has a **Build EFI** action after Plan/Stage.
 3. **Plan** — compatibility + automatic choices.
 4. **Stage** — pinned upstream source + isolated workspace.
 5. **Build EFI** — generates files only inside the workspace.
-6. **Validate EFI** — mandatory `ocvalidate`.
+6. **Validate EFI** — upstream `ocvalidate` + independent CorePilot structure audit.
 7. **Write USB** — **still disabled**.
 
 No build step writes to a physical disk.
 
 ## Next
 
-1. Add structural EFI validation beyond `ocvalidate` (required files, drivers, kext dependencies, config snapshot audit).
-2. Add Apple Recovery download using OpenCore/macRecovery.
-3. Add a final installer manifest with hashes.
-4. Only after those pass, implement guarded USB partition/write operations.
+1. Add Apple Recovery download using OpenCore `macrecovery.py`.
+2. Hash the completed EFI + recovery payload into a final installer manifest.
+3. Add recovery/EFI integrity re-check before any removable disk operation.
+4. Only then implement guarded USB partition/write operations.
 5. Then add Windows/Linux media engines and multiboot.
 
 ## Build
