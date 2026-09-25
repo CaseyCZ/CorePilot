@@ -164,27 +164,48 @@ public sealed class LinuxIsoPreparationService
             downloadPage,
             cancellationToken);
 
-        var isoHref = MatchFirst(
-            html,
-            @"href\s*=\s*[""'](?<value>https://(?:[a-z0-9.-]+\.)?releases\.ubuntu\.com/(?:releases/)?[^""']*/ubuntu-[^""'/]+-desktop-amd64\.iso)[""']",
-            "current Ubuntu desktop amd64 ISO");
+        var decodedHtml = WebUtility.HtmlDecode(html);
 
-        var isoUri = new Uri(WebUtility.HtmlDecode(isoHref));
+        var version = MatchFirst(
+            decodedHtml,
+            @"(?:version=|Ubuntu\s+)(?<value>\d+\.\d+(?:\.\d+)?)",
+            "current Ubuntu Desktop version");
 
-        if (isoUri.Scheme != Uri.UriSchemeHttps ||
-            !isoUri.Host.EndsWith(
+        var releaseDirectory = new Uri(
+            $"https://releases.ubuntu.com/{version}/");
+
+        var (releaseHtml, finalReleaseUri) =
+            await GetTextWithFinalUriAsync(
+                releaseDirectory,
+                cancellationToken);
+
+        if (!finalReleaseUri.Host.Equals(
                 "releases.ubuntu.com",
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(
-                $"Ubuntu download page returned an unexpected ISO host: {isoUri.Host}");
+                $"Ubuntu release directory redirected to an unexpected host: {finalReleaseUri.Host}");
 
-        var fileName = Path.GetFileName(isoUri.AbsolutePath);
+        var preferredFileName =
+            $"ubuntu-{version}-desktop-amd64.iso";
+
+        var fileName = Regex.IsMatch(
+            releaseHtml,
+            $@"href\s*=\s*[""']{Regex.Escape(preferredFileName)}[""']",
+            RegexOptions.IgnoreCase)
+            ? preferredFileName
+            : Path.GetFileName(
+                WebUtility.HtmlDecode(
+                    MatchFirst(
+                        releaseHtml,
+                        @"href\s*=\s*[""'](?<value>ubuntu-[^""'/]+-desktop-amd64\.iso)[""']",
+                        "Ubuntu desktop amd64 ISO")));
+
         if (string.IsNullOrWhiteSpace(fileName))
             throw new InvalidDataException(
-                "Ubuntu download page returned an ISO URL without a filename.");
+                "Ubuntu release page did not provide a desktop amd64 ISO filename.");
 
-        var releaseDirectory = new Uri(isoUri, "./");
-        var checksumUri = new Uri(releaseDirectory, "SHA256SUMS");
+        var isoUri = new Uri(finalReleaseUri, fileName);
+        var checksumUri = new Uri(finalReleaseUri, "SHA256SUMS");
         var checksums = await _http.GetStringAsync(
             checksumUri,
             cancellationToken);
@@ -198,7 +219,7 @@ public sealed class LinuxIsoPreparationService
             checksumUri,
             fileName,
             expected,
-            $"Current Ubuntu desktop image discovered from {finalDownloadUri.Host} and verified against SHA256SUMS from {checksumUri.Host}.");
+            $"Ubuntu {version} Desktop discovered from {finalDownloadUri.Host} and verified against SHA256SUMS from {checksumUri.Host}.");
     }
 
     private async Task<ResolvedLinuxImage> ResolveDebianAsync(
