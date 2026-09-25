@@ -69,6 +69,34 @@ catch (InvalidOperationException)
 
 Assert(backwardsRejected, "backward Advance() must be rejected");
 
+workflow.Reset("simulation one-shot");
+workflow.Advance(MacOSWorkflowPhase.HardwareScanned, "hardware");
+workflow.Advance(MacOSWorkflowPhase.CompatibilityReady, "compatibility");
+workflow.Advance(MacOSWorkflowPhase.WorkspaceStaged, "workspace");
+workflow.Advance(MacOSWorkflowPhase.EfiValidated, "efi");
+workflow.Advance(MacOSWorkflowPhase.RecoveryVerified, "recovery");
+workflow.Advance(MacOSWorkflowPhase.ManifestVerified, "manifest");
+workflow.Advance(MacOSWorkflowPhase.UsbInspected, "usb");
+workflow.Advance(MacOSWorkflowPhase.DryRunPlanned, "plan");
+
+var expiry3 = DateTimeOffset.UtcNow.AddMinutes(2);
+workflow.Advance(MacOSWorkflowPhase.PreflightReady, "preflight3", expiry3);
+workflow.Advance(MacOSWorkflowPhase.Confirmed, "confirmed3", expiry3);
+workflow.EnsureExactly(MacOSWorkflowPhase.Confirmed);
+workflow.Advance(MacOSWorkflowPhase.Simulated, "simulated");
+
+var reuseRejected = false;
+try
+{
+    workflow.EnsureExactly(MacOSWorkflowPhase.Confirmed);
+}
+catch (InvalidOperationException)
+{
+    reuseRejected = true;
+}
+
+Assert(reuseRejected, "simulated authorization must not be reusable");
+
 workflow.Reset("new hardware scan");
 Assert(workflow.Current.Phase == MacOSWorkflowPhase.Idle, "Reset must return to Idle");
 Assert(workflow.Current.AuthorizationExpiresAt is null, "Reset must clear authorization");
