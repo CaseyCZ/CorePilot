@@ -8,58 +8,43 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.12 ✅
+### v0.1–v0.13 ✅
 
-The non-destructive pipeline now includes hardware discovery, macOS policy, EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, two-minute atomic execution preflight and exact typed confirmation.
+The non-destructive macOS pipeline covers hardware discovery, compatibility, OpenCore EFI generation and validation, verified Apple Recovery, SHA-256 installer manifest, USB safety inspection, manifest-bound dry-run planning, atomic preflight, exact typed confirmation and a logging-only simulated write backend.
 
-### v0.13 — Logging-only disk backend 🚧
+### v0.14 — Central execution state machine 🚧
 
-CorePilot now passes the fully confirmed USB write plan through a common disk-operation backend, but the only backend that exists is:
+CorePilot now has one authoritative workflow phase instead of relying only on nullable UI fields.
 
-`LoggingDiskOperationBackend`
+Phases:
 
-Hard guarantees in this version:
+`IDLE → HARDWARE SCANNED → DEEP SCANNED → COMPATIBILITY READY → WORKSPACE STAGED → EFI VALIDATED → RECOVERY VERIFIED → MANIFEST VERIFIED → USB INSPECTED → DRY-RUN PLANNED → PREFLIGHT READY → CONFIRMED → SIMULATED`
 
-- `CanWritePhysicalDisks=false`
-- the simulator rejects any backend reporting write capability
-- every planned destructive action is recorded as **SIMULATED ONLY**
-- no command preview is executed
-- no process is launched
-- no physical-disk handle is opened
-- no partition, format, mount or raw-disk API is used
-- the full plan is still reverified before simulation
-- typed confirmation is reverified and must remain inside the original preflight expiry
-- the target USB is re-inspected again before simulation
+Safety behavior:
 
-Generated files:
+- every invalidation increments a workflow generation counter
+- a new local hardware scan revokes Deep Scan and every downstream artifact
+- a new Deep Scan revokes every previously generated downstream artifact
+- changing macOS/system compatibility inputs revokes workspace/EFI/recovery/manifest and USB authorization
+- changing the selected USB revokes every target-specific state after the verified installer manifest
+- refreshing the disk list revokes target-specific state
+- re-inspecting a USB creates a new `USB INSPECTED` state
+- preflight/confirmation states carry the original expiration timestamp
+- expired execution authorization automatically falls back to `DRY-RUN PLANNED`
+- expired preflight/confirmation objects are cleared before confirmation or simulation
+- simulation can start only from `CONFIRMED`
+- successful simulation clears the short-lived execution authorization
+- the current phase, generation and invalidation reason are visible in the UI
 
-- `CorePilotUsbSimulationTranscript.json`
-- `CorePilotUsbSimulationTranscript.sha256`
-
-The transcript records every would-be step, including which steps would be destructive in a future real backend.
-
-GitHub Actions contains a safety guard that rejects forbidden physical-disk/process capability markers in the logging backend source.
-
-## Safety model
-
-1. Scan / Deep Scan
-2. Build + validate EFI
-3. Verify Recovery + installer manifest
-4. Inspect USB
-5. Build dry-run write plan
-6. Atomic preflight
-7. Exact typed confirmation
-8. Execute entire plan through logging-only backend
-9. Review SHA-256 simulation transcript
-10. **Real physical USB backend — still absent**
+Physical-disk writes remain impossible: the only disk backend is still the logging-only simulation backend with `CanWritePhysicalDisks=false`.
 
 ## Next
 
-1. Add deterministic simulator assertions: action count/order, all destructive actions remain simulated, hashes remain stable.
-2. Add an execution state machine so stale confirmation/preflight objects cannot be reused after target refresh.
-3. Add a dedicated FAT32 strategy abstraction for >32 GB USB media.
-4. Only after simulation tests are exhaustive, design the real backend behind a feature flag that defaults permanently off.
-5. Continue Windows/Linux media engines using the same common safety gates.
+1. Add deterministic state-machine smoke tests in CI for invalidation and expiry transitions.
+2. Bind button enabled/disabled state to the workflow phase instead of only showing runtime messages.
+3. Add a dedicated FAT32 strategy abstraction for larger USB media.
+4. Persist a compact support bundle containing workflow snapshot, manifests and simulation transcript.
+5. Only after the complete safety layer is covered by tests, evaluate a real writer behind a default-off feature gate.
 
 ## Build
 
