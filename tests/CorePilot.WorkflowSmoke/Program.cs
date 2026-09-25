@@ -391,3 +391,356 @@ Assert(sourceCatalog.Sources
     "kext sources must resolve from upstream GitHub releases");
 
 Console.WriteLine("CorePilot online source catalog smoke test OK");
+
+
+var writtenWorkflow = new MacOSWorkflowStateMachine();
+writtenWorkflow.Advance(MacOSWorkflowPhase.HardwareScanned, "hardware");
+writtenWorkflow.Advance(MacOSWorkflowPhase.DeepScanned, "deep");
+writtenWorkflow.Advance(MacOSWorkflowPhase.CompatibilityReady, "compat");
+writtenWorkflow.Advance(MacOSWorkflowPhase.WorkspaceStaged, "workspace");
+writtenWorkflow.Advance(MacOSWorkflowPhase.EfiValidated, "efi");
+writtenWorkflow.Advance(MacOSWorkflowPhase.RecoveryVerified, "recovery");
+writtenWorkflow.Advance(MacOSWorkflowPhase.ManifestVerified, "manifest");
+writtenWorkflow.Advance(MacOSWorkflowPhase.UsbInspected, "usb");
+writtenWorkflow.Advance(MacOSWorkflowPhase.DryRunPlanned, "plan");
+var writtenExpiry = DateTimeOffset.UtcNow.AddMinutes(2);
+writtenWorkflow.Advance(MacOSWorkflowPhase.PreflightReady, "preflight", writtenExpiry);
+writtenWorkflow.Advance(MacOSWorkflowPhase.Confirmed, "confirmed", writtenExpiry);
+writtenWorkflow.Advance(MacOSWorkflowPhase.Written, "physical write complete");
+Assert(writtenWorkflow.Current.Phase == MacOSWorkflowPhase.Written,
+    "guarded physical write must have a terminal Written phase");
+Assert(writtenWorkflow.Current.AuthorizationExpiresAt is null,
+    "terminal physical write must clear short-lived authorization");
+
+Console.WriteLine("CorePilot physical-write state smoke test OK");
+
+var genericAnalyzer = new GenericCompatibilityAnalyzer();
+
+var windows11Ok = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(windows11Ok.CanProceed,
+    "Windows 11 generic verification must complete for a basic UEFI/4GB+ machine");
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "TPM" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must explicitly disclose that TPM is not collected by the lightweight scan");
+
+var windows11Legacy = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "Legacy BIOS",
+        SecureBoot = false,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11Legacy.CanProceed,
+    "Windows 11 generic verification must block Legacy BIOS");
+
+var ubuntuOk = genericAnalyzer.Analyze(
+    "linux",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("ubuntu", "Ubuntu"));
+
+Assert(ubuntuOk.CanProceed,
+    "Linux generic verification must produce a usable report instead of failing because it is not macOS");
+
+Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
+
+Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
+       opCoreSimplifySource.Branch == "main" &&
+       opCoreSimplifySource.Critical,
+    "execution-critical OpCore Simplify trust policy must stay pinned to the expected upstream");
+
+Console.WriteLine("CorePilot execution-critical source trust smoke test OK");
+
+
+var componentAuditTemp = Path.Combine(
+    Path.GetTempPath(),
+    "CorePilot-component-audit-" + Guid.NewGuid().ToString("N"));
+
+try
+{
+    var upstream = Path.Combine(componentAuditTemp, "upstream");
+    var workspace = Path.Combine(componentAuditTemp, "workspace");
+    var ock = Path.Combine(upstream, "OCK_Files");
+    var openCore = Path.Combine(ock, "OpenCorePkg");
+
+    Directory.CreateDirectory(openCore);
+    Directory.CreateDirectory(workspace);
+    await File.WriteAllTextAsync(
+        Path.Combine(openCore, "manifest.json"),
+        "{}");
+
+    var trustedHash = new string('A', 64);
+    await File.WriteAllTextAsync(
+        Path.Combine(ock, "history.json"),
+        $$"""
+        [
+          {
+            "product_name": "OpenCorePkg",
+            "id": 123,
+            "url": "https://github.com/acidanthera/OpenCorePkg/releases/download/1.0.7/OpenCore-1.0.7-RELEASE.zip",
+            "sha256": "{{trustedHash}}"
+          }
+        ]
+        """);
+
+    var auditStage = new OpCoreStagingResult(
+        workspace,
+        upstream,
+        new string('B', 40),
+        new string('C', 64),
+        Path.Combine(workspace, "Report.json"),
+        Path.Combine(workspace, "ACPI"),
+        Path.Combine(workspace, "CorePilotAutomationProfile.json"),
+        true,
+        "python",
+        "python.exe",
+        "3.x");
+
+    var componentAuditService = new OpCoreDownloadedComponentAuditService();
+    var liveCatalogSnapshot = new OnlineSourceSnapshot(
+        "macos",
+        DateTimeOffset.UtcNow,
+        "test",
+        true,
+        new OnlineSourceResolution[]
+        {
+            new(
+                "macos.opencore",
+                "OpenCorePkg",
+                "bootloader",
+                "upstream",
+                "githubRelease",
+                "acidanthera/OpenCorePkg",
+                "https://github.com/acidanthera/OpenCorePkg/releases/latest",
+                true,
+                true,
+                true,
+                false,
+                "1.0.7",
+                "1.0.7",
+                DateTimeOffset.UtcNow,
+                null,
+                DateTimeOffset.UtcNow,
+                null)
+        });
+
+    var componentAudit = await componentAuditService.AuditAsync(
+        auditStage,
+        liveCatalogSnapshot);
+
+    Assert(componentAudit.ComponentCount == 1 &&
+           componentAudit.Components[0].ProductName == "OpenCorePkg" &&
+           componentAudit.Components[0].CatalogAligned is true,
+        "downloaded component audit must bind hashed OpenCorePkg to the live catalog release");
+
+    var staleCatalogSnapshot = liveCatalogSnapshot with
+    {
+        Sources = new OnlineSourceResolution[]
+        {
+            liveCatalogSnapshot.Sources[0] with
+            {
+                Version = "1.0.8",
+                ResolvedRef = "1.0.8"
+            }
+        }
+    };
+
+    var staleReleaseRejected = false;
+    try
+    {
+        _ = await componentAuditService.AuditAsync(
+            auditStage,
+            staleCatalogSnapshot);
+    }
+    catch (InvalidDataException)
+    {
+        staleReleaseRejected = true;
+    }
+
+    Assert(staleReleaseRejected,
+        "downloaded component audit must reject an OpenCore release older than the live catalog");
+
+    await File.WriteAllTextAsync(
+        Path.Combine(ock, "history.json"),
+        """
+        [
+          {
+            "product_name": "OpenCorePkg",
+            "id": 123,
+            "url": "https://example.com/OpenCorePkg.zip",
+            "sha256": ""
+          }
+        ]
+        """);
+
+    var missingHashRejected = false;
+    try
+    {
+        _ = await componentAuditService.AuditAsync(auditStage);
+    }
+    catch (InvalidDataException)
+    {
+        missingHashRejected = true;
+    }
+
+    Assert(missingHashRejected,
+        "downloaded component audit must reject components without SHA-256 metadata");
+}
+finally
+{
+    if (Directory.Exists(componentAuditTemp))
+        Directory.Delete(componentAuditTemp, recursive: true);
+}
+
+Console.WriteLine("CorePilot downloaded-component integrity smoke test OK");
+
+
+var sourceTestTemp = Path.Combine(
+    Path.GetTempPath(),
+    "CorePilot-source-tests-" + Guid.NewGuid().ToString("N"));
+
+try
+{
+    Directory.CreateDirectory(sourceTestTemp);
+
+    var bundledCatalog = OnlineSourceCatalogService.LoadBundledCatalog();
+    var bundledJson = System.Text.Json.JsonSerializer.Serialize(bundledCatalog);
+    var verifiedSha = new string('d', 40);
+
+    using var verifiedHttp = new HttpClient(new DelegateHttpHandler(request =>
+    {
+        if (request.RequestUri?.Host.Equals(
+                "api.github.com",
+                StringComparison.OrdinalIgnoreCase) == true &&
+            request.RequestUri.AbsolutePath.EndsWith(
+                "/repos/CaseyCZ/CorePilot/commits/main",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        sha = verifiedSha,
+                        commit = new { verification = new { verified = true } }
+                    }))
+            };
+        }
+
+        if (request.RequestUri?.Host.Equals(
+                "raw.githubusercontent.com",
+                StringComparison.OrdinalIgnoreCase) == true &&
+            request.RequestUri.AbsolutePath.Contains(
+                $"/CaseyCZ/CorePilot/{verifiedSha}/",
+                StringComparison.OrdinalIgnoreCase) &&
+            request.RequestUri.AbsolutePath.EndsWith(
+                "/src/CorePilot.Core/Data/source-catalog.json",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(bundledJson)
+            };
+        }
+
+        return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+    }));
+
+    var verifiedService = new OnlineSourceCatalogService(
+        verifiedHttp,
+        Path.Combine(sourceTestTemp, "verified"));
+
+    var verifiedLoad = await verifiedService.LoadCatalogAsync();
+    Assert(
+        verifiedLoad.FromRemote &&
+        verifiedLoad.Origin.Contains(verifiedSha, StringComparison.OrdinalIgnoreCase),
+        "online catalog must load only from the immutable GitHub-verified main commit SHA");
+
+    using var unverifiedHttp = new HttpClient(new DelegateHttpHandler(request =>
+    {
+        if (request.RequestUri?.AbsoluteUri ==
+            "https://api.github.com/repos/CaseyCZ/CorePilot/commits/main")
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        sha = new string('e', 40),
+                        commit = new { verification = new { verified = false } }
+                    }))
+            };
+        }
+
+        return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+    }));
+
+    var unverifiedService = new OnlineSourceCatalogService(
+        unverifiedHttp,
+        Path.Combine(sourceTestTemp, "unverified"));
+
+    var unverifiedLoad = await unverifiedService.LoadCatalogAsync();
+    Assert(
+        !unverifiedLoad.FromRemote,
+        "unverified CorePilot main commit must never authorize a remote source catalog");
+
+    var corruptCacheDir = Path.Combine(sourceTestTemp, "corrupt-cache");
+    Directory.CreateDirectory(corruptCacheDir);
+    await File.WriteAllTextAsync(
+        Path.Combine(corruptCacheDir, "source-catalog.json"),
+        "{ definitely-not-json");
+
+    using var offlineHttp = new HttpClient(new DelegateHttpHandler(_ =>
+        new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable)));
+
+    var offlineService = new OnlineSourceCatalogService(
+        offlineHttp,
+        corruptCacheDir);
+
+    var offlineLoad = await offlineService.LoadCatalogAsync();
+    Assert(
+        !offlineLoad.FromRemote &&
+        offlineLoad.Catalog.Sources.Count > 0,
+        "offline/corrupt catalog cache must fail safely to the bundled trusted catalog");
+
+    var offlineSnapshot = await offlineService.ResolveForSystemAsync("macos");
+    Assert(
+        offlineSnapshot.CriticalFailures > 0,
+        "cached/offline critical sources must not authorize physical writing");
+}
+finally
+{
+    if (Directory.Exists(sourceTestTemp))
+        Directory.Delete(sourceTestTemp, recursive: true);
+}
+
+Console.WriteLine("CorePilot online-source fallback and trust regression smoke test OK");
+
+sealed class DelegateHttpHandler : HttpMessageHandler
+{
+    private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+    public DelegateHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) =>
+        _handler = handler;
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(_handler(request));
+}

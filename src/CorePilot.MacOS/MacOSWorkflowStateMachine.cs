@@ -14,7 +14,8 @@ public enum MacOSWorkflowPhase
     DryRunPlanned = 90,
     PreflightReady = 100,
     Confirmed = 110,
-    Simulated = 120
+    Simulated = 120,
+    Written = 130
 }
 
 public sealed record MacOSWorkflowSnapshot(
@@ -38,6 +39,7 @@ public sealed record MacOSWorkflowSnapshot(
         MacOSWorkflowPhase.PreflightReady => "PREFLIGHT READY",
         MacOSWorkflowPhase.Confirmed => "CONFIRMED",
         MacOSWorkflowPhase.Simulated => "SIMULATED",
+        MacOSWorkflowPhase.Written => "WRITTEN",
         _ => Phase.ToString().ToUpperInvariant()
     };
 }

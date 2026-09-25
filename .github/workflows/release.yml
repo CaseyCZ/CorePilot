@@ -24,15 +24,17 @@ jobs:
           if ($env:RELEASE_VERSION -notmatch '^v\d+\.\d+(\.\d+)?([+-][A-Za-z0-9.-]+)?$') {
             throw "Version must look like v0.18 or v0.18.1"
           }
+          $semver = $env:RELEASE_VERSION.TrimStart('v')
+          "COREPILOT_VERSION=$semver" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
 
@@ -44,30 +46,48 @@ jobs:
           python -m py_compile src/CorePilot.MacOS/Bridge/opcore_bridge.py
           python src/CorePilot.MacOS/Bridge/opcore_bridge.py --self-test
 
-      - name: Enforce logging-only disk backend
+      - name: Enforce isolated guarded disk writer
         shell: pwsh
         run: |
-          $path = "src/CorePilot.MacOS/LoggingDiskOperationBackend.cs"
-          $text = Get-Content $path -Raw
-          $forbidden = @(
-            "System.Diagnostics",
-            "Process.Start",
-            "CreateFile",
-            "DeviceIoControl",
-            "PhysicalDrive",
-            "diskpart.exe"
-          )
-          foreach ($needle in $forbidden) {
-            if ($text.Contains($needle)) {
-              throw "Forbidden physical-disk capability marker '$needle' found in $path"
+          $loggingPath = "src/CorePilot.MacOS/LoggingDiskOperationBackend.cs"
+          $logging = Get-Content $loggingPath -Raw
+          foreach ($needle in @("System.Diagnostics", "Process.Start", "CreateFile", "DeviceIoControl", "PhysicalDrive", "diskpart.exe")) {
+            if ($logging.Contains($needle)) {
+              throw "Simulation backend gained forbidden disk capability '$needle'."
+            }
+          }
+
+          $writerPath = "src/CorePilot.MacOS/MacOSUsbPhysicalWriteService.cs"
+          $writer = Get-Content $writerPath -Raw
+          foreach ($needle in @(
+            "confirmationVerification",
+            "planVerification",
+            "manifestVerification",
+            "IdentityFingerprint",
+            'Verb = "runas"',
+            "Get-CimInstance Win32_DiskDrive",
+            "VerifyMountedVolumeBelongsToTargetAsync",
+            "diskpart.exe",
+            "CopyAndVerifyFileAsync"
+          )) {
+            if (-not $writer.Contains($needle)) {
+              throw "Guarded physical writer is missing required safety marker '$needle'."
+            }
+          }
+
+          $diskpartReferences = Get-ChildItem src -Recurse -Filter *.cs |
+            Select-String -SimpleMatch "diskpart.exe"
+          foreach ($match in $diskpartReferences) {
+            if ($match.Path -notlike "*MacOSUsbPhysicalWriteService.cs") {
+              throw "diskpart.exe reference escaped the isolated physical writer: $($match.Path)"
             }
           }
 
       - name: State-machine smoke test
-        run: dotnet run --project tests/CorePilot.WorkflowSmoke/CorePilot.WorkflowSmoke.csproj --configuration Release
+        run: dotnet run --project tests/CorePilot.WorkflowSmoke/CorePilot.WorkflowSmoke.csproj --configuration Release -p:Version=$env:COREPILOT_VERSION
 
       - name: Build
-        run: dotnet build CorePilot.sln --configuration Release --no-restore
+        run: dotnet build CorePilot.sln --configuration Release --no-restore -p:Version=$env:COREPILOT_VERSION
 
       - name: Publish Windows x64
         run: >
@@ -80,6 +100,7 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=None
           -p:DebugSymbols=false
+          -p:Version=$env:COREPILOT_VERSION
 
       - name: Create versioned package
         shell: pwsh

@@ -45,6 +45,7 @@ public sealed class HardwareSnifferBridge
             throw new InvalidOperationException("Hardware Sniffer release has no assets list.");
 
         string? downloadUrl = null;
+        string? expectedDigest = null;
         foreach (var asset in assets.EnumerateArray())
         {
             if (!asset.TryGetProperty("name", out var name) ||
@@ -53,11 +54,21 @@ public sealed class HardwareSnifferBridge
 
             if (asset.TryGetProperty("browser_download_url", out var url))
                 downloadUrl = url.GetString();
+
+            if (asset.TryGetProperty("digest", out var digest) &&
+                digest.ValueKind == JsonValueKind.String)
+                expectedDigest = digest.GetString();
+
             break;
         }
 
         if (string.IsNullOrWhiteSpace(downloadUrl))
             throw new InvalidOperationException("Hardware-Sniffer-CLI.exe was not found in the latest release.");
+
+        if (string.IsNullOrWhiteSpace(expectedDigest) ||
+            !expectedDigest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "Hardware Sniffer release asset does not expose a trusted SHA-256 digest.");
 
         var uri = new Uri(downloadUrl);
         if (!uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
@@ -86,6 +97,14 @@ public sealed class HardwareSnifferBridge
         }
 
         var sha256 = await ComputeSha256Async(toolPath, cancellationToken);
+        var expectedSha256 = expectedDigest["sha256:".Length..].Trim();
+
+        if (!sha256.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            try { File.Delete(toolPath); } catch { }
+            throw new InvalidDataException(
+                "Hardware Sniffer SHA-256 does not match the GitHub Release asset digest.");
+        }
 
         var reportDirectory = Path.Combine(
             appData,

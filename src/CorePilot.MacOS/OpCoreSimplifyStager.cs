@@ -85,47 +85,41 @@ public sealed class OpCoreSimplifyStager
 
         Directory.CreateDirectory(toolCache);
 
-        if (!File.Exists(archivePath))
-        {
-            progress?.Report(
-                $"Downloading current OpCore Simplify {upstreamCommit[..8]}…");
+        progress?.Report(
+            $"Downloading fresh verified OpCore Simplify {upstreamCommit[..8]}…");
 
-            var archiveUri = new Uri(
-                $"https://github.com/lzhoang2801/OpCore-Simplify/archive/{upstreamCommit}.zip");
+        var archiveUri = new Uri(
+            $"https://github.com/lzhoang2801/OpCore-Simplify/archive/{upstreamCommit}.zip");
 
-            await DownloadHttpsAsync(archiveUri, archivePath, cancellationToken);
-        }
+        await DownloadHttpsAsync(archiveUri, archivePath, cancellationToken);
 
         var archiveSha256 = await ComputeSha256Async(archivePath, cancellationToken);
 
-        if (!Directory.Exists(extractedRoot) ||
-            !File.Exists(Path.Combine(extractedRoot, ".corepilot-ready")))
-        {
-            progress?.Report("Extracting OpCore Simplify source…");
+        progress?.Report("Extracting fresh commit-addressed OpCore Simplify source…");
 
-            if (Directory.Exists(extractedRoot))
-                Directory.Delete(extractedRoot, recursive: true);
+        if (Directory.Exists(extractedRoot))
+            Directory.Delete(extractedRoot, recursive: true);
 
-            var tempExtract = Path.Combine(toolCache, "extract-temp");
-            if (Directory.Exists(tempExtract))
-                Directory.Delete(tempExtract, recursive: true);
-
-            Directory.CreateDirectory(tempExtract);
-            ZipFile.ExtractToDirectory(archivePath, tempExtract);
-
-            var sourceRoot = Directory
-                .EnumerateDirectories(tempExtract)
-                .SingleOrDefault()
-                ?? throw new InvalidDataException(
-                    "Unexpected OpCore Simplify archive layout.");
-
-            Directory.Move(sourceRoot, extractedRoot);
+        var tempExtract = Path.Combine(toolCache, "extract-temp");
+        if (Directory.Exists(tempExtract))
             Directory.Delete(tempExtract, recursive: true);
-            await File.WriteAllTextAsync(
-                Path.Combine(extractedRoot, ".corepilot-ready"),
-                upstreamCommit,
-                cancellationToken);
-        }
+
+        Directory.CreateDirectory(tempExtract);
+        ZipFile.ExtractToDirectory(archivePath, tempExtract);
+
+        var sourceRoot = Directory
+            .EnumerateDirectories(tempExtract)
+            .SingleOrDefault()
+            ?? throw new InvalidDataException(
+                "Unexpected OpCore Simplify archive layout.");
+
+        Directory.Move(sourceRoot, extractedRoot);
+        Directory.Delete(tempExtract, recursive: true);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(extractedRoot, ".corepilot-ready"),
+            upstreamCommit,
+            cancellationToken);
 
         ValidateUpstreamSource(extractedRoot);
 
@@ -196,6 +190,8 @@ public sealed class OpCoreSimplifyStager
         string destination,
         CancellationToken cancellationToken)
     {
+        const long maxArchiveBytes = 100L * 1024L * 1024L;
+
         if (uri.Scheme != Uri.UriSchemeHttps ||
             !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Unexpected OpCore Simplify source URL.");
@@ -204,9 +200,63 @@ public sealed class OpCoreSimplifyStager
 
         try
         {
-            await using var input = await _http.GetStreamAsync(uri, cancellationToken);
-            await using var output = File.Create(temp);
-            await input.CopyToAsync(output, cancellationToken);
+            using var response = await _http.GetAsync(
+                uri,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            var finalUri = response.RequestMessage?.RequestUri
+                ?? throw new InvalidOperationException(
+                    "OpCore Simplify download did not expose a final HTTPS URI.");
+
+            if (finalUri.Scheme != Uri.UriSchemeHttps ||
+                !(finalUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                  finalUri.Host.Equals("codeload.github.com", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException(
+                    $"Unexpected OpCore Simplify redirect host: {finalUri.Host}");
+
+            if (response.Content.Headers.ContentLength is long length &&
+                length > maxArchiveBytes)
+                throw new InvalidDataException(
+                    "OpCore Simplify archive is unexpectedly large.");
+
+            await using var input = await response.Content.ReadAsStreamAsync(
+                cancellationToken);
+            await using var output = new FileStream(
+                temp,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                1024 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            var buffer = new byte[1024 * 1024];
+            long total = 0;
+
+            while (true)
+            {
+                var read = await input.ReadAsync(
+                    buffer.AsMemory(0, buffer.Length),
+                    cancellationToken);
+
+                if (read == 0)
+                    break;
+
+                total += read;
+                if (total > maxArchiveBytes)
+                    throw new InvalidDataException(
+                        "OpCore Simplify archive exceeded the maximum accepted size.");
+
+                await output.WriteAsync(
+                    buffer.AsMemory(0, read),
+                    cancellationToken);
+            }
+
+            await output.FlushAsync(cancellationToken);
+            output.Flush(flushToDisk: true);
+
             File.Move(temp, destination, overwrite: true);
         }
         finally
