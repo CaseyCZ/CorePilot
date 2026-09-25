@@ -9,14 +9,38 @@ on:
 jobs:
   windows-build:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
       - name: Restore
         run: dotnet restore CorePilot.sln
+
       - name: Build
         run: dotnet build CorePilot.sln --configuration Release --no-restore
+
+      - name: Publish Windows x64 test build
+        run: >
+          dotnet publish src/CorePilot.App/CorePilot.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output artifacts/CorePilot-win-x64
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+
+      - name: Upload CorePilot test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CorePilot-win-x64
+          path: artifacts/CorePilot-win-x64/
+          if-no-files-found: error
+          retention-days: 14
