@@ -240,8 +240,10 @@ public sealed class WindowsIsoPreparationService
             .Select(x => x.Value.TrimEnd('.', ',', ';'))
             .ToArray();
 
-        foreach (var value in urls.Reverse())
+        for (var index = urls.Length - 1; index >= 0; index--)
         {
+            var value = urls[index];
+
             if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
                 uri.AbsolutePath.EndsWith(".iso", StringComparison.OrdinalIgnoreCase))
                 return uri;
