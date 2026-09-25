@@ -838,7 +838,7 @@ var currentUbuntuReleaseSnippet =
 Assert(
     System.Text.RegularExpressions.Regex.IsMatch(
         currentUbuntuReleaseSnippet,
-        $@"href\s*=\s*[\"\"']{System.Text.RegularExpressions.Regex.Escape("ubuntu-26.04.1-desktop-amd64.iso")}[\"\"']",
+        @"href\s*=\s*[""']ubuntu-26\.04\.1-desktop-amd64\.iso[""']",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase),
     "Ubuntu resolver must prefer the exact current point-release desktop ISO");
 
