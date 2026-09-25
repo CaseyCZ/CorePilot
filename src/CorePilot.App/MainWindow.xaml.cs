@@ -420,21 +420,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _hardwareReport is not null &&
             MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
         {
-            var requiredIds = target.Id == "ventura-13"
-                ? new HashSet<string>(
-                    new[]
-                    {
-                        "macos.apple-download-install",
-                        "macos.apple-version-index"
-                    },
-                    StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(
-                    new[]
-                    {
-                        "macos.apple-download-install",
-                        "macos.apple-version-index"
-                    },
-                    StringComparer.OrdinalIgnoreCase);
+            var requiredIds = new HashSet<string>(
+                new[]
+                {
+                    "macos.apple-download-install",
+                    "macos.apple-version-index"
+                },
+                StringComparer.OrdinalIgnoreCase);
 
             return requiredIds.Count(id =>
             {
