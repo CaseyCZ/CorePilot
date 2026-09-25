@@ -23,7 +23,9 @@ jobs:
         run: dotnet restore CorePilot.sln
 
       - name: Validate Python EFI bridge
-        run: python -m py_compile src/CorePilot.MacOS/Bridge/opcore_bridge.py
+        run: |
+          python -m py_compile src/CorePilot.MacOS/Bridge/opcore_bridge.py
+          python src/CorePilot.MacOS/Bridge/opcore_bridge.py --self-test
 
       - name: Build
         run: dotnet build CorePilot.sln --configuration Release --no-restore
