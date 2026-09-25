@@ -55,6 +55,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private MacOSAutomationProfile? _automationProfile;
     private MacOSAutoResolutionResult? _autoResolution;
     private InstallationPreparationResult? _preparationResult;
+    private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
 
@@ -196,6 +197,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _verificationCompleted = false;
         _preparationResult = null;
+        _preparationFailure = null;
         _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
 
@@ -240,7 +242,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ScanHardwareAsync();
 
         if (module.Id == "macos" && _hardwareReport is not null)
-            await TryAutomaticMacResolutionAsync(target);
+        {
+            try
+            {
+                await TryAutomaticMacResolutionAsync(target);
+
+                if (_autoResolution?.AutomaticConfigurationReady == true &&
+                    _automationProfile is { CanBuildEfi: true, RequiresReview: false })
+                {
+                    await PrepareMacOSPayloadAsync(target);
+                }
+            }
+            catch (Exception ex)
+            {
+                _preparationFailure = ex.Message;
+                ActivityLog.Error(
+                    "Preparation",
+                    $"Automatic macOS preparation stopped safely: {ex.Message}",
+                    ex);
+            }
+        }
 
         if (_compatibilityReport is null)
         {
@@ -253,61 +274,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastOnlineSourceSnapshot is not null &&
             _lastOnlineSourceSnapshot.CriticalFailures == 0;
 
-        var automaticConfigurationReady =
-            module.Id != "macos" ||
-            _autoResolution?.AutomaticConfigurationReady == true;
+        _preparationResult = BuildPreparationResult(module, target);
+        _verificationCompleted = true;
 
-        _verificationCompleted =
-            _compatibilityReport.CanProceed &&
-            onlineReady &&
-            automaticConfigurationReady;
-
+        ApplyPreparationResultToUi(module, target);
         RefreshActionAvailability();
 
-        if (_compatibilityReport.CanProceed &&
-            onlineReady &&
-            automaticConfigurationReady)
-        {
-            var nativeApple =
-                _hardwareReport is not null &&
-                MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
-
-            var sourceSuffix =
-                $" Online sources: {_lastOnlineSourceSnapshot!.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.";
-
-            var autoSuffix = _autoResolution is null
-                ? ""
-                : $" {_autoResolution.Summary}.";
-
-            PlanStatus = (nativeApple
-                ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
-                : $"Verified ✅ {_compatibilityReport.Summary}. Hardware-specific configuration was prepared automatically.")
-                + sourceSuffix
-                + autoSuffix;
-
-            ActivityLog.Success("Verification", PlanStatus);
-        }
-        else if (_compatibilityReport.CanProceed && !onlineReady)
+        if (!onlineReady)
         {
             var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
             PlanStatus =
-                $"Compatibility passed, but writing is not ready: {failures} critical online source(s) were not refreshed live. " +
-                "Reconnect to the internet and run Verify again.";
-            ActivityLog.Warning("Verification", PlanStatus);
+                $"NOT READY · {failures} critical online source(s) could not be refreshed live. " +
+                "CorePilot will not prepare writable media from stale critical data.";
+            ActivityLog.Warning("Preparation", PlanStatus);
         }
-        else if (_compatibilityReport.CanProceed)
+        else if (_preparationResult.ReadyToWrite)
         {
             PlanStatus =
-                $"Compatibility passed, but automatic configuration is not complete. " +
-                $"{_autoResolution?.Summary ?? "Review the Compatibility tab."}.";
-            ActivityLog.Warning("Verification", PlanStatus);
+                $"READY TO WRITE ✅ {target.DisplayName} is prepared for this computer. " +
+                $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
+            ActivityLog.Success("Preparation", PlanStatus);
+        }
+        else if (_preparationResult.SystemPrepared)
+        {
+            PlanStatus =
+                $"SYSTEM PREPARED ✅ {target.DisplayName} has a validated installation path for this computer, " +
+                "but this path does not yet have a guarded physical writer. " +
+                $"{_preparationResult.Summary}.";
+            ActivityLog.Warning("Preparation", PlanStatus);
         }
         else
         {
             PlanStatus =
-                $"Verification finished: {CompatibilityVerdict}. {_compatibilityReport.Summary}. " +
-                "Open Compatibility to see the exact required fixes and installation path.";
-            ActivityLog.Warning("Verification", PlanStatus);
+                $"NOT READY · CorePilot exhausted the currently implemented safe paths: " +
+                $"{_preparationResult.Summary}. Open Preparation to see what remains unresolved.";
+            ActivityLog.Warning("Preparation", PlanStatus);
         }
     }
 
