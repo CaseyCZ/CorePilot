@@ -168,14 +168,15 @@
                                      Visibility="Hidden"
                                      VerticalContentAlignment="Center"/>
 
-                            <Popup x:Name="Popup"
+                            <Popup x:Name="PART_Popup"
                                    Placement="Bottom"
+                                   PlacementTarget="{Binding ElementName=ToggleButton}"
+                                   Width="{Binding ActualWidth, ElementName=ToggleButton}"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True"
                                    Focusable="False"
                                    PopupAnimation="Slide">
-                                <Grid Width="{Binding ActualWidth, ElementName=ToggleButton}"
-                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <Grid MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <Border Background="{StaticResource PanelBrush}"
                                             BorderBrush="{StaticResource BorderBrush}"
                                             BorderThickness="1"
