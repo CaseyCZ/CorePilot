@@ -314,9 +314,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
     {
-        if (!_verificationCompleted || _compatibilityReport?.CanProceed != true)
+        if (!_verificationCompleted || _preparationResult?.ReadyToWrite != true)
         {
-            PlanStatus = "Run Verify successfully before writing to a disk.";
+            PlanStatus = "Run Verify first and wait until CorePilot reports READY TO WRITE.";
             return;
         }
 
@@ -365,98 +365,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 throw new InvalidOperationException(
                     $"{_lastOnlineSourceSnapshot.CriticalFailures} critical online source(s) are not live. Physical writing was blocked.");
 
-            if (_deepScanExport is null)
-            {
-                DeepScanStatus = "Running automatic Hardware Sniffer deep scan…";
-                ActivityLog.Progress("Write workflow", DeepScanStatus);
-
-                var deepProgress = new Progress<string>(message =>
-                {
-                    DeepScanStatus = message;
-                    ActivityLog.Progress("Deep Scan", message);
-                });
-
-                _deepScanExport = await _hardwareSniffer.ExportAsync(deepProgress);
-                _hardwareReport ??= await _scanner.ScanAsync();
-                _hardwareReport = await _hardwareSnifferParser.MergeAsync(
-                    _deepScanExport.ReportPath,
-                    _hardwareReport);
-
-                RefreshHardwareView();
-                _workflowStateMachine.Reset(
-                    "Automatic Deep Scan refreshed hardware identity.");
-                AdvanceWorkflow(
-                    MacOSWorkflowPhase.DeepScanned,
-                    "Hardware Sniffer Report.json + ACPI imported.");
-                RunCompatibilityAnalysis();
-
-                if (_compatibilityReport?.CanProceed != true ||
-                    _automationProfile is not { CanBuildEfi: true, RequiresReview: false })
-                    throw new InvalidOperationException(
-                        "Deep Scan changed the compatibility result. Run Verify again and review the Compatibility tab.");
-            }
+            if (_deepScanExport is null ||
+                _opCoreStage is null ||
+                _lastEfiBuild is null ||
+                _lastRecovery is null ||
+                _lastInstallerManifest is null)
+                throw new InvalidOperationException(
+                    "Prepared installer payload is missing. Run Verify again; Write to disk never rebuilds the system implicitly.");
 
             ActivityLog.Progress(
                 "Write workflow",
-                "Staging the current verified OpenCore automation engine…");
-
-            _opCoreStage = await _opCoreStager.StageAsync(
-                _deepScanExport.ReportPath,
-                _deepScanExport.AcpiDirectory,
-                _automationProfile,
-                new Progress<string>(message =>
-                    ActivityLog.Progress("Workspace", message)));
-
-            AdvanceWorkflow(
-                MacOSWorkflowPhase.WorkspaceStaged,
-                $"OpenCore workspace staged for {variant.DisplayName}.");
-
-            ActivityLog.Progress(
-                "Write workflow",
-                "Building and validating EFI…");
-
-            _lastEfiBuild = await _opCoreBuilder.BuildAsync(
-                _opCoreStage,
-                _automationProfile,
-                new Progress<string>(message =>
-                    ActivityLog.Progress("EFI Build", message)));
-
-            ActivityLog.Progress(
-                "Supply chain",
-                "Auditing downloaded OpenCore/kext source URLs and SHA-256 metadata…");
-
-            var componentAudit = await _componentAuditService.AuditAsync(
-                _opCoreStage,
-                _lastOnlineSourceSnapshot);
-
-            ActivityLog.Info(
-                "Supply chain",
-                $"{componentAudit.ComponentCount} downloaded component(s) have HTTPS sources, SHA-256 metadata and integrity manifests · audit {componentAudit.AuditSha256[..16]}…");
-
-            AdvanceWorkflow(
-                MacOSWorkflowPhase.EfiValidated,
-                "EFI passed ocvalidate, structural validation and downloaded-component integrity audit.");
-
-            ActivityLog.Progress(
-                "Write workflow",
-                "Downloading and verifying Apple Recovery…");
-
-            _lastRecovery = await _appleRecoveryDownloader.DownloadAsync(
-                _opCoreStage,
-                _automationProfile,
-                _lastEfiBuild,
-                new Progress<string>(message =>
-                    ActivityLog.Progress("Recovery", message)));
-
-            AdvanceWorkflow(
-                MacOSWorkflowPhase.RecoveryVerified,
-                "Apple Recovery downloaded and verified.");
-
-            _lastInstallerManifest = await _installerManifestService.CreateAsync(
-                _opCoreStage,
-                _automationProfile,
-                _lastEfiBuild,
-                _lastRecovery);
+                "Re-validating the prepared payload before destructive USB authorization…");
 
             var manifestVerification = await _installerManifestService.VerifyAsync(
                 _lastInstallerManifest.ManifestPath,
@@ -464,12 +383,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (!manifestVerification.Success)
                 throw new InvalidOperationException(
-                    "Installer manifest verification failed: " +
+                    "Prepared installer manifest no longer verifies: " +
                     string.Join("; ", manifestVerification.Errors.Take(4)));
 
-            AdvanceWorkflow(
-                MacOSWorkflowPhase.ManifestVerified,
-                "Final installer manifest created and re-verified.");
+            var componentAudit = await _componentAuditService.AuditAsync(
+                _opCoreStage,
+                _lastOnlineSourceSnapshot);
+
+            ActivityLog.Info(
+                "Supply chain",
+                $"{componentAudit.ComponentCount} prepared component(s) were re-audited before writing.");
 
             ActivityLog.Progress(
                 "Supply chain",
@@ -921,8 +844,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _compatibilityReport = null;
         _automationProfile = null;
         _autoResolution = null;
-        _preparationResult = null;
-        _preparationFailure = null;
         _preparationResult = null;
         _preparationFailure = null;
         CompatibilitySummary = "Press Verify to prepare this system for the detected hardware.";
