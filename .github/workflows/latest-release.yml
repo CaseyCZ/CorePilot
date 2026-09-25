@@ -138,6 +138,7 @@ jobs:
 
             gh release edit latest `
               --repo "$env:GITHUB_REPOSITORY" `
+              --target "$env:BUILD_SHA" `
               --title "CorePilot Latest" `
               --notes-file "$notes" `
               --latest
