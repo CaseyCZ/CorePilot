@@ -391,3 +391,78 @@ Assert(sourceCatalog.Sources
     "kext sources must resolve from upstream GitHub releases");
 
 Console.WriteLine("CorePilot online source catalog smoke test OK");
+
+
+var writtenWorkflow = new MacOSWorkflowStateMachine();
+writtenWorkflow.Advance(MacOSWorkflowPhase.HardwareScanned, "hardware");
+writtenWorkflow.Advance(MacOSWorkflowPhase.DeepScanned, "deep");
+writtenWorkflow.Advance(MacOSWorkflowPhase.CompatibilityReady, "compat");
+writtenWorkflow.Advance(MacOSWorkflowPhase.WorkspaceStaged, "workspace");
+writtenWorkflow.Advance(MacOSWorkflowPhase.EfiValidated, "efi");
+writtenWorkflow.Advance(MacOSWorkflowPhase.RecoveryVerified, "recovery");
+writtenWorkflow.Advance(MacOSWorkflowPhase.ManifestVerified, "manifest");
+writtenWorkflow.Advance(MacOSWorkflowPhase.UsbInspected, "usb");
+writtenWorkflow.Advance(MacOSWorkflowPhase.DryRunPlanned, "plan");
+var writtenExpiry = DateTimeOffset.UtcNow.AddMinutes(2);
+writtenWorkflow.Advance(MacOSWorkflowPhase.PreflightReady, "preflight", writtenExpiry);
+writtenWorkflow.Advance(MacOSWorkflowPhase.Confirmed, "confirmed", writtenExpiry);
+writtenWorkflow.Advance(MacOSWorkflowPhase.Written, "physical write complete");
+Assert(writtenWorkflow.Current.Phase == MacOSWorkflowPhase.Written,
+    "guarded physical write must have a terminal Written phase");
+Assert(writtenWorkflow.Current.AuthorizationExpiresAt is null,
+    "terminal physical write must clear short-lived authorization");
+
+Console.WriteLine("CorePilot physical-write state smoke test OK");
+
+var genericAnalyzer = new GenericCompatibilityAnalyzer();
+
+var windows11Ok = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(windows11Ok.CanProceed,
+    "Windows 11 generic verification must complete for a basic UEFI/4GB+ machine");
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "TPM" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must explicitly disclose that TPM is not collected by the lightweight scan");
+
+var windows11Legacy = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "Legacy BIOS",
+        SecureBoot = false,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11Legacy.CanProceed,
+    "Windows 11 generic verification must block Legacy BIOS");
+
+var ubuntuOk = genericAnalyzer.Analyze(
+    "linux",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("ubuntu", "Ubuntu"));
+
+Assert(ubuntuOk.CanProceed,
+    "Linux generic verification must produce a usable report instead of failing because it is not macOS");
+
+Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
+
+Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
+       opCoreSimplifySource.Branch == "main" &&
+       opCoreSimplifySource.Critical,
+    "execution-critical OpCore Simplify trust policy must stay pinned to the expected upstream");
+
+Console.WriteLine("CorePilot execution-critical source trust smoke test OK");
