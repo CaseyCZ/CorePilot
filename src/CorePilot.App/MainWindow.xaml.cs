@@ -1174,7 +1174,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var bypassable = blockers.All(x =>
-            x.Component is "TPM" or "Firmware");
+            x.Component == "TPM");
 
         if (!bypassable)
         {
@@ -1189,14 +1189,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .Select(finding =>
             {
                 if (finding.State == CompatibilityState.Blocked &&
-                    finding.Component is "TPM" or "Firmware")
+                    finding.Component == "TPM")
                 {
                     return finding with
                     {
                         State = CompatibilityState.Supported,
                         Title = finding.Title + " · resolved by older-PC media",
                         Details = finding.Details +
-                                  " CorePilot will apply the documented Windows Setup compatibility path and wider BIOS/UEFI USB layout."
+                                  " CorePilot will apply the documented Windows Setup compatibility path while keeping the normal UEFI media layout."
                     };
                 }
 
@@ -1220,7 +1220,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CompatibilityState.Supported,
             "Installer media",
             "Older-PC compatibility enabled automatically",
-            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply TPM and Secure Boot Windows Setup compatibility bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
+            "CorePilot will keep the normal UEFI/FAT32 media layout and apply the implemented TPM/Secure Boot Windows Setup compatibility settings. Legacy BIOS is not treated as resolved. CPU-specific requirements are not falsely claimed as bypassed."));
 
         remediated.Add(new(
             CompatibilityState.Warning,
@@ -1848,7 +1848,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         "Windows media mode",
                         _preparedWindowsMediaOptions.ModeText,
                         _preparedWindowsMediaOptions.ExtendedHardwareCompatibility
-                            ? "Verify locked the wider MBR/FAT32 BIOS+UEFI compatibility path with the documented Windows Setup TPM and Secure Boot remediation."
+                            ? "Verify locked the UEFI/FAT32 Windows 11 compatibility path with the implemented Windows Setup TPM/Secure Boot remediation."
                             : "Verify locked the standard Windows media path for Write to disk."));
                 }
             }
