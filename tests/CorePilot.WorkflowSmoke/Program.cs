@@ -642,6 +642,16 @@ Assert(windows11Ok.Findings.Any(x =>
         x.State == CompatibilityState.Warning),
     "Windows 11 must not claim an exact supported-CPU-list match from processor detection alone");
 
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "Graphics" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must disclose that DirectX 12 / WDDM 2.0 is not fully verified");
+
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "Storage" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 media preparation must not assume the final installation drive satisfies the 64 GB requirement");
+
 var windows11LowRam = genericAnalyzer.Analyze(
     "windows",
     testHardware with
