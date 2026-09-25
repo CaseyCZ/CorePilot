@@ -101,7 +101,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,12,0,10"/>
 
-                        <Border Background="#12151A"
+                        <Border Background="{StaticResource PanelBrush}"
                                 BorderBrush="{StaticResource BorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
@@ -171,7 +171,7 @@
                                 </StackPanel>
                             </Grid>
 
-                            <Border Grid.Row="1" Background="#12151A" BorderBrush="{StaticResource BorderBrush}"
+                            <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,10,0,0">
                                 <TextBlock Text="{Binding DeepScanStatus}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
                             </Border>
@@ -212,7 +212,7 @@
                             </StackPanel>
 
                             <Border Grid.Row="2"
-                                    Background="#12151A"
+                                    Background="{StaticResource PanelBrush}"
                                     BorderBrush="{StaticResource BorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="10"
@@ -222,16 +222,19 @@
                                                Foreground="{StaticResource MutedBrush}"
                                                FontWeight="SemiBold"/>
                                     <TextBlock Text="{Binding CompatibilityVerdict}"
+                                               Foreground="{StaticResource TextBrush}"
                                                FontSize="22"
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"
                                                Margin="0,4,0,10"/>
 
                                     <TextBlock Text="{Binding CompatibilityInstallPath}"
+                                               Foreground="{StaticResource TextBrush}"
                                                TextWrapping="Wrap"
                                                Margin="0,0,0,12"/>
 
                                     <TextBlock Text="Problems found / fixes / drivers / patches"
+                                               Foreground="{StaticResource TextBrush}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock Text="{Binding CompatibilityRequirements}"
@@ -239,6 +242,7 @@
                                                TextWrapping="Wrap"/>
 
                                     <TextBlock Text="Automatic configuration"
+                                               Foreground="{StaticResource TextBrush}"
                                                FontWeight="SemiBold"
                                                Margin="0,14,0,4"/>
                                     <TextBlock Text="{Binding CompatibilityAutoConfiguration}"
@@ -251,20 +255,33 @@
                                       BorderThickness="0" Foreground="{StaticResource TextBrush}">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,11">
+                                        <Border Background="{StaticResource RowBrush}"
+                                                BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                CornerRadius="4"
+                                                Padding="8,11"
+                                                Margin="0,0,0,3">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="90"/>
                                                     <ColumnDefinition Width="120"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding StateText}" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding StateText}"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           FontWeight="Bold"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding Category}" Foreground="{StaticResource MutedBrush}"/>
                                                 <StackPanel Grid.Column="2">
-                                                    <TextBlock Text="{Binding Problem}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Problem}"
+                                                               Foreground="{StaticResource TextBrush}"
+                                                               FontWeight="SemiBold"
+                                                               TextWrapping="Wrap"/>
                                                     <TextBlock Text="{Binding Resolution}" Foreground="{StaticResource MutedBrush}"
                                                                TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                                    <TextBlock Text="{Binding Source}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding Source}"
+                                                               Foreground="{StaticResource TextBrush}"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,4,0,0"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -277,7 +294,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded macOS physical USB writing enabled."
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded macOS, Windows and Linux USB writing enabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
