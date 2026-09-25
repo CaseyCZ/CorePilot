@@ -14,7 +14,11 @@
       "critical": true,
       "resolveOnVerify": true,
       "requireVerifiedCommit": false,
-      "notes": "Primary Apple source for current/previous macOS download methods and compatibility links."
+      "notes": "Primary Apple source for current/previous macOS download methods and compatibility links.",
+      "useFor": [
+        "installation",
+        "compatibility"
+      ]
     },
     {
       "id": "macos.apple-version-index",
@@ -29,7 +33,11 @@
       "critical": true,
       "resolveOnVerify": true,
       "requireVerifiedCommit": false,
-      "notes": "Apple-maintained current version list."
+      "notes": "Apple-maintained current version list.",
+      "useFor": [
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "macos.dortania-guide",
@@ -44,7 +52,13 @@
       "critical": false,
       "resolveOnVerify": true,
       "requireVerifiedCommit": false,
-      "notes": "Primary OpenCore/Hackintosh workflow guide."
+      "notes": "Primary OpenCore/Hackintosh workflow guide.",
+      "useFor": [
+        "compatibility",
+        "configuration",
+        "installation",
+        "remediation"
+      ]
     },
     {
       "id": "macos.opencore",
@@ -59,7 +73,11 @@
       "critical": true,
       "resolveOnVerify": true,
       "requireVerifiedCommit": false,
-      "notes": "Authoritative OpenCore release source."
+      "notes": "Authoritative OpenCore release source.",
+      "useFor": [
+        "configuration",
+        "installation"
+      ]
     },
     {
       "id": "macos.opcore-simplify",
@@ -75,7 +93,12 @@
       "critical": true,
       "resolveOnVerify": true,
       "requireVerifiedCommit": true,
-      "notes": "CorePilot resolves the current verified upstream main commit instead of pinning a bundled revision."
+      "notes": "CorePilot resolves the current verified upstream main commit instead of pinning a bundled revision.",
+      "useFor": [
+        "configuration",
+        "remediation",
+        "installation"
+      ]
     },
     {
       "id": "macos.macrecoveryx",
@@ -89,7 +112,11 @@
       "repository": "AngeloAvv/MacRecoveryX",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "recovery"
+      ]
     },
     {
       "id": "macos.usbtoolbox",
@@ -103,7 +130,12 @@
       "repository": "USBToolBox/tool",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "configuration",
+        "usb",
+        "remediation"
+      ]
     },
     {
       "id": "macos.propertree",
@@ -118,7 +150,11 @@
       "branch": "master",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "configuration",
+        "plist"
+      ]
     },
     {
       "id": "macos.ocat",
@@ -132,7 +168,11 @@
       "repository": "ic005k/OCAuxiliaryTools",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "configuration",
+        "plist"
+      ]
     },
     {
       "id": "macos.hackintool",
@@ -146,7 +186,12 @@
       "repository": "benbaker76/Hackintool",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "diagnostics",
+        "configuration",
+        "remediation"
+      ]
     },
     {
       "id": "macos.gensmbios",
@@ -161,7 +206,11 @@
       "branch": "master",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "configuration",
+        "smbios"
+      ]
     },
     {
       "id": "macos.oclp",
@@ -175,7 +224,12 @@
       "repository": "dortania/OpenCore-Legacy-Patcher",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "compatibility",
+        "remediation",
+        "installation"
+      ]
     },
     {
       "id": "macos.oclp-mod-kgp",
@@ -191,7 +245,11 @@
       "critical": false,
       "resolveOnVerify": false,
       "requireVerifiedCommit": false,
-      "notes": "Secondary experimental source only; never preferred over official OCLP."
+      "notes": "Secondary experimental source only; never preferred over official OCLP.",
+      "useFor": [
+        "experimental-remediation",
+        "compatibility"
+      ]
     },
     {
       "id": "macos.kext.lilu",
@@ -205,7 +263,11 @@
       "repository": "acidanthera/Lilu",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.virtualsmc",
@@ -219,7 +281,11 @@
       "repository": "acidanthera/VirtualSMC",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.whatevergreen",
@@ -233,7 +299,12 @@
       "repository": "acidanthera/WhateverGreen",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "graphics",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.applealc",
@@ -247,7 +318,12 @@
       "repository": "acidanthera/AppleALC",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "audio",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.intelmausi",
@@ -261,7 +337,12 @@
       "repository": "acidanthera/IntelMausi",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "network",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.airportbrcmfixup",
@@ -275,7 +356,12 @@
       "repository": "acidanthera/AirportBrcmFixup",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "wifi",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.nvmefix",
@@ -289,7 +375,12 @@
       "repository": "acidanthera/NVMeFix",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "storage",
+        "remediation"
+      ]
     },
     {
       "id": "macos.kext.restrictevents",
@@ -303,7 +394,11 @@
       "repository": "acidanthera/RestrictEvents",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "drivers",
+        "remediation"
+      ]
     },
     {
       "id": "windows.microsoft-windows11",
@@ -317,7 +412,15 @@
       "url": "https://www.microsoft.com/software-download/windows11",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "windows-11"
+      ]
     },
     {
       "id": "windows.microsoft-windows10",
@@ -331,7 +434,15 @@
       "url": "https://www.microsoft.com/software-download/windows10",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "windows-10"
+      ]
     },
     {
       "id": "windows.rufus-site",
@@ -346,7 +457,12 @@
       "url": "https://rufus.ie/",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "media-writer",
+        "remediation"
+      ]
     },
     {
       "id": "windows.rufus",
@@ -361,7 +477,12 @@
       "repository": "pbatard/rufus",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "media-writer",
+        "remediation"
+      ]
     },
     {
       "id": "linux.ubuntu",
@@ -375,7 +496,15 @@
       "url": "https://ubuntu.com/download/desktop",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "ubuntu"
+      ]
     },
     {
       "id": "linux.fedora",
@@ -389,7 +518,15 @@
       "url": "https://fedoraproject.org/workstation/download",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "fedora"
+      ]
     },
     {
       "id": "linux.debian",
@@ -403,7 +540,15 @@
       "url": "https://www.debian.org/distrib/",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "debian"
+      ]
     },
     {
       "id": "linux.mint",
@@ -417,7 +562,15 @@
       "url": "https://linuxmint.com/download.php",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ],
+      "targets": [
+        "linux-mint"
+      ]
     },
     {
       "id": "macos.kext.itlwm",
@@ -432,7 +585,12 @@
       "critical": false,
       "resolveOnVerify": false,
       "requireVerifiedCommit": false,
-      "notes": "Resolved only when detected Intel Wi-Fi needs the OpenIntelWireless stack."
+      "notes": "Resolved only when detected Intel Wi-Fi needs the OpenIntelWireless stack.",
+      "useFor": [
+        "drivers",
+        "wifi",
+        "remediation"
+      ]
     },
     {
       "id": "macos.heliport",
@@ -447,7 +605,11 @@
       "critical": false,
       "resolveOnVerify": false,
       "requireVerifiedCommit": false,
-      "notes": "Resolved only when the automatic Wi-Fi plan selects itlwm + HeliPort."
+      "notes": "Resolved only when the automatic Wi-Fi plan selects itlwm + HeliPort.",
+      "useFor": [
+        "wifi",
+        "remediation"
+      ]
     },
     {
       "id": "macos.amd-vanilla",
@@ -463,7 +625,91 @@
       "critical": false,
       "resolveOnVerify": false,
       "requireVerifiedCommit": false,
-      "notes": "Resolved only for AMD CPU configurations that require the AMD Vanilla patch set."
+      "notes": "Resolved only for AMD CPU configurations that require the AMD Vanilla patch set.",
+      "useFor": [
+        "cpu",
+        "kernel",
+        "remediation"
+      ]
+    },
+    {
+      "id": "macos.guide.vyoralek-opencore",
+      "name": "Vyoralek - Hackintosh / OpenCore practical guide",
+      "systems": [
+        "macos"
+      ],
+      "role": "community-practical-guide",
+      "trust": "community",
+      "strategy": "webPage",
+      "url": "https://blog.vyoralek.cz/apple/hackintosh-aneb-macos-na-beznem-pc-opencore/",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Practical reference previously supplied for how OpenCore installation and configuration steps are performed.",
+      "useFor": [
+        "installation",
+        "configuration",
+        "remediation"
+      ]
+    },
+    {
+      "id": "macos.video.opencore-install-2giy",
+      "name": "OpenCore Hackintosh installation video",
+      "systems": [
+        "macos"
+      ],
+      "role": "video-practical-guide",
+      "trust": "community",
+      "strategy": "webPage",
+      "url": "https://youtu.be/2giYStLped8",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Practical video reference previously supplied; use to cross-check where settings are changed and how the installation flow is performed.",
+      "useFor": [
+        "installation",
+        "configuration",
+        "remediation"
+      ]
+    },
+    {
+      "id": "macos.video.virtualbox-ya3x",
+      "name": "macOS on Windows AMD/Intel VirtualBox video",
+      "systems": [
+        "macos"
+      ],
+      "role": "video-context-reference",
+      "trust": "community",
+      "strategy": "webPage",
+      "url": "https://youtu.be/YA3X2msKsfU",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Context reference previously supplied. VirtualBox-specific steps must not be applied to physical OpenCore targets unless independently validated.",
+      "useFor": [
+        "installation-reference"
+      ]
+    },
+    {
+      "id": "windows.fido",
+      "name": "Fido Windows ISO resolver",
+      "systems": [
+        "windows"
+      ],
+      "role": "official-iso-resolver",
+      "trust": "upstream",
+      "strategy": "githubBranchHead",
+      "repository": "pbatard/Fido",
+      "branch": "master",
+      "critical": true,
+      "resolveOnVerify": true,
+      "requireVerifiedCommit": true,
+      "useFor": [
+        "installation",
+        "media-resolver",
+        "media-writer"
+      ],
+      "notes": "Used only to resolve current official Microsoft retail ISO URLs. CorePilot stages the script from the exact GitHub-verified commit returned by this source."
     }
   ]
 }

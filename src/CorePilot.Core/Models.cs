@@ -132,7 +132,8 @@ public sealed record HardwareReport(
     bool? SecureBoot,
     long MemoryBytes,
     IReadOnlyList<HardwareDeviceInfo> Devices,
-    IReadOnlyList<UsbDriveInfo> Disks)
+    IReadOnlyList<UsbDriveInfo> Disks,
+    bool? Tpm20 = null)
 {
     public IEnumerable<HardwareDisplayItem> ToDisplayItems()
     {
@@ -140,6 +141,7 @@ public sealed record HardwareReport(
         yield return new("CPU", Cpu, CpuCores > 0 ? $"{CpuCores} cores / {CpuThreads} threads" : "");
         yield return new("Motherboard", Motherboard, "");
         yield return new("Firmware", FirmwareMode, $"Secure Boot: {FormatBool(SecureBoot)}");
+        yield return new("Security", "TPM 2.0", FormatBool(Tpm20));
         yield return new("Memory", $"{MemoryBytes / 1024d / 1024d / 1024d:0.#} GB", "");
 
         foreach (var device in Devices)

@@ -70,7 +70,7 @@
                                    FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}"/>
-                        <TextBlock Text="1. Verify compatibility without a USB disk.  2. Connect a USB disk only when you are ready to write."
+                        <TextBlock Text="1. Verify scans the PC, searches online for usable fixes/drivers, configures the selected system and validates the prepared result.  2. Write to disk only copies the already prepared system to USB."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,6,0,20"/>
@@ -137,7 +137,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,4,0,8"/>
 
-                        <TextBlock Text="Write to disk runs the hidden safety/build stages automatically. The selected USB is erased only after a fresh identity check, verified manifest/preflight and an exact typed confirmation phrase."
+                        <TextBlock Text="Write to disk uses the system already prepared by Verify. The selected USB is erased only after a fresh identity check, payload re-validation, verified preflight and an exact typed confirmation phrase."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"/>
 
@@ -197,7 +197,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="Compatibility">
+                    <TabItem Header="Preparation">
                         <Grid Margin="6,12,6,6">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -207,7 +207,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Compatibility" FontSize="20" FontWeight="SemiBold"/>
+                                <TextBlock Text="Preparation" FontSize="20" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding CompatibilitySummary}" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
 
@@ -231,7 +231,7 @@
                                                TextWrapping="Wrap"
                                                Margin="0,0,0,12"/>
 
-                                    <TextBlock Text="Required fixes / patches / drivers"
+                                    <TextBlock Text="Problems found / fixes / drivers / patches"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock Text="{Binding CompatibilityRequirements}"

@@ -1,5 +1,7 @@
 using CorePilot.Core;
 using CorePilot.MacOS;
+using CorePilot.Windows;
+using CorePilot.Linux;
 
 static void Assert(bool condition, string message)
 {
@@ -493,6 +495,7 @@ var requiredOnlineSources = new[]
     "macos.heliport",
     "macos.amd-vanilla",
     "windows.microsoft-windows11",
+    "windows.fido",
     "windows.rufus",
     "linux.ubuntu",
     "linux.fedora",
@@ -503,6 +506,48 @@ var requiredOnlineSources = new[]
 foreach (var sourceId in requiredOnlineSources)
     Assert(sourceIds.Contains(sourceId),
         $"online source catalog is missing {sourceId}");
+
+var windows11Source = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.microsoft-windows11");
+var windows10Source = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.microsoft-windows10");
+var ubuntuSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "linux.ubuntu");
+var fedoraSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "linux.fedora");
+
+Assert(OnlineSourceCatalogService.AppliesToTarget(
+           windows11Source,
+           "windows-11") &&
+       !OnlineSourceCatalogService.AppliesToTarget(
+           windows11Source,
+           "windows-10") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           windows10Source,
+           "windows-10"),
+    "Windows verification sources must be scoped to the selected Windows target");
+
+Assert(OnlineSourceCatalogService.AppliesToTarget(
+           ubuntuSource,
+           "ubuntu") &&
+       !OnlineSourceCatalogService.AppliesToTarget(
+           ubuntuSource,
+           "fedora") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fedoraSource,
+           "fedora"),
+    "Linux verification sources must be scoped to the selected distribution");
+
+var fidoSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.fido");
+Assert(fidoSource.RequireVerifiedCommit &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fidoSource,
+           "windows-11") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fidoSource,
+           "windows-10"),
+    "Fido must stay a verified common Windows ISO resolver for both targets");
 
 Assert(sourceCatalog.Sources
         .Where(x => x.Strategy == "webPage")
@@ -522,6 +567,31 @@ Assert(sourceCatalog.Sources
         .All(x => x.Strategy == "githubRelease" &&
                   !string.IsNullOrWhiteSpace(x.Repository)),
     "kext sources must resolve from upstream GitHub releases");
+
+var knowledgeIds = sourceCatalog.Sources
+    .Where(x => x.UseFor is { Count: > 0 })
+    .Select(x => x.Id)
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+Assert(knowledgeIds.Contains("macos.dortania-guide") &&
+       knowledgeIds.Contains("macos.opcore-simplify") &&
+       knowledgeIds.Contains("macos.usbtoolbox") &&
+       knowledgeIds.Contains("macos.propertree") &&
+       knowledgeIds.Contains("macos.hackintool") &&
+       knowledgeIds.Contains("macos.gensmbios") &&
+       knowledgeIds.Contains("macos.oclp"),
+    "macOS preparation knowledge must include the supplied configuration and remediation toolchain");
+
+Assert(knowledgeIds.Contains("macos.guide.vyoralek-opencore") &&
+       knowledgeIds.Contains("macos.video.opencore-install-2giy") &&
+       knowledgeIds.Contains("macos.video.virtualbox-ya3x"),
+    "supplied practical article/video references must remain in the preparation knowledge catalog");
+
+var virtualBoxReference = sourceCatalog.Sources.Single(x =>
+    x.Id == "macos.video.virtualbox-ya3x");
+Assert(!virtualBoxReference.ResolveOnVerify &&
+       virtualBoxReference.UseFor?.Contains("installation-reference") == true,
+    "VirtualBox-only video must stay reference-only and must never drive physical OpenCore configuration automatically");
 
 Console.WriteLine("CorePilot online source catalog smoke test OK");
 
@@ -555,6 +625,7 @@ var windows11Ok = genericAnalyzer.Analyze(
     {
         FirmwareMode = "UEFI",
         SecureBoot = true,
+        Tpm20 = true,
         MemoryBytes = 8L * 1024 * 1024 * 1024
     },
     new SystemVariant("windows-11", "Windows 11"));
@@ -563,8 +634,25 @@ Assert(windows11Ok.CanProceed,
     "Windows 11 generic verification must complete for a basic UEFI/4GB+ machine");
 Assert(windows11Ok.Findings.Any(x =>
         x.Component == "TPM" &&
-        x.State == CompatibilityState.Warning),
-    "Windows 11 must explicitly disclose that TPM is not collected by the lightweight scan");
+        x.State == CompatibilityState.Supported),
+    "Windows 11 must require and confirm TPM 2.0 before reporting a usable path");
+
+var windows11NoTpm = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        Tpm20 = false,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11NoTpm.CanProceed &&
+       windows11NoTpm.Findings.Any(x =>
+           x.Component == "TPM" &&
+           x.State == CompatibilityState.Blocked),
+    "Windows 11 must fail closed when TPM 2.0 is absent or disabled");
 
 var windows11Legacy = genericAnalyzer.Analyze(
     "windows",
@@ -572,6 +660,7 @@ var windows11Legacy = genericAnalyzer.Analyze(
     {
         FirmwareMode = "Legacy BIOS",
         SecureBoot = false,
+        Tpm20 = true,
         MemoryBytes = 8L * 1024 * 1024 * 1024
     },
     new SystemVariant("windows-11", "Windows 11"));
@@ -592,6 +681,127 @@ Assert(ubuntuOk.CanProceed,
     "Linux generic verification must produce a usable report instead of failing because it is not macOS");
 
 Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
+
+var windowsPreparationSources = new OnlineSourceSnapshot(
+    "windows",
+    DateTimeOffset.UtcNow,
+    "test",
+    true,
+    new[]
+    {
+        LiveSource(
+            "windows.microsoft-windows11",
+            "Microsoft Windows 11 download",
+            "microsoft/windows",
+            "current")
+    });
+
+var windowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility(
+    "windows",
+    new SystemVariant("windows-11", "Windows 11"),
+    windows11Ok,
+    windowsPreparationSources,
+    mediaWriterAvailable: false);
+
+Assert(windowsPreparation.SystemPrepared,
+    "a compatible Windows target with live sources must become a prepared system configuration");
+Assert(!windowsPreparation.ReadyToWrite,
+    "generic compatibility alone must not claim READY TO WRITE before a verified installer image is prepared");
+
+var blockedWindowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility(
+    "windows",
+    new SystemVariant("windows-11", "Windows 11"),
+    windows11Legacy,
+    windowsPreparationSources,
+    mediaWriterAvailable: false);
+
+Assert(!blockedWindowsPreparation.SystemPrepared &&
+       blockedWindowsPreparation.UnresolvedCount > 0,
+    "an unresolved Windows blocker must remain visible after preparation");
+
+var windowsKnowledge = sourceCatalog.Sources
+    .Where(x => x.Systems.Contains("windows") &&
+                x.UseFor is { Count: > 0 })
+    .ToArray();
+
+Assert(windowsKnowledge.Any(x =>
+        x.Id == "windows.rufus" &&
+        x.UseFor!.Contains("media-writer")),
+    "Rufus must be classified as a Windows media-writer preparation source");
+
+var linuxKnowledge = sourceCatalog.Sources
+    .Where(x => x.Systems.Contains("linux") &&
+                x.UseFor is { Count: > 0 })
+    .ToArray();
+
+Assert(linuxKnowledge.Any(x =>
+        x.Id == "linux.ubuntu" &&
+        x.UseFor!.Contains("installation")),
+    "Linux official images must be classified as installation preparation sources");
+
+Console.WriteLine("CorePilot installation-preparation smoke test OK");
+
+var writerTestTarget = new UsbTargetSafetyReport(
+    @"\\.\PHYSICALDRIVE7",
+    7,
+    "Test USB",
+    "SERIAL",
+    "USB",
+    "Removable Media",
+    @"USBSTOR\TEST",
+    32L * 1024 * 1024 * 1024,
+    true,
+    true,
+    "ABCDEF0123456789ABCDEF0123456789",
+    UsbTargetSafetyLevel.SafeCandidate,
+    Array.Empty<string>(),
+    Array.Empty<UsbPartitionInfo>());
+
+var windowsTestImage = new PreparedIsoImage(
+    "windows",
+    "windows-11",
+    "Windows 11",
+    @"C:\test\windows.iso",
+    "windows.iso",
+    "https://software-download.microsoft.com/test/windows.iso",
+    new string('A', 64),
+    null,
+    true,
+    6L * 1024 * 1024 * 1024,
+    @"C:\test\windows.iso.corepilot.json",
+    "test");
+
+var linuxTestImage = windowsTestImage with
+{
+    SystemId = "linux",
+    TargetId = "ubuntu",
+    DisplayName = "Ubuntu",
+    FileName = "ubuntu.iso",
+    SourceUrl = "https://releases.ubuntu.com/test/ubuntu.iso",
+    Sha256 = new string('B', 64),
+    ExpectedSha256 = new string('B', 64)
+};
+
+var windowsPhrase =
+    WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        windowsTestImage);
+var linuxPhrase =
+    LinuxRawUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        linuxTestImage);
+
+Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal),
+    "Windows writer confirmation must bind the exact disk identity and prepared target");
+
+Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       linuxPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       linuxPhrase.Contains("UBUNTU", StringComparison.Ordinal),
+    "Linux writer confirmation must bind the exact disk identity and prepared target");
+
+Console.WriteLine("CorePilot generic guarded-writer contract smoke test OK");
 
 Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&

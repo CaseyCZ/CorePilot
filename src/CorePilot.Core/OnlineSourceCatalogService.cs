@@ -25,7 +25,9 @@ public sealed record OnlineSourceDefinition(
     bool Critical,
     bool ResolveOnVerify,
     bool RequireVerifiedCommit,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<string>? UseFor = null,
+    IReadOnlyList<string>? Targets = null);
 
 public sealed record OnlineSourceCatalogDocument(
     int SchemaVersion,
@@ -223,8 +225,17 @@ public sealed class OnlineSourceCatalogService
         return ParseCatalog(reader.ReadToEnd());
     }
 
-    public async Task<OnlineSourceSnapshot> ResolveForSystemAsync(
+    public Task<OnlineSourceSnapshot> ResolveForSystemAsync(
         string systemId,
+        CancellationToken cancellationToken = default) =>
+        ResolveForTargetAsync(
+            systemId,
+            targetId: null,
+            cancellationToken);
+
+    public async Task<OnlineSourceSnapshot> ResolveForTargetAsync(
+        string systemId,
+        string? targetId,
         CancellationToken cancellationToken = default)
     {
         var loaded = await LoadCatalogAsync(cancellationToken);
@@ -234,7 +245,8 @@ public sealed class OnlineSourceCatalogService
                 x.ResolveOnVerify &&
                 x.Systems.Contains(
                     systemId,
-                    StringComparer.OrdinalIgnoreCase))
+                    StringComparer.OrdinalIgnoreCase) &&
+                AppliesToTarget(x, targetId))
             .ToArray();
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -252,6 +264,40 @@ public sealed class OnlineSourceCatalogService
             loaded.Origin,
             loaded.FromRemote,
             results);
+    }
+
+    public static bool AppliesToTarget(
+        OnlineSourceDefinition source,
+        string? targetId)
+    {
+        if (source.Targets is null || source.Targets.Count == 0)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(targetId))
+            return false;
+
+        return source.Targets.Contains(
+            targetId,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<IReadOnlyList<OnlineSourceDefinition>> GetKnowledgeSourcesAsync(
+        string systemId,
+        string useCase,
+        CancellationToken cancellationToken = default)
+    {
+        var loaded = await LoadCatalogAsync(cancellationToken);
+
+        return loaded.Catalog.Sources
+            .Where(x =>
+                x.Systems.Contains(systemId, StringComparer.OrdinalIgnoreCase) &&
+                x.UseFor is not null &&
+                x.UseFor.Contains(useCase, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(x => x.Trust.Equals("official", StringComparison.OrdinalIgnoreCase) ? 0 :
+                          x.Trust.Equals("upstream", StringComparison.OrdinalIgnoreCase) ? 1 :
+                          x.Trust.Equals("community", StringComparison.OrdinalIgnoreCase) ? 2 : 3)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public async Task<OnlineSourceResolution> ResolveRequiredSourceAsync(

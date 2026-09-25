@@ -6,7 +6,9 @@ Target workflow:
 
 **Choose an operating system → Verify → optionally choose a USB drive → Write to disk.**
 
-The main UI intentionally exposes only the two workflow actions **Verify** and **Write to disk**. Internal safety/build/preflight stages remain in the state machine and Activity Log instead of appearing as separate buttons.
+CorePilot is not intended to stop at a compatibility verdict. **Verify is the preparation engine**: it scans the exact hardware, searches the trusted online knowledge/tool catalog for usable installation paths, resolves applicable drivers/kexts/patches, generates the hardware-specific configuration, downloads non-destructive installer payloads where supported, and validates the result. A detected incompatibility is treated as a remediation task first; it becomes a final blocker only when the currently implemented safe paths cannot resolve it.
+
+The main UI intentionally exposes only the two workflow actions **Verify** and **Write to disk**. **Write to disk never invents or rebuilds a configuration at the destructive stage; it consumes the payload already prepared and validated by Verify**, then re-validates sources/manifest/USB identity before erasing the selected target.
 
 ## Download released Windows build
 
@@ -37,16 +39,20 @@ The current non-destructive pipeline includes hardware discovery, compatibility,
 
 The simple UI exposes only **Verify** and **Write to disk**.
 
-For supported Hackintosh/OpenCore targets, the write path is fail-closed and automatically performs:
+For supported Hackintosh/OpenCore targets, **Verify** now performs the non-destructive preparation stages automatically:
 
-- live online-source refresh
+- live online-source + preparation-knowledge refresh
 - Hardware Sniffer Deep Scan
+- hardware-specific remediation/source resolution
 - fresh download of the current GitHub-verified OpCore-Simplify commit
 - EFI generation, `ocvalidate` and structural validation
 - verification of every cached OpenCore/kext file against OpCore-Simplify integrity manifests
 - binding of OpenCorePkg and cataloged kext downloads to the current live CorePilot release catalog
 - Apple Recovery download and verification
 - installer manifest + SHA-256 verification
+
+**Write to disk** then consumes that prepared payload and performs only the destructive boundary/safety stages:
+
 - a second live-source refresh immediately before destructive authorization
 - exact USB identity inspection and short-lived preflight
 - exact typed erase phrase
@@ -57,7 +63,13 @@ For supported Hackintosh/OpenCore targets, the write path is fail-closed and aut
 
 If a critical source goes offline, a component version changes while the installer is being prepared, the USB identity changes, authorization expires, or any hash check fails, physical writing stops.
 
-Windows and Linux now have real **Verify** compatibility reports. Their physical media writers are still intentionally disabled until their dedicated image paths are implemented.
+### Windows / Linux guarded media ✅
+
+**Windows 11** is not reported ready unless CorePilot confirms UEFI, sufficient memory and an enabled TPM 2.0 device. Verify resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, and re-hashes critical boot files.
+
+**Linux** verification is scoped to the selected distribution only. Verify downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
+
+Windows and Linux now use the same **Verify → READY TO WRITE → Write to disk** model. Verify prepares the selected official installer image before USB is selected; Write to disk consumes that exact prepared image through a guarded physical writer.
 
 ## Support Bundle
 
@@ -91,9 +103,9 @@ The log window also has **Copy selected**, which copies the selected timestamp, 
 
 ## Next
 
-1. Add the dedicated native-Apple media path for genuine Macs.
-2. Add physical Windows and Linux media writers; their compatibility verification is already enabled.
-3. Add a dedicated FAT32 strategy for payloads/layouts that exceed the Windows built-in FAT32 formatter limit.
+1. Add the dedicated native-Apple/OCLP media writer for genuine Macs that need legacy patching.
+2. Expand hardware-specific Windows/Linux remediation only where a real installer dependency requires it.
+3. Add further media-layout fallbacks if future Windows images exceed the current guarded FAT32 + DISM split strategy.
 
 ## Build
 
@@ -112,12 +124,16 @@ GitHub Actions validates the Python bridge, isolated physical-writer safety mark
 
 The development UI now keeps the normal flow intentionally small:
 
-1. **Verify** — scans hardware and evaluates compatibility without requiring any USB disk.
-2. **Write to disk** — becomes available only after a successful verification. The USB list refreshes when opened.
+1. **Verify** — one-click preparation: hardware scan → online remediation/tool lookup → hardware-specific configuration → required dependency resolution → payload generation/download → validation. No USB disk is required.
+2. **Write to disk** — becomes available only when CorePilot has a prepared writable result. It re-validates the prepared payload and performs the guarded destructive USB stages.
 
-For supported Hackintosh/OpenCore targets, **Write to disk** now runs the hidden pipeline automatically: live-source revalidation → Hardware Sniffer Deep Scan → current verified OpCore-Simplify staging → EFI build + `ocvalidate` + structural audit → Apple Recovery → installer manifest → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
+For supported Hackintosh/OpenCore targets the flow is now: **Verify** → Hardware Sniffer Deep Scan → current verified OpCore-Simplify staging → hardware-specific EFI/kext/patch configuration → `ocvalidate` + structural/integrity audit → Apple Recovery → final installer manifest. Then **Write to disk** → live-source revalidation → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
 
-Windows and Linux now produce real compatibility reports during **Verify**, but their physical media writers are intentionally disabled until their system-specific image/write paths are implemented. Genuine Apple Macs also stay on the native-media path instead of being forced through the Hackintosh writer.
+For **Windows 10/11**, Verify checks hardware (including TPM 2.0 for Windows 11), resolves the current official Microsoft retail ISO through the GitHub-verified Fido source, downloads it, records its SHA-256 and prepares it for the guarded Windows USB writer. The writer creates a UEFI FAT32 installer and automatically splits an oversized `install.wim` with DISM when required.
+
+For **Ubuntu, Fedora, Debian and Linux Mint**, Verify resolves the current official x86_64 image, downloads the publisher checksum, verifies the ISO SHA-256, and prepares it for the guarded Linux raw-image writer. After writing, CorePilot reads back the full image-length region from the USB and requires the SHA-256 to match before reporting success.
+
+Genuine Apple Macs stay on their dedicated native/OCLP media path instead of being forced through the Hackintosh writer.
 
 ### Genuine Apple Mac path
 

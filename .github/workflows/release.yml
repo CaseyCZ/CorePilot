@@ -75,11 +75,53 @@ jobs:
             }
           }
 
+          $windowsWriterPath = "src/CorePilot.Windows/WindowsInstallerUsbWriter.cs"
+          $windowsWriter = Get-Content $windowsWriterPath -Raw
+          foreach ($needle in @(
+            "IdentityFingerprint",
+            'Verb = "runas"',
+            "Get-CimInstance Win32_DiskDrive",
+            "diskpart.exe",
+            "Mount-DiskImage",
+            "dism.exe",
+            "VerifyMountedVolumeBelongsToTargetAsync",
+            "Get-FileHash"
+          )) {
+            if (-not $windowsWriter.Contains($needle)) {
+              throw "Guarded Windows writer is missing required safety marker '$needle'."
+            }
+          }
+
+          $linuxWriterPath = "src/CorePilot.Linux/LinuxRawUsbWriter.cs"
+          $linuxWriter = Get-Content $linuxWriterPath -Raw
+          foreach ($needle in @(
+            "IdentityFingerprint",
+            'Verb = "runas"',
+            "Get-CimInstance Win32_DiskDrive",
+            "Clear-Disk",
+            "IncrementalHash",
+            "readBackSha256",
+            "ExpectedIsoSha256"
+          )) {
+            if (-not $linuxWriter.Contains($needle)) {
+              throw "Guarded Linux writer is missing required safety marker '$needle'."
+            }
+          }
+
           $diskpartReferences = Get-ChildItem src -Recurse -Filter *.cs |
             Select-String -SimpleMatch "diskpart.exe"
           foreach ($match in $diskpartReferences) {
-            if ($match.Path -notlike "*MacOSUsbPhysicalWriteService.cs") {
-              throw "diskpart.exe reference escaped the isolated physical writer: $($match.Path)"
+            if ($match.Path -notlike "*MacOSUsbPhysicalWriteService.cs" -and
+                $match.Path -notlike "*WindowsInstallerUsbWriter.cs") {
+              throw "diskpart.exe reference escaped the guarded physical writers: $($match.Path)"
+            }
+          }
+
+          $clearDiskReferences = Get-ChildItem src -Recurse -Filter *.cs |
+            Select-String -SimpleMatch "Clear-Disk"
+          foreach ($match in $clearDiskReferences) {
+            if ($match.Path -notlike "*LinuxRawUsbWriter.cs") {
+              throw "Clear-Disk reference escaped the guarded Linux writer: $($match.Path)"
             }
           }
 
