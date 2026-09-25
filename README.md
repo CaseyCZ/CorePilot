@@ -72,7 +72,7 @@ This covers:
 - blocked target during typed confirmation
 - blocked target during write simulation
 
-Physical-disk writes remain disabled.
+Physical-disk writes are permitted only through the final guarded macOS writer after live-source validation, USB identity re-inspection, manifest verification, a short-lived preflight and exact typed confirmation.
 
 ## Support Bundle
 
@@ -106,8 +106,9 @@ The log window also has **Copy selected**, which copies the selected timestamp, 
 
 ## Next
 
-1. Add dedicated FAT32 strategy handling for larger USB media.
-2. Continue simulation coverage before considering a real physical-disk writer.
+1. Add the dedicated native-Apple media path for genuine Macs.
+2. Add physical Windows and Linux media writers; their compatibility verification is already enabled.
+3. Add a dedicated FAT32 strategy for payloads/layouts that exceed the Windows built-in FAT32 formatter limit.
 
 ## Build
 
@@ -129,7 +130,9 @@ The development UI now keeps the normal flow intentionally small:
 1. **Verify** — scans hardware and evaluates compatibility without requiring any USB disk.
 2. **Write to disk** — becomes available only after a successful verification. The USB list refreshes when opened.
 
-The current development build still stops before physical disk modification; **Write to disk** performs the final USB target/safety readiness check only until the physical writer is explicitly enabled.
+For supported Hackintosh/OpenCore targets, **Write to disk** now runs the hidden pipeline automatically: live-source revalidation → Hardware Sniffer Deep Scan → current verified OpCore-Simplify staging → EFI build + `ocvalidate` + structural audit → Apple Recovery → installer manifest → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
+
+Windows and Linux now produce real compatibility reports during **Verify**, but their physical media writers are intentionally disabled until their system-specific image/write paths are implemented. Genuine Apple Macs also stay on the native-media path instead of being forced through the Hackintosh writer.
 
 ### Genuine Apple Mac path
 
@@ -148,11 +151,9 @@ Newer macOS targets on the 2017 MacBook Pro are not marked natively supported; t
 
 CorePilot no longer treats the versions of OpenCore, kexts and helper tools as permanently bundled application data.
 
-At **Verify** time it first tries to refresh the catalog from:
+At **Verify** time CorePilot first resolves the current `CaseyCZ/CorePilot` `main` commit through the GitHub API, requires that commit to be GitHub-verified, and only then downloads `src/CorePilot.Core/Data/source-catalog.json` from that immutable commit SHA.
 
-`https://raw.githubusercontent.com/CaseyCZ/CorePilot/main/src/CorePilot.Core/Data/source-catalog.json`
-
-If the network/catalog is temporarily unavailable, CorePilot can use the cached or bundled catalog for diagnostics, but it reports that the source was not refreshed live.
+If the network/catalog is temporarily unavailable, CorePilot can use the cached or bundled catalog for diagnostics, but a cached critical source does **not** authorize physical writing. The execution-critical OpCore-Simplify catalog entry is additionally policy-locked to `lzhoang2801/OpCore-Simplify`, branch `main`, with a verified commit required.
 
 The catalog currently covers:
 
@@ -175,6 +176,6 @@ The catalog currently covers:
 
 GitHub release sources resolve the current stable release. Branch-based tools resolve the current upstream branch head. The OpCore-Simplify execution path additionally requires the resolved GitHub commit to be **verified** before CorePilot will execute it.
 
-The OpCore-Simplify staging cache is keyed by the online-resolved commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest.
+The OpCore-Simplify staging cache is keyed by the online-resolved verified commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest. Hardware-Sniffer-CLI is also checked against the SHA-256 digest published on its GitHub Release asset before CorePilot executes it.
 
 This lets source URLs and component metadata be updated from the online catalog without requiring a new CorePilot application release.
