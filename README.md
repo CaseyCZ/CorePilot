@@ -29,50 +29,31 @@ When a version is agreed as ready, the manual **Release** workflow is run with a
 
 The current non-destructive pipeline includes hardware discovery, compatibility, OpenCore EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, execution preflight, exact typed confirmation, logging-only write simulation, a central state machine and persistent searchable Activity/Error logging.
 
-### v0.17 — State-driven guided actions 🚧
+### Current guarded writer ✅
 
-CorePilot now decides whether each action is valid **before the user can click it**.
+The simple UI exposes only **Verify** and **Write to disk**.
 
-The action policy is a pure state-machine layer covered by the existing CI smoke test.
+For supported Hackintosh/OpenCore targets, the write path is fail-closed and automatically performs:
 
-Examples:
+- live online-source refresh
+- Hardware Sniffer Deep Scan
+- fresh download of the current GitHub-verified OpCore-Simplify commit
+- EFI generation, `ocvalidate` and structural validation
+- verification of every cached OpenCore/kext file against OpCore-Simplify integrity manifests
+- binding of OpenCorePkg and cataloged kext downloads to the current live CorePilot release catalog
+- Apple Recovery download and verification
+- installer manifest + SHA-256 verification
+- a second live-source refresh immediately before destructive authorization
+- exact USB identity inspection and short-lived preflight
+- exact typed erase phrase
+- another identity check inside the elevated erase boundary
+- GPT/FAT32 creation and verified EFI/Recovery copy
+- mounted-volume-to-physical-disk verification
+- SHA-256 verification of every copied file
 
-- **Deep scan** requires a local hardware scan.
-- **Prepare plan** requires macOS compatibility + Deep Scan + a selected USB + an automation profile cleared for automatic building.
-- **Build EFI** is enabled only at `WORKSPACE STAGED`.
-- **Download Recovery** is enabled only at `EFI VALIDATED`.
-- **Check USB safety** becomes part of the guided flow after `MANIFEST VERIFIED`.
-- **Dry-run USB plan** requires an inspected, non-blocked target.
-- **Execution preflight** requires `DRY-RUN PLANNED`.
-- **Confirm target** requires a live, unexpired `PREFLIGHT READY`.
-- **Simulate write** requires exact `CONFIRMED` state and remains one-shot.
-- while any logged operation is `RUNNING`, conflicting workflow actions and input selectors are disabled.
+If a critical source goes offline, a component version changes while the installer is being prepared, the USB identity changes, authorization expires, or any hash check fails, physical writing stops.
 
-Disabled buttons expose the reason through tooltips even while disabled.
-
-The main workflow card also displays a **Next · …** hint showing the expected next step.
-
-### v0.17 state-machine fixes
-
-While wiring the guided actions, two missing phase transitions from the earlier UI integration were found and corrected:
-
-- successful EFI generation now explicitly advances to `EFI VALIDATED`
-- successful Apple Recovery + installer-manifest verification now advances through `RECOVERY VERIFIED → MANIFEST VERIFIED`
-
-CI now exercises the action policy together with the state-machine smoke test so these transitions have usable downstream actions.
-
-### RUNNING-state correction
-
-Safety-stop branches after a started operation now finish the Activity Log as `WARNING` instead of leaving the app visually stuck on `RUNNING`.
-
-This covers:
-
-- changed USB identity during dry-run
-- blocked target during execution preflight
-- blocked target during typed confirmation
-- blocked target during write simulation
-
-Physical-disk writes are permitted only through the final guarded macOS writer after live-source validation, USB identity re-inspection, manifest verification, a short-lived preflight and exact typed confirmation.
+Windows and Linux now have real **Verify** compatibility reports. Their physical media writers are still intentionally disabled until their dedicated image paths are implemented.
 
 ## Support Bundle
 
@@ -120,7 +101,7 @@ dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
-GitHub Actions validates the Python bridge, logging-backend safety guard, state-machine transitions and workflow action policy, then publishes a self-contained `CorePilot-win-x64` test artifact.
+GitHub Actions validates the Python bridge, isolated physical-writer safety markers, online-source trust/fallback behavior, component-integrity gates, state-machine transitions, Windows/Linux/macOS compatibility checks, then publishes a self-contained versioned `CorePilot-win-x64` test artifact.
 
 
 ## Simple two-step UI
@@ -176,6 +157,6 @@ The catalog currently covers:
 
 GitHub release sources resolve the current stable release. Branch-based tools resolve the current upstream branch head. The OpCore-Simplify execution path additionally requires the resolved GitHub commit to be **verified** before CorePilot will execute it.
 
-The OpCore-Simplify staging cache is keyed by the online-resolved verified commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest. Hardware-Sniffer-CLI is also checked against the SHA-256 digest published on its GitHub Release asset before CorePilot executes it. After EFI generation, CorePilot additionally audits OpCore-Simplify's `OCK_Files/history.json`: every recorded OpenCore/kext component must have an HTTPS source, stable id, SHA-256 metadata and integrity-manifested cache folder before Recovery or physical writing can continue.
+OpCore-Simplify is resolved to a GitHub-verified commit and CorePilot downloads a fresh commit-addressed archive for each staging run instead of trusting an old executable source cache. The archive is SHA-256 hashed and recorded in the workspace manifest. Hardware-Sniffer-CLI is also checked against the SHA-256 digest published on its GitHub Release asset before CorePilot executes it. After EFI generation, CorePilot additionally audits OpCore-Simplify's `OCK_Files/history.json`: every recorded OpenCore/kext component must have an HTTPS source, stable id and SHA-256 metadata, and every file in each cache folder must match its integrity manifest. OpenCorePkg and cataloged kexts are also checked against the current live CorePilot release catalog. The same live sources are re-resolved again immediately before USB authorization.
 
 This lets source URLs and component metadata be updated from the online catalog without requiring a new CorePilot application release.
