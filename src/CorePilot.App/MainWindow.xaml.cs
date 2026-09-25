@@ -1100,50 +1100,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _automationProfile = null;
         _autoResolution = null;
 
-        if (module.Id == "macos")
-        {
-            _compatibilityReport = new(
-                target.Id,
-                new[]
-                {
-                    new CompatibilityFinding(
-                        CompatibilityState.Blocked,
-                        "Target hardware",
-                        "macOS preparation requires the target computer's hardware",
-                        "CorePilot cannot safely generate EFI, ACPI, SMBIOS, GPU, Wi-Fi or other hardware-specific macOS settings from the computer that is only creating the USB.",
-                        "Use This computer on the target Mac/PC, or add a target hardware report when that import path is available.")
-                },
-                Array.Empty<string>(),
-                Array.Empty<string>(),
-                Array.Empty<string>());
-        }
-        else
-        {
-            var findings = new List<CompatibilityFinding>
-            {
-                new(
-                    CompatibilityState.Supported,
-                    "Target mode",
-                    "Universal installer media for another computer",
-                    "The hardware of this PC is intentionally not used as a compatibility gate.")
-            };
-
-            if (module.Id == "windows" && target.Id == "windows-11")
-            {
-                findings.Add(new(
-                    CompatibilityState.Supported,
-                    "Windows media mode",
-                    "Standard Windows 11 media for another computer",
-                    "CorePilot prepares the installation media without asserting the unknown target PC's TPM, CPU, Secure Boot or firmware compatibility."));
-            }
-
-            _compatibilityReport = new(
-                target.Id,
-                findings,
-                Array.Empty<string>(),
-                Array.Empty<string>(),
-                Array.Empty<string>());
-        }
+        _compatibilityReport =
+            InstallationTargetCompatibilityBuilder.ForOtherComputer(
+                module.Id,
+                module.DisplayName,
+                target);
 
         foreach (var finding in _compatibilityReport.Findings)
             CompatibilityItems.Add(finding);
