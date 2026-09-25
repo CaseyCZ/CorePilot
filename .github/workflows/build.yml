@@ -73,7 +73,12 @@ jobs:
             "dism.exe",
             "VerifyMountedVolumeBelongsToTargetAsync",
             "Target PNP identity changed after formatting.",
-            "Get-FileHash"
+            "Get-FileHash",
+            "BypassTPMCheck",
+            "BypassSecureBootCheck",
+            "BypassRAMCheck",
+            "convert mbr",
+            "bootsect.exe"
           )) {
             if (-not $windowsWriter.Contains($needle)) {
               throw "Guarded Windows writer is missing required safety marker '$needle'."
