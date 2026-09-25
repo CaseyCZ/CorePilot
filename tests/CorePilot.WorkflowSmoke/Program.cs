@@ -1,5 +1,7 @@
 using CorePilot.Core;
 using CorePilot.MacOS;
+using CorePilot.Windows;
+using CorePilot.Linux;
 
 static void Assert(bool condition, string message)
 {
@@ -738,6 +740,68 @@ Assert(linuxKnowledge.Any(x =>
     "Linux official images must be classified as installation preparation sources");
 
 Console.WriteLine("CorePilot installation-preparation smoke test OK");
+
+var writerTestTarget = new UsbTargetSafetyReport(
+    @"\\.\PHYSICALDRIVE7",
+    7,
+    "Test USB",
+    "SERIAL",
+    "USB",
+    "Removable Media",
+    @"USBSTOR\TEST",
+    32L * 1024 * 1024 * 1024,
+    true,
+    true,
+    "ABCDEF0123456789ABCDEF0123456789",
+    UsbTargetSafetyLevel.SafeCandidate,
+    Array.Empty<string>(),
+    Array.Empty<UsbPartitionInfo>());
+
+var windowsTestImage = new PreparedIsoImage(
+    "windows",
+    "windows-11",
+    "Windows 11",
+    @"C:\test\windows.iso",
+    "windows.iso",
+    "https://software-download.microsoft.com/test/windows.iso",
+    new string('A', 64),
+    null,
+    true,
+    6L * 1024 * 1024 * 1024,
+    @"C:\test\windows.iso.corepilot.json",
+    "test");
+
+var linuxTestImage = windowsTestImage with
+{
+    SystemId = "linux",
+    TargetId = "ubuntu",
+    DisplayName = "Ubuntu",
+    FileName = "ubuntu.iso",
+    SourceUrl = "https://releases.ubuntu.com/test/ubuntu.iso",
+    Sha256 = new string('B', 64),
+    ExpectedSha256 = new string('B', 64)
+};
+
+var windowsPhrase =
+    WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        windowsTestImage);
+var linuxPhrase =
+    LinuxRawUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        linuxTestImage);
+
+Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal),
+    "Windows writer confirmation must bind the exact disk identity and prepared target");
+
+Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       linuxPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       linuxPhrase.Contains("UBUNTU", StringComparison.Ordinal),
+    "Linux writer confirmation must bind the exact disk identity and prepared target");
+
+Console.WriteLine("CorePilot generic guarded-writer contract smoke test OK");
 
 Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&
