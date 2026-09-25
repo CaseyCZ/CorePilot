@@ -14,12 +14,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
         </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        </Style>
-        <Style TargetType="Label">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        </Style>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="14,9"/>
             <Setter Property="Margin" Value="0,4,8,4"/>
