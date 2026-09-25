@@ -54,6 +54,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
     private MacOSAutoResolutionResult? _autoResolution;
+    private InstallationPreparationResult? _preparationResult;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
 
@@ -61,9 +62,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
     private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
     private string _usbSafetyStatus = "USB target not inspected. No physical-disk writes are enabled.";
-    private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
-    private string _compatibilityVerdict = "NOT CHECKED";
-    private string _compatibilityInstallPath = "Press Verify to determine whether the selected system is installable on this computer.";
+    private string _compatibilitySummary = "Select a system and press Verify. CorePilot will scan hardware, search for solutions, configure and validate an installation path.";
+    private string _compatibilityVerdict = "NOT PREPARED";
+    private string _compatibilityInstallPath = "No installation path has been prepared yet.";
     private string _compatibilityRequirements = "Required fixes, patches, drivers and boot arguments will appear here.";
     private string _compatibilityAutoConfiguration = "Automatic configuration has not run yet.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
@@ -81,21 +82,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool CanWriteToDisk =>
         !ActivityLog.IsBusy &&
         _verificationCompleted &&
-        _compatibilityReport?.CanProceed == true &&
-        SystemCombo.SelectedItem is ISystemModule { Id: "macos" } &&
-        _automationProfile is { CanBuildEfi: true, RequiresReview: false };
+        _preparationResult?.ReadyToWrite == true;
     public string WriteToDiskToolTip =>
-        !_verificationCompleted
-            ? "Run Verify first. Critical online sources must be live before writing."
-            : _compatibilityReport?.CanProceed != true
-                ? "The selected system did not pass compatibility verification."
-                : SystemCombo.SelectedItem is not ISystemModule { Id: "macos" }
-                    ? "Windows/Linux verification is available, but their physical media writer is not enabled in this build."
-                    : _automationProfile is null
-                        ? "This Apple-Mac target needs the dedicated native-media path; the OpenCore writer is intentionally not used."
-                        : _automationProfile.RequiresReview || !_automationProfile.CanBuildEfi
-                            ? "The macOS automation profile requires review before physical writing."
-                            : "Build all hidden safety stages, require exact typed confirmation, then write the verified macOS installer to the selected USB.";
+        _preparationResult is null
+            ? "Run Verify first. CorePilot must scan the hardware, search for solutions, configure the target and validate the result."
+            : _preparationResult.ReadyToWrite
+                ? "The installation is prepared and validated for this computer. Write the prepared system to the selected USB."
+                : _preparationResult.SystemPrepared
+                    ? "The system configuration is prepared, but a guarded physical writer for this installation path is not available yet."
+                    : _preparationResult.ManualCount > 0
+                        ? "CorePilot found a possible installation path, but a required manual hardware or firmware action remains."
+                        : "CorePilot searched the available paths but unresolved items still prevent a safe prepared installation.";
 
     public string ScanStatus
     {
@@ -183,8 +180,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
-            PlanStatus = "Choose a system and version, then press Verify. USB is not required for verification.";
-            UsbSafetyStatus = "USB is optional for verification. Connect it only when you are ready to write.";
+            PlanStatus = "Choose a system and version, then press Verify. CorePilot will scan, search for solutions, configure and validate automatically.";
+            UsbSafetyStatus = "USB is optional while preparing the system. Connect it when CorePilot reports READY TO WRITE.";
         };
     }
 
@@ -198,6 +195,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _verificationCompleted = false;
+        _preparationResult = null;
         _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
 
@@ -238,7 +236,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Online source refresh could not complete: {ex.Message}");
         }
 
-        PlanStatus = $"Verifying {target.DisplayName} against this computer…";
+        PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
         await ScanHardwareAsync();
 
         if (module.Id == "macos" && _hardwareReport is not null)
