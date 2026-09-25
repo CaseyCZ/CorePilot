@@ -436,17 +436,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (module.Id == "windows" &&
-            _preparedWindowsMediaOptions is null)
-        {
-            PlanStatus =
-                "Prepared Windows media mode is missing. Run Verify again so Write to disk consumes the exact verified configuration.";
-            return;
-        }
-
-        var preparedWindowsOptions =
-            _preparedWindowsMediaOptions ?? WindowsMediaOptions.Standard;
-
         if (UsbCombo.SelectedItem is not UsbDriveInfo)
             await RefreshDrivesAsync(silentNoUsb: true);
 
@@ -1625,6 +1614,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Prepared installer image is missing or no longer matches the selection. Run Verify again.";
             return;
         }
+
+        if (module.Id == "windows" &&
+            _preparedWindowsMediaOptions is null)
+        {
+            PlanStatus =
+                "Prepared Windows media mode is missing. Run Verify again so Write to disk consumes the exact verified configuration.";
+            return;
+        }
+
+        var preparedWindowsOptions =
+            _preparedWindowsMediaOptions ?? WindowsMediaOptions.Standard;
 
         if (UsbCombo.SelectedItem is not UsbDriveInfo)
             await RefreshDrivesAsync(silentNoUsb: true);
