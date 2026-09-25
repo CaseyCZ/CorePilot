@@ -686,6 +686,14 @@ Assert(!windows11NoTpm.CanProceed &&
            x.State == CompatibilityState.Blocked),
     "Windows 11 must fail closed when TPM 2.0 is absent or disabled");
 
+// MainWindow's automatic compatibility-media remediation is intentionally
+// UI/state logic; the generic analyzer must preserve the original TPM blocker
+// so the app can make that transition explicitly and attach the unsupported-hardware warning.
+Assert(!windows11NoTpm.Findings.Any(x =>
+        x.Component == "Microsoft support" &&
+        x.State == CompatibilityState.Supported),
+    "generic compatibility must never silently convert unsupported Windows 11 hardware into a fully supported result");
+
 var windows11Legacy = genericAnalyzer.Analyze(
     "windows",
     testHardware with
