@@ -1662,7 +1662,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var phrase = module.Id == "windows"
                 ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
                     inspected,
-                    _preparedIso)
+                    _preparedIso,
+                    CurrentWindowsMediaOptions)
                 : LinuxRawUsbWriter.RequiredConfirmationPhrase(
                     inspected,
                     _preparedIso);
@@ -1702,7 +1703,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _preparedIso,
                     finalTarget,
                     typed,
-                    progress)
+                    progress,
+                    options: CurrentWindowsMediaOptions)
                 : await _linuxUsbWriter.WriteAsync(
                     _preparedIso,
                     finalTarget,
@@ -1768,6 +1770,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
                         : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
                     _preparedIso.SourceUrl));
+
+                if (system.Id == "windows" && target.Id == "windows-11")
+                {
+                    var mediaOptions = CurrentWindowsMediaOptions;
+                    genericItems.Add(new(
+                        PreparationItemState.ResolvedAutomatically,
+                        "Windows media mode",
+                        mediaOptions.ModeText,
+                        mediaOptions.ExtendedHardwareCompatibility
+                            ? "CorePilot will create wider MBR/FAT32 BIOS+UEFI media and apply the documented Windows Setup TPM, Secure Boot and RAM compatibility bypasses."
+                            : "CorePilot will create the standard Windows 11 media path without requirement bypasses."));
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(_preparationFailure))
@@ -1881,7 +1895,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityVerdict = _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
-            ? $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for this computer."
+            ? $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
@@ -1976,7 +1990,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             CompatibilityInstallPath =
-                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image and validate it for this computer before Write to disk is enabled.";
+                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image for {TargetComputerLabel} before Write to disk is enabled.";
         }
 
         var requirements = new List<string>();
