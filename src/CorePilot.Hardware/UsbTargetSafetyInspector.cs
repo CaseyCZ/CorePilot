@@ -15,8 +15,12 @@ public sealed class UsbTargetSafetyInspector
     private static UsbTargetSafetyReport Inspect(UsbDriveInfo target)
     {
         var systemDrive = ReadSystemDrive();
-        var pageFileDrives = ReadPageFileDrives();
-        var volumesByLetter = ReadVolumeFlags();
+        var pageFilesOk = TryReadPageFileDrives(out var pageFileDrives);
+        var volumeFlagsOk = TryReadVolumeFlags(out var volumesByLetter);
+        var protectionSignalsComplete =
+            !string.IsNullOrWhiteSpace(systemDrive) &&
+            pageFilesOk &&
+            volumeFlagsOk;
 
         using var searcher = new ManagementObjectSearcher(
             "SELECT DeviceID, Index, Model, SerialNumber, InterfaceType, MediaType, " +
@@ -34,7 +38,8 @@ public sealed class UsbTargetSafetyInspector
                 disk,
                 systemDrive,
                 pageFileDrives,
-                volumesByLetter);
+                volumesByLetter,
+                protectionSignalsComplete);
         }
 
         return new(
@@ -59,7 +64,8 @@ public sealed class UsbTargetSafetyInspector
         ManagementObject disk,
         string systemDrive,
         IReadOnlySet<string> pageFileDrives,
-        IReadOnlyDictionary<string, VolumeFlags> volumeFlags)
+        IReadOnlyDictionary<string, VolumeFlags> volumeFlags,
+        bool protectionSignalsComplete)
     {
         var deviceId = Value(disk, "DeviceID");
         var diskIndex = IntValue(disk, "Index", -1);
@@ -81,7 +87,11 @@ public sealed class UsbTargetSafetyInspector
         var reasons = new List<string>();
         var partitions = new List<UsbPartitionInfo>();
         var containsProtectedContent = false;
-        var associationFailed = false;
+        var associationFailed = !protectionSignalsComplete;
+
+        if (!protectionSignalsComplete)
+            reasons.Add(
+                "Windows protection signals (system/boot/pagefile metadata) could not be fully resolved.");
 
         try
         {
@@ -226,9 +236,10 @@ public sealed class UsbTargetSafetyInspector
             partitions.OrderBy(x => x.Index).ToArray());
     }
 
-    private static Dictionary<string, VolumeFlags> ReadVolumeFlags()
+    private static bool TryReadVolumeFlags(
+        out Dictionary<string, VolumeFlags> result)
     {
-        var result = new Dictionary<string, VolumeFlags>(
+        result = new Dictionary<string, VolumeFlags>(
             StringComparer.OrdinalIgnoreCase);
 
         try
@@ -247,14 +258,14 @@ public sealed class UsbTargetSafetyInspector
                     BoolValue(item, "BootVolume"),
                     BoolValue(item, "SystemVolume"));
             }
+
+            return true;
         }
         catch
         {
-            // The caller also checks Environment/Win32_OperatingSystem and pagefile.
-            // Missing Win32_Volume flags alone must not produce a false "blocked".
+            result.Clear();
+            return false;
         }
-
-        return result;
     }
 
     private static string ReadSystemDrive()
@@ -279,9 +290,10 @@ public sealed class UsbTargetSafetyInspector
         return NormalizeDrive(Path.GetPathRoot(windows) ?? "");
     }
 
-    private static HashSet<string> ReadPageFileDrives()
+    private static bool TryReadPageFileDrives(
+        out HashSet<string> drives)
     {
-        var drives = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        drives = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -294,12 +306,14 @@ public sealed class UsbTargetSafetyInspector
                 if (name.Length >= 2 && name[1] == ':')
                     drives.Add(NormalizeDrive(name[..2]));
             }
+
+            return true;
         }
         catch
         {
+            drives.Clear();
+            return false;
         }
-
-        return drives;
     }
 
     private static string Fingerprint(
