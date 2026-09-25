@@ -82,7 +82,7 @@
                                    FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}"/>
-                        <TextBlock Text="1. Verify scans the PC, searches online for usable fixes/drivers, configures the selected system and validates the prepared result.  2. Write to disk only copies the already prepared system to USB."
+                        <TextBlock Text="1. Choose whether you are preparing for this computer or another one. Verify scans hardware when needed, searches online for usable solutions and validates the prepared result.  2. Write to disk only copies the already prepared system to USB."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,6,0,20"/>
@@ -229,7 +229,7 @@
                                     <TextBlock Text="Hardware"
                                                FontSize="20"
                                                FontWeight="SemiBold"/>
-                                    <TextBlock Text="Hardware is scanned automatically when you press Verify."
+                                    <TextBlock Text="This computer mode scans hardware automatically. Other computer mode prepares Windows/Linux media without using this PC as the compatibility gate."
                                                Foreground="{StaticResource MutedBrush}"
                                                Margin="0,4,0,0"/>
                                 </StackPanel>
