@@ -34,6 +34,10 @@
             <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                 <Button Content="Open folder" Click="OpenFolder_OnClick"/>
                 <Button Content="Copy path" Click="CopyPath_OnClick"/>
+                <Button x:Name="CopySelectedButton"
+                        Content="Copy selected"
+                        Click="CopySelected_OnClick"
+                        IsEnabled="False"/>
                 <Button Content="Clear view" Click="ClearView_OnClick"/>
             </WrapPanel>
         </Grid>
@@ -96,6 +100,7 @@
         <ListView x:Name="LogList"
                   Grid.Row="4"
                   SelectionMode="Single"
+                  SelectionChanged="LogList_OnSelectionChanged"
                   Background="#12151A"
                   BorderBrush="{StaticResource BorderBrush}"
                   BorderThickness="1"

@@ -106,6 +106,26 @@ public partial class LogWindow : Window
         });
     }
 
+    public void FocusEntry(ActivityLogEntry entry)
+    {
+        LevelFilterCombo.SelectedIndex = 1;
+        SearchBox.Text = "";
+        _levelFilter = "Error";
+        _searchText = "";
+        RefreshView();
+
+        if (!_view.Cast<object>().Contains(entry))
+        {
+            LevelFilterCombo.SelectedIndex = 0;
+            _levelFilter = "All";
+            RefreshView();
+        }
+
+        LogList.SelectedItem = entry;
+        LogList.ScrollIntoView(entry);
+        LogList.Focus();
+    }
+
     private void ScrollToNewestVisible()
     {
         var newest = _view
@@ -139,6 +159,26 @@ public partial class LogWindow : Window
 
     private void CopyPath_OnClick(object sender, RoutedEventArgs e) =>
         Clipboard.SetText(_log.LogFilePath);
+
+    private void LogList_OnSelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e) =>
+        CopySelectedButton.IsEnabled =
+            LogList.SelectedItem is ActivityLogEntry;
+
+    private void CopySelected_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (LogList.SelectedItem is not ActivityLogEntry entry)
+            return;
+
+        var text =
+            $"{entry.Timestamp:O} [{entry.LevelText}] [{entry.Area}] {entry.Message}";
+
+        if (entry.HasDetail)
+            text += Environment.NewLine + entry.Detail;
+
+        Clipboard.SetText(text);
+    }
 
     private void ClearView_OnClick(object sender, RoutedEventArgs e)
     {

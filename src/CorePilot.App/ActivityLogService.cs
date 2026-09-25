@@ -37,6 +37,8 @@ public sealed class ActivityLogService : INotifyPropertyChanged
 
     public ObservableCollection<ActivityLogEntry> Entries { get; } = [];
 
+    public event EventHandler<ActivityLogEntry>? EntryAdded;
+
     public string LogFilePath { get; }
 
     public string CurrentStatus
@@ -182,6 +184,8 @@ public sealed class ActivityLogService : INotifyPropertyChanged
 
             if (level == ActivityLogLevel.Error)
                 ErrorCount++;
+
+            EntryAdded?.Invoke(this, entry);
         });
     }
 
