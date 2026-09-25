@@ -65,6 +65,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
+    private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
+    private bool _windowsOlderPcCompatibility;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -76,6 +78,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _compatibilityRequirements = "Required fixes, patches, drivers and boot arguments will appear here.";
     private string _compatibilityAutoConfiguration = "Automatic configuration has not run yet.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
+    private string _targetModeStatus = "This computer · Verify uses the hardware detected on this PC.";
+    private string _windowsCompatibilityStatus = "Standard Windows 11 media.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
     public ObservableCollection<SystemVariant> Variants { get; } = [];
@@ -163,6 +167,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set { _workflowStatus = value; OnPropertyChanged(); }
     }
 
+    public string TargetModeStatus
+    {
+        get => _targetModeStatus;
+        private set { _targetModeStatus = value; OnPropertyChanged(); }
+    }
+
+    public string WindowsCompatibilityStatus
+    {
+        get => _windowsCompatibilityStatus;
+        private set { _windowsCompatibilityStatus = value; OnPropertyChanged(); }
+    }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -187,6 +203,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Systems.Add(new LinuxModule());
 
         SystemCombo.SelectedIndex = 0;
+        UpdateTargetModeUi();
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
@@ -267,10 +284,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Online source refresh could not complete: {ex.Message}");
         }
 
-        PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
-        await ScanHardwareAsync();
+        if (_targetMode == InstallationTargetMode.ThisComputer)
+        {
+            PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
+            await ScanHardwareAsync();
 
-        if (module.Id == "macos" && _hardwareReport is not null)
+            if (module.Id == "windows" && target.Id == "windows-11")
+                ApplyAutomaticWindows11CompatibilityRemediation();
+        }
+        else
+        {
+            PlanStatus = $"Preparing {target.DisplayName} for another computer without using this PC's hardware as a compatibility gate…";
+            PrepareCompatibilityForOtherComputer(module, target);
+        }
+
+        if (module.Id == "macos" &&
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _hardwareReport is not null)
         {
             try
             {
@@ -349,14 +379,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else if (_preparationResult.ReadyToWrite)
         {
             PlanStatus =
-                $"READY TO WRITE ✅ {target.DisplayName} is prepared for this computer. " +
+                $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
                 $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
             ActivityLog.Success("Preparation", PlanStatus);
         }
         else if (_preparationResult.SystemPrepared)
         {
             PlanStatus =
-                $"SYSTEM PREPARED ✅ {target.DisplayName} has a validated installation path for this computer, " +
+                $"SYSTEM PREPARED ✅ {target.DisplayName} has a validated installation path for {TargetComputerLabel}, " +
                 "but this path does not yet have a guarded physical writer. " +
                 $"{_preparationResult.Summary}.";
             ActivityLog.Warning("Preparation", PlanStatus);
@@ -897,6 +927,325 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private string TargetComputerLabel =>
+        _targetMode == InstallationTargetMode.ThisComputer
+            ? "this computer"
+            : "another computer";
+
+    private WindowsMediaOptions CurrentWindowsMediaOptions =>
+        SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
+        VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" } &&
+        _windowsOlderPcCompatibility
+            ? WindowsMediaOptions.OlderPc
+            : WindowsMediaOptions.Standard;
+
+    private void ThisComputer_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_targetMode == InstallationTargetMode.ThisComputer)
+            return;
+
+        _targetMode = InstallationTargetMode.ThisComputer;
+        _windowsOlderPcCompatibility = false;
+        ResetPreparationForTargetModeChange(
+            "Target changed to this computer; verification is required.");
+        UpdateTargetModeUi();
+    }
+
+    private void OtherComputer_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_targetMode == InstallationTargetMode.OtherComputer)
+            return;
+
+        _targetMode = InstallationTargetMode.OtherComputer;
+        _windowsOlderPcCompatibility = false;
+        ResetPreparationForTargetModeChange(
+            "Target changed to another computer; local hardware compatibility is no longer used.");
+        UpdateTargetModeUi();
+    }
+
+    private void WindowsOlderPc_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_targetMode != InstallationTargetMode.OtherComputer ||
+            SystemCombo.SelectedItem is not ISystemModule { Id: "windows" } ||
+            VariantCombo.SelectedItem is not SystemVariant { Id: "windows-11" })
+            return;
+
+        _windowsOlderPcCompatibility = !_windowsOlderPcCompatibility;
+        ResetPreparationForTargetModeChange(
+            _windowsOlderPcCompatibility
+                ? "Older-PC Windows compatibility enabled; verification is required."
+                : "Standard Windows media selected; verification is required.");
+        UpdateTargetModeUi();
+    }
+
+    private void ResetPreparationForTargetModeChange(string reason)
+    {
+        _verificationCompleted = false;
+        CompatibilityItems.Clear();
+        PreparationItems.Clear();
+        _compatibilityReport = null;
+        _automationProfile = null;
+        _autoResolution = null;
+        _preparationResult = null;
+        _preparedIso = null;
+        _lastGenericUsbWrite = null;
+        _preparationFailure = null;
+
+        if (_targetMode == InstallationTargetMode.OtherComputer)
+        {
+            HardwareItems.Clear();
+            _hardwareReport = null;
+            _deepScanExport = null;
+            ScanStatus = "Other computer · target hardware not scanned";
+            DeepScanStatus =
+                "Universal Windows/Linux media preparation does not use this PC's hardware. macOS requires target hardware.";
+        }
+
+        ResetCompatibilityDecision("Press Verify to prepare the selected target mode.");
+        PlanStatus = reason;
+        RefreshActionAvailability();
+    }
+
+    private void UpdateTargetModeUi()
+    {
+        var thisComputerSelected =
+            _targetMode == InstallationTargetMode.ThisComputer;
+
+        SetSegmentButtonState(ThisComputerButton, thisComputerSelected);
+        SetSegmentButtonState(OtherComputerButton, !thisComputerSelected);
+
+        TargetModeStatus = thisComputerSelected
+            ? "This computer · Verify uses the hardware detected on this PC and automatically resolves supported compatibility issues."
+            : "Other computer · Windows/Linux media is prepared independently of this PC's TPM, CPU, Secure Boot and firmware state.";
+
+        var isWindows11 =
+            SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
+            VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" };
+
+        WindowsCompatibilityPanel.Visibility =
+            isWindows11 ? Visibility.Visible : Visibility.Collapsed;
+
+        WindowsOlderPcButton.Visibility =
+            isWindows11 && !thisComputerSelected
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        if (!isWindows11)
+        {
+            _windowsOlderPcCompatibility = false;
+            WindowsCompatibilityStatus = "Standard Windows media.";
+            return;
+        }
+
+        if (thisComputerSelected)
+        {
+            WindowsCompatibilityStatus = _windowsOlderPcCompatibility
+                ? "AUTO · Older-PC compatibility was selected because this PC needs the documented TPM / Secure Boot / RAM compatibility path."
+                : "AUTO · CorePilot will use standard Windows 11 media when this PC passes the checks, or enable documented older-PC compatibility when it can safely resolve those blockers.";
+        }
+        else
+        {
+            WindowsOlderPcButton.Content =
+                _windowsOlderPcCompatibility
+                    ? "Older PC compatibility: ON"
+                    : "Older PC compatibility: OFF";
+
+            WindowsCompatibilityStatus = _windowsOlderPcCompatibility
+                ? "ON · Prepare wider BIOS/UEFI boot media and apply the documented Windows Setup TPM / Secure Boot / RAM bypasses."
+                : "OFF · Prepare standard Windows 11 installation media. The target PC must satisfy normal Windows 11 hardware requirements.";
+        }
+    }
+
+    private void SetSegmentButtonState(Button button, bool selected)
+    {
+        button.SetResourceReference(
+            BackgroundProperty,
+            selected ? "AccentBrush" : "PanelBrush");
+        button.SetResourceReference(
+            BorderBrushProperty,
+            selected ? "AccentBrush" : "BorderBrush");
+        button.SetResourceReference(
+            ForegroundProperty,
+            selected ? "TextBrush" : "MutedBrush");
+    }
+
+    private void PrepareCompatibilityForOtherComputer(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        CompatibilityItems.Clear();
+        PreparationItems.Clear();
+        _hardwareReport = null;
+        _deepScanExport = null;
+        _automationProfile = null;
+        _autoResolution = null;
+
+        if (module.Id == "macos")
+        {
+            _compatibilityReport = new(
+                target.Id,
+                new[]
+                {
+                    new CompatibilityFinding(
+                        CompatibilityState.Blocked,
+                        "Target hardware",
+                        "macOS preparation requires the target computer's hardware",
+                        "CorePilot cannot safely generate EFI, ACPI, SMBIOS, GPU, Wi-Fi or other hardware-specific macOS settings from the computer that is only creating the USB.",
+                        "Use This computer on the target Mac/PC, or add a target hardware report when that import path is available.")
+                },
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+        else
+        {
+            var findings = new List<CompatibilityFinding>
+            {
+                new(
+                    CompatibilityState.Supported,
+                    "Target mode",
+                    "Universal installer media for another computer",
+                    "The hardware of this PC is intentionally not used as a compatibility gate.")
+            };
+
+            if (module.Id == "windows" && target.Id == "windows-11")
+            {
+                findings.Add(new(
+                    CompatibilityState.Supported,
+                    "Windows media mode",
+                    _windowsOlderPcCompatibility
+                        ? "Older-PC compatibility selected"
+                        : "Standard Windows 11 media selected",
+                    _windowsOlderPcCompatibility
+                        ? "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented Windows Setup TPM, Secure Boot and RAM compatibility bypasses."
+                        : "CorePilot will prepare standard Windows 11 media. Compatibility with the target PC itself is not asserted because its hardware was not scanned."));
+            }
+
+            _compatibilityReport = new(
+                target.Id,
+                findings,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        foreach (var finding in _compatibilityReport.Findings)
+            CompatibilityItems.Add(finding);
+
+        CompatibilitySummary = _compatibilityReport.Summary;
+        ScanStatus = "Other computer · target hardware not scanned";
+        DeepScanStatus =
+            module.Id == "macos"
+                ? "macOS automatic preparation needs target hardware and is blocked in Other computer mode."
+                : "Target hardware scan is intentionally skipped for universal Windows/Linux media.";
+        UpdateCompatibilityDecisionWithoutHardware(module, target);
+    }
+
+    private void ApplyAutomaticWindows11CompatibilityRemediation()
+    {
+        if (_compatibilityReport is null)
+            return;
+
+        var blockers = _compatibilityReport.Findings
+            .Where(x => x.State == CompatibilityState.Blocked)
+            .ToArray();
+
+        if (blockers.Length == 0)
+        {
+            _windowsOlderPcCompatibility = false;
+            UpdateTargetModeUi();
+            return;
+        }
+
+        var bypassable = blockers.All(x =>
+            x.Component is "TPM" or "Memory" or "Firmware");
+
+        if (!bypassable)
+        {
+            _windowsOlderPcCompatibility = false;
+            UpdateTargetModeUi();
+            return;
+        }
+
+        _windowsOlderPcCompatibility = true;
+
+        var remediated = _compatibilityReport.Findings
+            .Select(finding =>
+            {
+                if (finding.State == CompatibilityState.Blocked &&
+                    finding.Component is "TPM" or "Memory" or "Firmware")
+                {
+                    return finding with
+                    {
+                        State = CompatibilityState.Supported,
+                        Title = finding.Title + " · resolved by older-PC media",
+                        Details = finding.Details +
+                                  " CorePilot will apply the documented Windows Setup compatibility path and wider BIOS/UEFI USB layout."
+                    };
+                }
+
+                if (finding.Component == "Secure Boot" &&
+                    finding.State != CompatibilityState.Supported)
+                {
+                    return finding with
+                    {
+                        State = CompatibilityState.Supported,
+                        Title = "Secure Boot requirement handled by older-PC media",
+                        Details = finding.Details +
+                                  " CorePilot will apply the documented Secure Boot installation bypass."
+                    };
+                }
+
+                return finding;
+            })
+            .ToList();
+
+        remediated.Add(new(
+            CompatibilityState.Supported,
+            "Installer media",
+            "Older-PC compatibility enabled automatically",
+            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented TPM, Secure Boot and RAM Windows Setup bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
+
+        _compatibilityReport = _compatibilityReport with
+        {
+            Findings = remediated
+        };
+
+        CompatibilityItems.Clear();
+        foreach (var finding in _compatibilityReport.Findings)
+            CompatibilityItems.Add(finding);
+
+        CompatibilitySummary = _compatibilityReport.Summary;
+        UpdateCompatibilityDecision(
+            (ISystemModule)SystemCombo.SelectedItem,
+            (SystemVariant)VariantCombo.SelectedItem);
+        UpdateTargetModeUi();
+    }
+
+    private void UpdateCompatibilityDecisionWithoutHardware(
+        ISystemModule system,
+        SystemVariant target)
+    {
+        if (_compatibilityReport is null)
+            return;
+
+        CompatibilityVerdict = _compatibilityReport.CanProceed
+            ? "MEDIA PREPARATION AVAILABLE"
+            : "TARGET HARDWARE REQUIRED";
+
+        CompatibilityInstallPath = system.Id == "macos"
+            ? "Installation path: macOS needs the actual target hardware before CorePilot can build a safe hardware-specific configuration."
+            : $"Installation path: prepare the official {system.DisplayName} image for another computer without using this PC's hardware as a blocker.";
+
+        CompatibilityRequirements = _compatibilityReport.CanProceed
+            ? "Target hardware compatibility is not asserted in Other computer mode. CorePilot validates the installer media and writer path instead."
+            : string.Join(
+                Environment.NewLine,
+                _compatibilityReport.Findings
+                    .Where(x => x.State == CompatibilityState.Blocked)
+                    .Select(x => "• " + (x.SuggestedAction ?? x.Details)));
+    }
+
     private void SystemCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         Variants.Clear();
@@ -909,6 +1258,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (Variants.Count > 0)
             VariantCombo.SelectedIndex = 0;
+
+        _windowsOlderPcCompatibility = false;
+        UpdateTargetModeUi();
 
         _verificationCompleted = false;
         CompatibilityItems.Clear();
@@ -931,6 +1283,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        _windowsOlderPcCompatibility = false;
+        UpdateTargetModeUi();
         _verificationCompleted = false;
         CompatibilityItems.Clear();
         PreparationItems.Clear();
