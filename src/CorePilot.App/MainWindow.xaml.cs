@@ -321,6 +321,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparationResult = BuildPreparationResult(module, target);
         _verificationCompleted = true;
 
+        foreach (var item in _preparationResult.Items)
+        {
+            var message =
+                $"{item.StateText} · {item.Category} · {item.Problem} — {item.Resolution}" +
+                (string.IsNullOrWhiteSpace(item.Source)
+                    ? ""
+                    : $" · {item.Source}");
+
+            if (item.State == PreparationItemState.Unresolved)
+                ActivityLog.Warning("Preparation item", message);
+            else
+                ActivityLog.Info("Preparation item", message);
+        }
+
         ApplyPreparationResultToUi(module, target);
         RefreshActionAvailability();
 
