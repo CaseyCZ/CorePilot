@@ -351,10 +351,25 @@ public sealed class SupportBundleService
 
         if (node is JsonObject obj)
         {
-            foreach (var item in obj.ToList())
-                obj[item.Key] = SanitizeNode(
-                    item.Value,
-                    item.Key);
+            foreach (var key in obj.Select(x => x.Key).ToArray())
+            {
+                var child = obj[key];
+
+                if (IsSensitiveProperty(key))
+                {
+                    obj[key] = "<redacted>";
+                    continue;
+                }
+
+                if (child is JsonValue value &&
+                    value.TryGetValue<string>(out var text))
+                {
+                    obj[key] = RedactText(text);
+                    continue;
+                }
+
+                SanitizeNode(child, key);
+            }
 
             return obj;
         }
@@ -362,14 +377,21 @@ public sealed class SupportBundleService
         if (node is JsonArray array)
         {
             for (var i = 0; i < array.Count; i++)
-                array[i] = SanitizeNode(array[i], null);
+            {
+                var child = array[i];
+
+                if (child is JsonValue value &&
+                    value.TryGetValue<string>(out var text))
+                {
+                    array[i] = RedactText(text);
+                    continue;
+                }
+
+                SanitizeNode(child, null);
+            }
 
             return array;
         }
-
-        if (node is JsonValue value &&
-            value.TryGetValue<string>(out var text))
-            return JsonValue.Create(RedactText(text));
 
         return node;
     }
