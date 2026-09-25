@@ -820,6 +820,30 @@ Assert(
 
 Console.WriteLine("CorePilot current Fedora filename regression smoke test OK");
 
+var currentUbuntuDownloadSnippet =
+    "Ubuntu 26.04.1 LTS " +
+    "https://ubuntu.com/download/desktop/thank-you?architecture=amd64&lts=true&version=26.04.1";
+var ubuntuVersionMatch =
+    System.Text.RegularExpressions.Regex.Match(
+        currentUbuntuDownloadSnippet,
+        @"(?:version=|Ubuntu\s+)(?<value>\d+\.\d+(?:\.\d+)?)",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+Assert(
+    ubuntuVersionMatch.Success &&
+    ubuntuVersionMatch.Groups["value"].Value == "26.04.1",
+    "Ubuntu resolver must discover the current point-release version from the official Desktop page");
+
+var currentUbuntuReleaseSnippet =
+    "href=\"ubuntu-26.04.1-desktop-amd64.iso\"";
+Assert(
+    System.Text.RegularExpressions.Regex.IsMatch(
+        currentUbuntuReleaseSnippet,
+        $@"href\s*=\s*[\"\"']{System.Text.RegularExpressions.Regex.Escape("ubuntu-26.04.1-desktop-amd64.iso")}[\"\"']",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+    "Ubuntu resolver must prefer the exact current point-release desktop ISO");
+
+Console.WriteLine("CorePilot current Ubuntu release regression smoke test OK");
+
 Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&
        opCoreSimplifySource.Critical,
