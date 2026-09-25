@@ -417,6 +417,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "windows-11"
       ]
     },
     {
@@ -436,6 +439,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "windows-10"
       ]
     },
     {
@@ -495,6 +501,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "ubuntu"
       ]
     },
     {
@@ -514,6 +523,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "fedora"
       ]
     },
     {
@@ -533,6 +545,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "debian"
       ]
     },
     {
@@ -552,6 +567,9 @@
         "installation",
         "versions",
         "compatibility"
+      ],
+      "targets": [
+        "linux-mint"
       ]
     },
     {
