@@ -90,8 +90,7 @@ jobs:
             "Get-FileHash",
             "BypassTPMCheck",
             "BypassSecureBootCheck",
-            "convert mbr",
-            "bootsect.exe",
+            "convert gpt",
             "customizationSha256",
             "result does not match the media mode prepared by Verify"
           )) {
