@@ -729,6 +729,11 @@ Assert(windowsKnowledge.Any(x =>
         x.UseFor!.Contains("media-writer")),
     "Rufus must be classified as a Windows media-writer preparation source");
 
+var rufusReference = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.rufus");
+Assert(!rufusReference.ResolveOnVerify,
+    "Rufus is reference/fallback knowledge only and must not slow normal Windows/Linux Verify");
+
 var linuxKnowledge = sourceCatalog.Sources
     .Where(x => x.Systems.Contains("linux") &&
                 x.UseFor is { Count: > 0 })
