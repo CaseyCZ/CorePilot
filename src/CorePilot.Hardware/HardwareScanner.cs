@@ -18,23 +18,25 @@ public sealed class HardwareScanner
         var cpu = First("SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor");
         var board = First("SELECT Manufacturer, Product FROM Win32_BaseBoard");
 
-        var cpuName = Value(cpu, "Name");
-        var cores = Value(cpu, "NumberOfCores");
-        var threads = Value(cpu, "NumberOfLogicalProcessors");
-        var cpuDetails = string.IsNullOrWhiteSpace(cores) ? cpuName : $"{cpuName} ({cores}C/{threads}T)";
+        var devices = new List<HardwareDeviceInfo>();
+        devices.AddRange(QueryDevices("GPU", "SELECT Name, PNPDeviceID FROM Win32_VideoController"));
+        devices.AddRange(QueryDevices("Network", "SELECT Name, PNPDeviceID FROM Win32_NetworkAdapter WHERE PhysicalAdapter=True AND NetEnabled=True"));
+        devices.AddRange(QueryDevices("Audio", "SELECT Name, PNPDeviceID FROM Win32_SoundDevice"));
+        devices.AddRange(QueryDevices("USB", "SELECT Name, PNPDeviceID FROM Win32_USBController"));
 
         return new HardwareReport(
             Environment.MachineName,
             Value(computer, "Manufacturer"),
             Value(computer, "Model"),
-            cpuDetails,
+            ReadFormFactor(),
+            Value(cpu, "Name"),
+            IntValue(cpu, "NumberOfCores"),
+            IntValue(cpu, "NumberOfLogicalProcessors"),
             JoinNonEmpty(Value(board, "Manufacturer"), Value(board, "Product")),
             ReadFirmwareMode(),
             ReadSecureBoot(),
             LongValue(computer, "TotalPhysicalMemory"),
-            QueryNames("SELECT Name FROM Win32_VideoController"),
-            QueryNames("SELECT Name FROM Win32_NetworkAdapter WHERE PhysicalAdapter=True AND NetEnabled=True"),
-            QueryNames("SELECT Name FROM Win32_SoundDevice"),
+            devices.DistinctBy(x => $"{x.Category}|{x.Name}|{x.PnpDeviceId}", StringComparer.OrdinalIgnoreCase).ToArray(),
             ScanDisks());
     }
 
@@ -64,16 +66,17 @@ public sealed class HardwareScanner
             .ToArray();
     }
 
-    private static IReadOnlyList<string> QueryNames(string query)
+    private static IReadOnlyList<HardwareDeviceInfo> QueryDevices(string category, string query)
     {
-        var values = new List<string>();
+        var values = new List<HardwareDeviceInfo>();
         using var searcher = new ManagementObjectSearcher(query);
         foreach (ManagementObject item in searcher.Get())
         {
-            var value = Value(item, "Name");
-            if (!string.IsNullOrWhiteSpace(value)) values.Add(value);
+            var name = Value(item, "Name");
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            values.Add(new HardwareDeviceInfo(category, name, Value(item, "PNPDeviceID")));
         }
-        return values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return values;
     }
 
     private static ManagementObject? First(string query)
@@ -82,11 +85,33 @@ public sealed class HardwareScanner
         return searcher.Get().Cast<ManagementObject>().FirstOrDefault();
     }
 
+    private static string ReadFormFactor()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure");
+            foreach (ManagementObject item in searcher.Get())
+            {
+                if (item["ChassisTypes"] is not ushort[] types) continue;
+                if (types.Any(x => x is 8 or 9 or 10 or 11 or 12 or 14 or 18 or 21 or 30 or 31 or 32))
+                    return "Laptop";
+            }
+        }
+        catch { }
+        return "Desktop";
+    }
+
     private static string Value(ManagementBaseObject? item, string property, string fallback = "")
     {
         if (item is null) return fallback;
         var value = item[property]?.ToString()?.Trim();
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private static int IntValue(ManagementBaseObject? item, string property)
+    {
+        if (item is null) return 0;
+        return int.TryParse(item[property]?.ToString(), out var value) ? value : 0;
     }
 
     private static long LongValue(ManagementBaseObject? item, string property)
