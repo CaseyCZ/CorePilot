@@ -155,6 +155,107 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
     }
 
+    private async void Verify_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (SystemCombo.SelectedItem is not ISystemModule module ||
+            VariantCombo.SelectedItem is not SystemVariant target)
+        {
+            PlanStatus = "Choose a system and version first.";
+            return;
+        }
+
+        _verificationCompleted = false;
+        _lastOnlineSourceSnapshot = null;
+        RefreshActionAvailability();
+
+        try
+        {
+            ActivityLog.Start(
+                "Online sources",
+                $"Refreshing current {module.DisplayName} sources…");
+
+            _lastOnlineSourceSnapshot =
+                await _onlineSources.ResolveForSystemAsync(module.Id);
+
+            foreach (var source in _lastOnlineSourceSnapshot.Sources)
+            {
+                var state = source.Live && source.Success
+                    ? "LIVE"
+                    : source.Success
+                        ? "CACHE"
+                        : "FAILED";
+
+                var version = string.IsNullOrWhiteSpace(source.Version)
+                    ? ""
+                    : $" · {source.Version}";
+
+                ActivityLog.Info(
+                    "Online source",
+                    $"{state} · {source.Name}{version} · {source.SourceUrl ?? source.Repository ?? "no URL"}");
+            }
+
+            ActivityLog.Progress(
+                "Verification",
+                $"Online sources refreshed: {_lastOnlineSourceSnapshot.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.");
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Info(
+                "Online sources",
+                $"Online source refresh could not complete: {ex.Message}");
+        }
+
+        PlanStatus = $"Verifying {target.DisplayName} against this computer…";
+        await ScanHardwareAsync();
+
+        if (_compatibilityReport is null)
+        {
+            PlanStatus = "Verification could not be completed. Open the Activity Log for details.";
+            RefreshActionAvailability();
+            return;
+        }
+
+        var onlineReady =
+            _lastOnlineSourceSnapshot is not null &&
+            _lastOnlineSourceSnapshot.CriticalFailures == 0;
+
+        _verificationCompleted =
+            _compatibilityReport.CanProceed &&
+            onlineReady;
+
+        RefreshActionAvailability();
+
+        if (_compatibilityReport.CanProceed && onlineReady)
+        {
+            var nativeApple =
+                _hardwareReport is not null &&
+                MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
+
+            var sourceSuffix =
+                $" Online sources: {_lastOnlineSourceSnapshot!.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.";
+
+            PlanStatus = (nativeApple
+                ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
+                : $"Verified ✅ {_compatibilityReport.Summary}. USB was not required for this check.")
+                + sourceSuffix;
+
+            ActivityLog.Success("Verification", PlanStatus);
+        }
+        else if (_compatibilityReport.CanProceed)
+        {
+            var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
+            PlanStatus =
+                $"Compatibility passed, but writing is not ready: {failures} critical online source(s) were not refreshed live. " +
+                "Reconnect to the internet and run Verify again.";
+            ActivityLog.Warning("Verification", PlanStatus);
+        }
+        else
+        {
+            PlanStatus = $"Verification finished: {_compatibilityReport.Summary}. Review the Compatibility tab.";
+            ActivityLog.Warning("Verification", PlanStatus);
+        }
+    }
+
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
     {
         if (!_verificationCompleted || _compatibilityReport?.CanProceed != true)
@@ -639,6 +740,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             HardwareItems.Add(item);
 
         ScanStatus = $"Detected {HardwareItems.Count} hardware items";
+    }
+
+    private void UsbCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        InvalidateWorkflowAfter(
+            MacOSWorkflowPhase.ManifestVerified,
+            "USB target changed; target-specific authorization revoked.");
+        UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
+            ? "USB target changed — safety inspection required."
+            : "USB target not selected.";
+        RefreshActionAvailability();
     }
 
     private async Task RefreshDrivesAsync(bool silentNoUsb = false)
