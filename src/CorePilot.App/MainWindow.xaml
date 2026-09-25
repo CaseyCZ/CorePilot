@@ -237,6 +237,13 @@
                                     <TextBlock Text="{Binding CompatibilityRequirements}"
                                                Foreground="{StaticResource MutedBrush}"
                                                TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="Automatic configuration"
+                                               FontWeight="SemiBold"
+                                               Margin="0,14,0,4"/>
+                                    <TextBlock Text="{Binding CompatibilityAutoConfiguration}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
 
