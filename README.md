@@ -6,6 +6,20 @@ Target workflow:
 
 **Choose an operating system → choose a USB drive → CorePilot handles the rest.**
 
+## Download latest Windows build
+
+The newest successful `main` build is always published as the rolling GitHub Release:
+
+**CorePilot Latest → `CorePilot-latest-win-x64.zip`**
+
+Release page:
+
+https://github.com/CaseyCZ/CorePilot/releases/tag/latest
+
+A matching `CorePilot-latest-win-x64.sha256` file is published next to the ZIP for integrity verification.
+
+The `latest` release is replaced only after the full CI pipeline succeeds.
+
 ## macOS pipeline status
 
 ### v0.1–v0.16 ✅

@@ -1,5 +1,8 @@
 name: Build
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main, "foundation/**", "feature/**" ]
@@ -71,3 +74,74 @@ jobs:
           path: artifacts/CorePilot-win-x64/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Create rolling release package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release | Out-Null
+
+          $zip = "artifacts/release/CorePilot-latest-win-x64.zip"
+          if (Test-Path $zip) {
+            Remove-Item $zip -Force
+          }
+
+          Compress-Archive `
+            -Path "artifacts/CorePilot-win-x64/*" `
+            -DestinationPath $zip `
+            -CompressionLevel Optimal `
+            -Force
+
+          $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
+          "$hash  CorePilot-latest-win-x64.zip" |
+            Set-Content "artifacts/release/CorePilot-latest-win-x64.sha256" -Encoding ascii
+
+          Write-Host "Release package SHA256: $hash"
+
+      - name: Update rolling GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest --repo "$env:GITHUB_REPOSITORY" *> $null
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Removing previous rolling release..."
+            gh release delete latest `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --yes `
+              --cleanup-tag
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to remove previous rolling release."
+            }
+          }
+          else {
+            Write-Host "No previous rolling release exists yet."
+          }
+
+          $short = "$env:GITHUB_SHA".Substring(0, 8)
+          $notes = @"
+          Rolling development build from the latest successful main branch.
+
+          Commit: $short
+          Platform: Windows x64
+          Package: CorePilot-latest-win-x64.zip
+          Integrity: CorePilot-latest-win-x64.sha256
+
+          This release is updated automatically only after the complete CorePilot CI pipeline succeeds.
+          "@
+
+          gh release create latest `
+            "artifacts/release/CorePilot-latest-win-x64.zip" `
+            "artifacts/release/CorePilot-latest-win-x64.sha256" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --target "$env:GITHUB_SHA" `
+            --title "CorePilot Latest" `
+            --notes "$notes" `
+            --latest
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to publish the rolling CorePilot release."
+          }
