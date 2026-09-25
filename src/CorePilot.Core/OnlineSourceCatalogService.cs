@@ -70,8 +70,11 @@ public sealed record OnlineSourceSnapshot(
 
 public sealed class OnlineSourceCatalogService
 {
-    private const string RemoteCatalogUrl =
-        "https://raw.githubusercontent.com/CaseyCZ/CorePilot/main/src/CorePilot.Core/Data/source-catalog.json";
+    private const string CatalogRepository = "CaseyCZ/CorePilot";
+    private const string CatalogBranch = "main";
+    private const string CatalogPath = "src/CorePilot.Core/Data/source-catalog.json";
+    private const string CatalogCommitApi =
+        "https://api.github.com/repos/CaseyCZ/CorePilot/commits/main";
 
     private const string EmbeddedResourceName =
         "CorePilot.Core.Data.source-catalog.json";
@@ -112,18 +115,19 @@ public sealed class OnlineSourceCatalogService
     {
         try
         {
-            var json = await _http.GetStringAsync(
-                RemoteCatalogUrl,
+            var (json, origin) = await DownloadVerifiedRemoteCatalogAsync(
                 cancellationToken);
 
             var catalog = ParseCatalog(json);
+            ValidateExecutionCriticalDefinitions(catalog);
+
             await File.WriteAllTextAsync(
                 Path.Combine(_cacheDirectory, "source-catalog.json"),
                 json,
                 new UTF8Encoding(false),
                 cancellationToken);
 
-            return new(catalog, RemoteCatalogUrl, true);
+            return new(catalog, origin, true);
         }
         catch
         {
@@ -138,9 +142,11 @@ public sealed class OnlineSourceCatalogService
                     var cached = await File.ReadAllTextAsync(
                         cachedPath,
                         cancellationToken);
+                    var catalog = ParseCatalog(cached);
+                    ValidateExecutionCriticalDefinitions(catalog);
 
                     return new(
-                        ParseCatalog(cached),
+                        catalog,
                         cachedPath,
                         false);
                 }
@@ -149,11 +155,51 @@ public sealed class OnlineSourceCatalogService
                 }
             }
 
+            var bundled = LoadBundledCatalog();
+            ValidateExecutionCriticalDefinitions(bundled);
             return new(
-                LoadBundledCatalog(),
+                bundled,
                 EmbeddedResourceName,
                 false);
         }
+    }
+
+    private async Task<(string Json, string Origin)> DownloadVerifiedRemoteCatalogAsync(
+        CancellationToken cancellationToken)
+    {
+        using var commitResponse = await _http.GetAsync(
+            CatalogCommitApi,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        commitResponse.EnsureSuccessStatusCode();
+
+        await using var commitStream = await commitResponse.Content.ReadAsStreamAsync(
+            cancellationToken);
+
+        using var commitDocument = await JsonDocument.ParseAsync(
+            commitStream,
+            cancellationToken: cancellationToken);
+
+        var root = commitDocument.RootElement;
+        var sha = root.GetProperty("sha").GetString();
+
+        var verified =
+            root.TryGetProperty("commit", out var commit) &&
+            commit.TryGetProperty("verification", out var verification) &&
+            verification.TryGetProperty("verified", out var verifiedNode) &&
+            verifiedNode.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+            verifiedNode.GetBoolean();
+
+        if (string.IsNullOrWhiteSpace(sha) || !verified)
+            throw new InvalidOperationException(
+                "CorePilot online catalog must come from a GitHub-verified main commit.");
+
+        var url =
+            $"https://raw.githubusercontent.com/{CatalogRepository}/{sha}/{CatalogPath}";
+
+        var json = await _http.GetStringAsync(url, cancellationToken);
+        return (json, url);
     }
 
     public static OnlineSourceCatalogDocument LoadBundledCatalog()
@@ -182,16 +228,14 @@ public sealed class OnlineSourceCatalogService
                     StringComparer.OrdinalIgnoreCase))
             .ToArray();
 
-        var results = new List<OnlineSourceResolution>();
+        cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var source in definitions)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            results.Add(await ResolveAsync(
-                source,
-                allowCachedFallback: true,
-                cancellationToken));
-        }
+        var results = await Task.WhenAll(
+            definitions.Select(source =>
+                ResolveAsync(
+                    source,
+                    allowCachedFallback: true,
+                    cancellationToken)));
 
         return new(
             systemId,
@@ -443,8 +487,10 @@ public sealed class OnlineSourceCatalogService
 
         response.EnsureSuccessStatusCode();
 
-        var finalUri = response.RequestMessage?.RequestUri?.ToString()
-                       ?? source.Url;
+        var finalUri = response.RequestMessage?.RequestUri;
+        if (finalUri is null || finalUri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException(
+                "Web source redirected outside HTTPS.");
 
         return new(
             source.Id,
@@ -453,7 +499,7 @@ public sealed class OnlineSourceCatalogService
             source.Trust,
             source.Strategy,
             source.Repository,
-            finalUri,
+            finalUri.ToString(),
             source.Critical,
             Success: true,
             Live: true,
@@ -517,6 +563,29 @@ public sealed class OnlineSourceCatalogService
             safe + ".json");
     }
 
+    private static void ValidateExecutionCriticalDefinitions(
+        OnlineSourceCatalogDocument catalog)
+    {
+        var source = catalog.Sources.SingleOrDefault(x =>
+            x.Id.Equals(
+                "macos.opcore-simplify",
+                StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException(
+                "Execution-critical OpCore Simplify source is missing.");
+
+        if (!source.Repository?.Equals(
+                "lzhoang2801/OpCore-Simplify",
+                StringComparison.OrdinalIgnoreCase) ?? true ||
+            !source.Branch?.Equals(
+                "main",
+                StringComparison.OrdinalIgnoreCase) ?? true ||
+            source.Strategy != "githubBranchHead" ||
+            !source.RequireVerifiedCommit ||
+            !source.Critical)
+            throw new InvalidDataException(
+                "Execution-critical OpCore Simplify source definition was modified outside the trusted policy.");
+    }
+
     private static OnlineSourceCatalogDocument ParseCatalog(string json)
     {
         var document = JsonSerializer.Deserialize<OnlineSourceCatalogDocument>(
@@ -547,9 +616,11 @@ public sealed class OnlineSourceCatalogService
 
             if (source.Strategy is "githubRelease" or "githubBranchHead")
             {
-                if (string.IsNullOrWhiteSpace(source.Repository))
+                if (string.IsNullOrWhiteSpace(source.Repository) ||
+                    source.Repository.Split('/').Length != 2 ||
+                    source.Repository.Any(char.IsWhiteSpace))
                     throw new InvalidDataException(
-                        $"Source '{source.Id}' requires a GitHub repository.");
+                        $"Source '{source.Id}' requires a simple owner/repository GitHub identifier.");
             }
             else if (source.Strategy == "webPage")
             {
@@ -561,6 +632,15 @@ public sealed class OnlineSourceCatalogService
                     throw new InvalidDataException(
                         $"Source '{source.Id}' requires an HTTPS URL.");
             }
+            else
+            {
+                throw new InvalidDataException(
+                    $"Source '{source.Id}' uses unsupported strategy '{source.Strategy}'.");
+            }
+
+            if (source.Trust is not ("official" or "upstream" or "community" or "experimental"))
+                throw new InvalidDataException(
+                    $"Source '{source.Id}' uses unsupported trust class '{source.Trust}'.");
         }
 
         return document;
