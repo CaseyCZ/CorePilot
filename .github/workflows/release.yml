@@ -64,7 +64,7 @@ jobs:
             "planVerification",
             "manifestVerification",
             "IdentityFingerprint",
-            "Verb = \"runas\"",
+            'Verb = "runas"',
             "diskpart.exe",
             "CopyAndVerifyFileAsync"
           )) {
