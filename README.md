@@ -8,47 +8,37 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1 — Foundation ✅
-Windows app, hardware inventory, USB discovery and modular OS architecture.
+### v0.1–v0.8 ✅
 
-### v0.2 — Compatibility engine ✅
-Hardware findings plus kext, patch and boot-argument planning.
+CorePilot currently provides:
 
-### v0.3 — Hardware Sniffer ✅
-Deep Scan with exact Report.json + ACPI import.
+- Windows hardware inventory + Hardware Sniffer Deep Scan
+- macOS compatibility and deterministic automation policies
+- pinned OpCore Simplify staging
+- non-interactive EFI generation
+- upstream `ocvalidate`
+- independent EFI structure audit
+- verified Apple Recovery download
+- final installer manifest with SHA-256 for every EFI/recovery file
+- immediate manifest re-verification
 
-### v0.4 — Policy + staging ✅
-Deterministic automation profile, pinned OpCore Simplify source and workspace manifest.
+### v0.9 — Read-only USB safety inspector 🚧
 
-### v0.5 — EFI builder ✅
-Non-interactive upstream integration and mandatory `ocvalidate`.
+Before CorePilot gains any destructive disk operation, the selected USB target is now inspected read-only:
 
-### v0.6 — EFI structure audit ✅
-Independent verification that enabled ACPI, kext, driver and tool references physically exist.
+- resolves the exact `Win32_DiskDrive`
+- reads physical disk index, model, serial number, size, interface/media type and PNP identity
+- enumerates partitions and mounted logical volumes
+- checks Windows `BootPartition`, `BootVolume`, `SystemVolume`
+- checks the current Windows system drive
+- checks pagefile placement
+- creates a stable SHA-256 target identity fingerprint
+- **BLOCKED** for any disk carrying system/boot/pagefile content
+- **BLOCKED** if disk topology cannot be resolved completely
+- **SAFE CANDIDATE** for a removable USB with stable serial identity
+- **STRONG CONFIRMATION** for USB fixed media (such as an external SSD/HDD) or removable media without a stable serial
 
-### v0.7 — Apple Recovery ✅
-Official OpenCorePkg `macrecovery.py`, signed chunk verification and local SHA-256 hashes.
-
-### v0.8 — Final installer manifest 🚧
-
-After Recovery succeeds, CorePilot now automatically creates:
-
-- `CorePilotInstallerManifest.json`
-- `CorePilotInstallerManifest.sha256`
-
-The manifest contains:
-
-- selected macOS target and Darwin version
-- actual SMBIOS used by the EFI builder
-- pinned OpCore Simplify commit + source archive SHA-256
-- `ocvalidate` and CorePilot structural-audit status
-- every file below the generated EFI tree
-- path, role, size and SHA-256 for every EFI file
-- verified `BaseSystem.dmg` and `BaseSystem.chunklist` hashes
-
-CorePilot immediately re-reads the manifest and re-hashes all referenced files. Workspace path traversal and reparse-point files are rejected.
-
-This gives the future USB writer a deterministic pre-write contract: **the bytes written to USB must match the already-validated installer manifest.**
+This feature performs **no disk writes, formatting, partitioning, dismounting or volume changes**.
 
 ## Safety model
 
@@ -59,18 +49,17 @@ This gives the future USB writer a deterministic pre-write contract: **the bytes
 5. Build EFI
 6. Validate EFI
 7. Download + verify Apple Recovery
-8. Create + verify final installer manifest
-9. **Write USB — still disabled**
-
-No current step writes to a physical disk.
+8. Create + verify installer manifest
+9. Inspect exact USB target read-only
+10. **Write USB — still disabled**
 
 ## Next
 
-1. Build a read-only USB target safety inspector: removable status, system-disk detection, model/serial/size and mounted volumes.
-2. Design the exact GPT/EFI/recovery layout.
-3. Add a dry-run USB write plan that must match the installer manifest.
-4. Only after those safeguards pass, enable the destructive write behind explicit confirmation.
-5. Then continue Windows/Linux media engines and multiboot.
+1. Create a dry-run macOS USB layout plan tied to both the installer-manifest SHA and USB identity fingerprint.
+2. Re-inspect the target immediately before execution and reject any identity change.
+3. Add explicit destructive confirmation containing disk number, model, serial/fingerprint and size.
+4. Only then implement the actual GPT/EFI/recovery write engine.
+5. Continue Windows/Linux media engines after the common disk-safety layer is stable.
 
 ## Build
 

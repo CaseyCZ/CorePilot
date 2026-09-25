@@ -23,11 +23,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
     private readonly AppleRecoveryDownloader _appleRecoveryDownloader = new();
     private readonly InstallerManifestService _installerManifestService = new();
+    private readonly UsbTargetSafetyInspector _usbSafetyInspector = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
     private AppleRecoveryResult? _lastRecovery;
     private InstallerManifestResult? _lastInstallerManifest;
+    private UsbTargetSafetyReport? _usbSafetyReport;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -35,6 +37,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
     private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
+    private string _usbSafetyStatus = "USB target not inspected. No physical-disk writes are enabled.";
     private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
     private string _macPlanDetails = "";
 
@@ -60,6 +63,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _planStatus;
         private set { _planStatus = value; OnPropertyChanged(); }
+    }
+
+    public string UsbSafetyStatus
+    {
+        get => _usbSafetyStatus;
+        private set { _usbSafetyStatus = value; OnPropertyChanged(); }
     }
 
     public string CompatibilitySummary
@@ -154,12 +163,45 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void RefreshDrives_OnClick(object sender, RoutedEventArgs e) => await RefreshDrivesAsync();
 
+    private void UsbCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _usbSafetyReport = null;
+        UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
+            ? "USB target changed — safety inspection required."
+            : "USB target not selected.";
+    }
+
+    private async void InspectUsb_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            UsbSafetyStatus = "Select a USB target first.";
+            return;
+        }
+
+        try
+        {
+            UsbSafetyStatus = "Inspecting physical disk, partitions and mounted volumes…";
+            var report = await _usbSafetyInspector.InspectAsync(usb);
+            _usbSafetyReport = report;
+            UsbSafetyStatus = report.Summary;
+        }
+        catch (Exception ex)
+        {
+            _usbSafetyReport = null;
+            UsbSafetyStatus = $"BLOCKED · USB inspection failed closed: {ex.Message}";
+        }
+    }
+
     private async Task RefreshDrivesAsync()
     {
         try
         {
             var current = UsbCombo.SelectedItem as UsbDriveInfo;
             var disks = await _scanner.ScanDisksAsync();
+
+            _usbSafetyReport = null;
+            UsbSafetyStatus = "USB list refreshed — safety inspection required.";
 
             UsbDrives.Clear();
             foreach (var disk in disks.Where(x => x.IsUsb))
