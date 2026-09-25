@@ -1,18 +1,15 @@
 namespace CorePilot.Windows;
 
 public sealed record WindowsMediaOptions(
-    bool ExtendedHardwareCompatibility,
-    bool LegacyBiosCompatible)
+    bool ExtendedHardwareCompatibility)
 {
     public static WindowsMediaOptions Standard { get; } =
         new(
-            ExtendedHardwareCompatibility: false,
-            LegacyBiosCompatible: false);
+            ExtendedHardwareCompatibility: false);
 
     public static WindowsMediaOptions OlderPc { get; } =
         new(
-            ExtendedHardwareCompatibility: true,
-            LegacyBiosCompatible: false);
+            ExtendedHardwareCompatibility: true);
 
     public string ModeText =>
         ExtendedHardwareCompatibility
