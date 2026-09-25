@@ -174,7 +174,7 @@
                                    AllowsTransparency="True"
                                    Focusable="False"
                                    PopupAnimation="Slide">
-                                <Grid Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                <Grid Width="{Binding ActualWidth, ElementName=ToggleButton}"
                                       MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <Border Background="{StaticResource PanelBrush}"
                                             BorderBrush="{StaticResource BorderBrush}"
@@ -201,6 +201,7 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{StaticResource DisabledBrush}"/>
                                 <Setter TargetName="ToggleButton" Property="Opacity" Value="0.6"/>
+                                <Setter TargetName="ContentSite" Property="Opacity" Value="0.6"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
