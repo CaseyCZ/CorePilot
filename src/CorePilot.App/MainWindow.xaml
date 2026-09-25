@@ -308,7 +308,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded macOS, Windows and Linux USB writing enabled."
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded Hackintosh/OpenCore, Windows and Linux USB writing enabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
