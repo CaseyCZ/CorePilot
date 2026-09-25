@@ -67,7 +67,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
     private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
-    private bool _windowsOlderPcCompatibility;
+    private bool _windowsCompatibilityMedia;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -997,8 +997,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private WindowsMediaOptions CurrentWindowsMediaOptions =>
         SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
         VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" } &&
-        _windowsOlderPcCompatibility
-            ? WindowsMediaOptions.OlderPc
+        _windowsCompatibilityMedia
+            ? WindowsMediaOptions.Compatibility
             : WindowsMediaOptions.Standard;
 
     private void ThisComputer_OnClick(object sender, RoutedEventArgs e)
@@ -1007,7 +1007,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         _targetMode = InstallationTargetMode.ThisComputer;
-        _windowsOlderPcCompatibility = false;
+        _windowsCompatibilityMedia = false;
         ResetPreparationForTargetModeChange(
             "Target changed to this computer; verification is required.");
         UpdateTargetModeUi();
@@ -1019,7 +1019,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         _targetMode = InstallationTargetMode.OtherComputer;
-        _windowsOlderPcCompatibility = false;
+        _windowsCompatibilityMedia = false;
         ResetPreparationForTargetModeChange(
             "Target changed to another computer; local hardware compatibility is no longer used.");
         UpdateTargetModeUi();
@@ -1145,7 +1145,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (blockers.Length == 0)
         {
-            _windowsOlderPcCompatibility = false;
+            _windowsCompatibilityMedia = false;
             UpdateTargetModeUi();
             return;
         }
@@ -1155,12 +1155,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!bypassable)
         {
-            _windowsOlderPcCompatibility = false;
+            _windowsCompatibilityMedia = false;
             UpdateTargetModeUi();
             return;
         }
 
-        _windowsOlderPcCompatibility = true;
+        _windowsCompatibilityMedia = true;
 
         var remediated = _compatibilityReport.Findings
             .Select(finding =>
@@ -1171,7 +1171,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     return finding with
                     {
                         State = CompatibilityState.Supported,
-                        Title = finding.Title + " · resolved by older-PC media",
+                        Title = finding.Title + " · resolved by Windows 11 compatibility media",
                         Details = finding.Details +
                                   " CorePilot will apply the documented Windows Setup compatibility path while keeping the normal UEFI media layout."
                     };
@@ -1183,7 +1183,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     return finding with
                     {
                         State = CompatibilityState.Supported,
-                        Title = "Secure Boot requirement handled by older-PC media",
+                        Title = "Secure Boot requirement handled by Windows 11 compatibility media",
                         Details = finding.Details +
                                   " CorePilot will apply the documented Secure Boot installation bypass."
                     };
@@ -1196,7 +1196,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         remediated.Add(new(
             CompatibilityState.Supported,
             "Installer media",
-            "Older-PC compatibility enabled automatically",
+            "Windows 11 compatibility media enabled automatically",
             "CorePilot will keep the normal UEFI/FAT32 media layout and apply the implemented TPM/Secure Boot Windows Setup compatibility settings. Legacy BIOS is not treated as resolved. CPU-specific requirements are not falsely claimed as bypassed."));
 
         remediated.Add(new(
@@ -1260,7 +1260,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (Variants.Count > 0)
             VariantCombo.SelectedIndex = 0;
 
-        _windowsOlderPcCompatibility = false;
+        _windowsCompatibilityMedia = false;
         UpdateTargetModeUi();
 
         _verificationCompleted = false;
@@ -1298,7 +1298,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _windowsOlderPcCompatibility = false;
+        _windowsCompatibilityMedia = false;
         UpdateTargetModeUi();
         _verificationCompleted = false;
         CompatibilityItems.Clear();
