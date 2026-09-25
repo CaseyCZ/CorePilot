@@ -159,18 +159,32 @@ public sealed class LinuxIsoPreparationService
     private async Task<ResolvedLinuxImage> ResolveUbuntuAsync(
         CancellationToken cancellationToken)
     {
-        var pageUri = new Uri("https://releases.ubuntu.com/latest/");
-        var (html, finalPageUri) = await GetTextWithFinalUriAsync(
-            pageUri,
+        var downloadPage = new Uri("https://ubuntu.com/download/desktop");
+        var (html, finalDownloadUri) = await GetTextWithFinalUriAsync(
+            downloadPage,
             cancellationToken);
 
-        var fileName = MatchFirst(
+        var isoHref = MatchFirst(
             html,
-            @"href\s*=\s*[""'](?<value>[^""']*ubuntu-[^""'/]+-desktop-amd64\.iso)[""']",
-            "Ubuntu desktop amd64 ISO");
+            @"href\s*=\s*[""'](?<value>https://(?:[a-z0-9.-]+\.)?releases\.ubuntu\.com/(?:releases/)?[^""']*/ubuntu-[^""'/]+-desktop-amd64\.iso)[""']",
+            "current Ubuntu desktop amd64 ISO");
 
-        fileName = Path.GetFileName(WebUtility.HtmlDecode(fileName));
-        var checksumUri = new Uri(finalPageUri, "SHA256SUMS");
+        var isoUri = new Uri(WebUtility.HtmlDecode(isoHref));
+
+        if (isoUri.Scheme != Uri.UriSchemeHttps ||
+            !isoUri.Host.EndsWith(
+                "releases.ubuntu.com",
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException(
+                $"Ubuntu download page returned an unexpected ISO host: {isoUri.Host}");
+
+        var fileName = Path.GetFileName(isoUri.AbsolutePath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new InvalidDataException(
+                "Ubuntu download page returned an ISO URL without a filename.");
+
+        var releaseDirectory = new Uri(isoUri, "./");
+        var checksumUri = new Uri(releaseDirectory, "SHA256SUMS");
         var checksums = await _http.GetStringAsync(
             checksumUri,
             cancellationToken);
@@ -180,11 +194,11 @@ public sealed class LinuxIsoPreparationService
             fileName);
 
         return new(
-            new Uri(finalPageUri, fileName),
+            isoUri,
             checksumUri,
             fileName,
             expected,
-            "Ubuntu release image verified against SHA256SUMS from releases.ubuntu.com.");
+            $"Current Ubuntu desktop image discovered from {finalDownloadUri.Host} and verified against SHA256SUMS from {checksumUri.Host}.");
     }
 
     private async Task<ResolvedLinuxImage> ResolveDebianAsync(
