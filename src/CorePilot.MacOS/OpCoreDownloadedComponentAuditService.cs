@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using CorePilot.Core;
 
 namespace CorePilot.MacOS;
 
@@ -10,7 +11,10 @@ public sealed record DownloadedComponentAuditEntry(
     string Url,
     string Sha256,
     bool FolderPresent,
-    bool FolderManifestPresent);
+    bool FolderManifestPresent,
+    string? CatalogSourceId = null,
+    string? CatalogVersion = null,
+    bool? CatalogAligned = null);
 
 public sealed record DownloadedComponentAuditResult(
     string AuditPath,
@@ -28,8 +32,14 @@ public sealed class OpCoreDownloadedComponentAuditService
         PropertyNameCaseInsensitive = true
     };
 
+    public Task<DownloadedComponentAuditResult> AuditAsync(
+        OpCoreStagingResult stage,
+        CancellationToken cancellationToken = default) =>
+        AuditAsync(stage, null, cancellationToken);
+
     public async Task<DownloadedComponentAuditResult> AuditAsync(
         OpCoreStagingResult stage,
+        OnlineSourceSnapshot? sourceSnapshot,
         CancellationToken cancellationToken = default)
     {
         var ockRoot = Path.Combine(stage.UpstreamDirectory, "OCK_Files");
@@ -88,13 +98,21 @@ public sealed class OpCoreDownloadedComponentAuditService
                 throw new InvalidDataException(
                     $"Downloaded component '{name}' is missing its integrity-manifested cache folder.");
 
+            var catalogMatch = ResolveCatalogMatch(
+                name,
+                uri,
+                sourceSnapshot);
+
             entries.Add(new(
                 name,
                 id,
                 uri.ToString(),
                 sha256.ToUpperInvariant(),
                 folderPresent,
-                manifestPresent));
+                manifestPresent,
+                catalogMatch.SourceId,
+                catalogMatch.Version,
+                catalogMatch.Aligned));
         }
 
         if (entries.Count == 0)
@@ -107,6 +125,28 @@ public sealed class OpCoreDownloadedComponentAuditService
                     StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException(
                 "OpenCorePkg is missing from the verified component history.");
+
+        if (sourceSnapshot is not null)
+        {
+            var mismatches = entries
+                .Where(x => x.CatalogAligned is false)
+                .Select(x => $"{x.ProductName} != {x.CatalogVersion ?? "current catalog release"}")
+                .ToArray();
+
+            if (mismatches.Length > 0)
+                throw new InvalidDataException(
+                    "Downloaded OpenCore/kext component versions do not match the live CorePilot catalog: " +
+                    string.Join("; ", mismatches));
+
+            var openCore = entries.Single(x =>
+                x.ProductName.Equals(
+                    "OpenCorePkg",
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (openCore.CatalogAligned is not true)
+                throw new InvalidDataException(
+                    "OpenCorePkg could not be bound to the current live CorePilot source catalog.");
+        }
 
         foreach (var directory in Directory.EnumerateDirectories(ockRoot))
         {
@@ -161,6 +201,66 @@ public sealed class OpCoreDownloadedComponentAuditService
             historySha,
             entries.Count,
             entries);
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> CatalogSourceByProduct =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["OpenCorePkg"] = "macos.opencore",
+            ["Lilu"] = "macos.kext.lilu",
+            ["VirtualSMC"] = "macos.kext.virtualsmc",
+            ["WhateverGreen"] = "macos.kext.whatevergreen",
+            ["AppleALC"] = "macos.kext.applealc",
+            ["IntelMausi"] = "macos.kext.intelmausi",
+            ["AirportBrcmFixup"] = "macos.kext.airportbrcmfixup",
+            ["NVMeFix"] = "macos.kext.nvmefix",
+            ["RestrictEvents"] = "macos.kext.restrictevents"
+        };
+
+    private static (string? SourceId, string? Version, bool? Aligned) ResolveCatalogMatch(
+        string productName,
+        Uri downloadUri,
+        OnlineSourceSnapshot? sourceSnapshot)
+    {
+        if (sourceSnapshot is null ||
+            !CatalogSourceByProduct.TryGetValue(productName, out var sourceId))
+            return (null, null, null);
+
+        var source = sourceSnapshot.Sources.FirstOrDefault(x =>
+            x.Id.Equals(sourceId, StringComparison.OrdinalIgnoreCase));
+
+        if (source is null || !source.Live || !source.Success)
+            return (sourceId, source?.Version, false);
+
+        var repositoryAligned =
+            !string.IsNullOrWhiteSpace(source.Repository) &&
+            downloadUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+            downloadUri.AbsolutePath.Contains(
+                "/" + source.Repository + "/",
+                StringComparison.OrdinalIgnoreCase);
+
+        var resolved = source.ResolvedRef ?? source.Version;
+        if (string.IsNullOrWhiteSpace(resolved))
+            return (sourceId, source.Version, false);
+
+        var tag = resolved.Trim();
+        var normalized = tag.TrimStart('v', 'V');
+
+        var versionAligned =
+            downloadUri.AbsolutePath.Contains(
+                "/download/" + tag + "/",
+                StringComparison.OrdinalIgnoreCase) ||
+            downloadUri.AbsolutePath.Contains(
+                "/download/v" + normalized + "/",
+                StringComparison.OrdinalIgnoreCase) ||
+            downloadUri.AbsolutePath.Contains(
+                "/download/" + normalized + "/",
+                StringComparison.OrdinalIgnoreCase);
+
+        return (
+            sourceId,
+            source.Version ?? source.ResolvedRef,
+            repositoryAligned && versionAligned);
     }
 
     private static string ReadString(JsonElement item, string name) =>
