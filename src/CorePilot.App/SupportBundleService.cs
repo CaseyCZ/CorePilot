@@ -47,7 +47,9 @@ public sealed class SupportBundleService
         "CorePilotUsbTypedConfirmation.json",
         "CorePilotUsbTypedConfirmation.sha256",
         "CorePilotUsbSimulationTranscript.json",
-        "CorePilotUsbSimulationTranscript.sha256"
+        "CorePilotUsbSimulationTranscript.sha256",
+        "CorePilotUsbPhysicalWrite.json",
+        "CorePilotUsbPhysicalWrite.sha256"
     ];
 
     public async Task<SupportBundleResult> CreateAsync(
@@ -165,7 +167,7 @@ public sealed class SupportBundleService
             corePilot = new
             {
                 informationalVersion,
-                physicalDiskWritesEnabled = false
+                physicalDiskWritesEnabled = true
             },
             runtime = new
             {
@@ -467,6 +469,6 @@ public sealed class SupportBundleService
         - USB target identity fingerprints,
         - destructive confirmation phrases.
 
-        Physical disk writing is disabled in the current CorePilot development build.
+        Physical disk writing is enabled only through CorePilot's guarded macOS workflow after live source checks, target re-inspection, manifest verification, short-lived preflight and exact typed confirmation.
         """;
 }
