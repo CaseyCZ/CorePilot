@@ -493,6 +493,7 @@ var requiredOnlineSources = new[]
     "macos.heliport",
     "macos.amd-vanilla",
     "windows.microsoft-windows11",
+    "windows.fido",
     "windows.rufus",
     "linux.ubuntu",
     "linux.fedora",
@@ -503,6 +504,48 @@ var requiredOnlineSources = new[]
 foreach (var sourceId in requiredOnlineSources)
     Assert(sourceIds.Contains(sourceId),
         $"online source catalog is missing {sourceId}");
+
+var windows11Source = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.microsoft-windows11");
+var windows10Source = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.microsoft-windows10");
+var ubuntuSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "linux.ubuntu");
+var fedoraSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "linux.fedora");
+
+Assert(OnlineSourceCatalogService.AppliesToTarget(
+           windows11Source,
+           "windows-11") &&
+       !OnlineSourceCatalogService.AppliesToTarget(
+           windows11Source,
+           "windows-10") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           windows10Source,
+           "windows-10"),
+    "Windows verification sources must be scoped to the selected Windows target");
+
+Assert(OnlineSourceCatalogService.AppliesToTarget(
+           ubuntuSource,
+           "ubuntu") &&
+       !OnlineSourceCatalogService.AppliesToTarget(
+           ubuntuSource,
+           "fedora") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fedoraSource,
+           "fedora"),
+    "Linux verification sources must be scoped to the selected distribution");
+
+var fidoSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.fido");
+Assert(fidoSource.RequireVerifiedCommit &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fidoSource,
+           "windows-11") &&
+       OnlineSourceCatalogService.AppliesToTarget(
+           fidoSource,
+           "windows-10"),
+    "Fido must stay a verified common Windows ISO resolver for both targets");
 
 Assert(sourceCatalog.Sources
         .Where(x => x.Strategy == "webPage")
@@ -580,6 +623,7 @@ var windows11Ok = genericAnalyzer.Analyze(
     {
         FirmwareMode = "UEFI",
         SecureBoot = true,
+        Tpm20 = true,
         MemoryBytes = 8L * 1024 * 1024 * 1024
     },
     new SystemVariant("windows-11", "Windows 11"));
@@ -588,8 +632,25 @@ Assert(windows11Ok.CanProceed,
     "Windows 11 generic verification must complete for a basic UEFI/4GB+ machine");
 Assert(windows11Ok.Findings.Any(x =>
         x.Component == "TPM" &&
-        x.State == CompatibilityState.Warning),
-    "Windows 11 must explicitly disclose that TPM is not collected by the lightweight scan");
+        x.State == CompatibilityState.Supported),
+    "Windows 11 must require and confirm TPM 2.0 before reporting a usable path");
+
+var windows11NoTpm = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        Tpm20 = false,
+        MemoryBytes = 8L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11NoTpm.CanProceed &&
+       windows11NoTpm.Findings.Any(x =>
+           x.Component == "TPM" &&
+           x.State == CompatibilityState.Blocked),
+    "Windows 11 must fail closed when TPM 2.0 is absent or disabled");
 
 var windows11Legacy = genericAnalyzer.Analyze(
     "windows",
@@ -597,6 +658,7 @@ var windows11Legacy = genericAnalyzer.Analyze(
     {
         FirmwareMode = "Legacy BIOS",
         SecureBoot = false,
+        Tpm20 = true,
         MemoryBytes = 8L * 1024 * 1024 * 1024
     },
     new SystemVariant("windows-11", "Windows 11"));
@@ -642,7 +704,7 @@ var windowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility
 Assert(windowsPreparation.SystemPrepared,
     "a compatible Windows target with live sources must become a prepared system configuration");
 Assert(!windowsPreparation.ReadyToWrite,
-    "Windows must not claim READY TO WRITE until its guarded physical writer is implemented");
+    "generic compatibility alone must not claim READY TO WRITE before a verified installer image is prepared");
 
 var blockedWindowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility(
     "windows",
