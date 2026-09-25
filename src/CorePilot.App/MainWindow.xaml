@@ -15,7 +15,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · v0.15 live activity log"
+                <TextBlock Text="Universal OS installer · v0.16 searchable activity log"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -33,6 +33,10 @@
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,2,0,0"/>
+                        <ProgressBar Height="3"
+                                     Margin="0,7,0,2"
+                                     IsIndeterminate="{Binding ActivityLog.IsBusy}"
+                                     Value="0"/>
                         <TextBlock Text="{Binding WorkflowStatus}"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
@@ -197,7 +201,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="CorePilot v0.15 preview · Live activity/error log · Physical disk writing remains disabled."
+        <TextBlock Grid.Row="3" Text="CorePilot v0.16 preview · Searchable/filterable activity log · Physical disk writing remains disabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
