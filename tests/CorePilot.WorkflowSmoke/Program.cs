@@ -722,6 +722,44 @@ Assert(ubuntuOk.CanProceed,
 
 Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
 
+var otherWindows11 = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "windows",
+    "Windows",
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(otherWindows11.CanProceed &&
+       otherWindows11.Findings.Any(x =>
+           x.Component == "Target mode" &&
+           x.State == CompatibilityState.Supported) &&
+       !otherWindows11.Findings.Any(x =>
+           x.Component is "TPM" or "CPU" or "Firmware"),
+    "Other computer Windows 11 preparation must not reuse this PC's TPM/CPU/firmware as compatibility blockers");
+
+var otherUbuntu = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "linux",
+    "Linux",
+    new SystemVariant("ubuntu", "Ubuntu"));
+
+Assert(otherUbuntu.CanProceed,
+    "Other computer Linux media must be preparable without scanning this PC as the target");
+
+var otherMac = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "macos",
+    "macOS",
+    new SystemVariant("tahoe-26", "macOS Tahoe 26"));
+
+Assert(!otherMac.CanProceed &&
+       otherMac.Findings.Any(x =>
+           x.Component == "Target hardware" &&
+           x.State == CompatibilityState.Blocked),
+    "Other computer macOS must stay blocked until target hardware is available");
+
+Assert(Enum.IsDefined(InstallationTargetMode.ThisComputer) &&
+       Enum.IsDefined(InstallationTargetMode.OtherComputer),
+    "Target computer mode must expose both This computer and Other computer states");
+
+Console.WriteLine("CorePilot target-computer mode smoke test OK");
+
 var windowsPreparationSources = new OnlineSourceSnapshot(
     "windows",
     DateTimeOffset.UtcNow,
