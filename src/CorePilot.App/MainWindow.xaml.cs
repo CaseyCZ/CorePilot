@@ -79,7 +79,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _compatibilityAutoConfiguration = "Automatic configuration has not run yet.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
     private string _targetModeStatus = "This computer · Verify uses the hardware detected on this PC.";
-    private string _windowsCompatibilityStatus = "Standard Windows 11 media.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
     public ObservableCollection<SystemVariant> Variants { get; } = [];
@@ -171,12 +170,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _targetModeStatus;
         private set { _targetModeStatus = value; OnPropertyChanged(); }
-    }
-
-    public string WindowsCompatibilityStatus
-    {
-        get => _windowsCompatibilityStatus;
-        private set { _windowsCompatibilityStatus = value; OnPropertyChanged(); }
     }
 
     public MainWindow()
@@ -967,21 +960,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         UpdateTargetModeUi();
     }
 
-    private void WindowsOlderPc_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (_targetMode != InstallationTargetMode.OtherComputer ||
-            SystemCombo.SelectedItem is not ISystemModule { Id: "windows" } ||
-            VariantCombo.SelectedItem is not SystemVariant { Id: "windows-11" })
-            return;
-
-        _windowsOlderPcCompatibility = !_windowsOlderPcCompatibility;
-        ResetPreparationForTargetModeChange(
-            _windowsOlderPcCompatibility
-                ? "Older-PC Windows compatibility enabled; verification is required."
-                : "Standard Windows media selected; verification is required.");
-        UpdateTargetModeUi();
-    }
-
     private void ResetPreparationForTargetModeChange(string reason)
     {
         _verificationCompleted = false;
@@ -1018,46 +996,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetSegmentButtonState(ThisComputerButton, thisComputerSelected);
         SetSegmentButtonState(OtherComputerButton, !thisComputerSelected);
 
-        TargetModeStatus = thisComputerSelected
-            ? "This computer · Verify uses the hardware detected on this PC and automatically resolves supported compatibility issues."
-            : "Other computer · Windows/Linux media is prepared independently of this PC's TPM, CPU, Secure Boot and firmware state.";
-
-        var isWindows11 =
-            SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
-            VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" };
-
-        WindowsCompatibilityPanel.Visibility =
-            isWindows11 ? Visibility.Visible : Visibility.Collapsed;
-
-        WindowsOlderPcButton.Visibility =
-            isWindows11 && !thisComputerSelected
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        if (!isWindows11)
+        if (thisComputerSelected)
         {
-            _windowsOlderPcCompatibility = false;
-            WindowsCompatibilityStatus = "Standard Windows media.";
+            TargetModeStatus =
+                "This computer · Verify scans this PC and may automatically resolve supported compatibility issues for the selected system.";
             return;
         }
 
-        if (thisComputerSelected)
-        {
-            WindowsCompatibilityStatus = _windowsOlderPcCompatibility
-                ? "AUTO · Older-PC compatibility was selected because this PC needs the documented TPM / Secure Boot / RAM compatibility path."
-                : "AUTO · CorePilot will use standard Windows 11 media when this PC passes the checks, or enable documented older-PC compatibility when it can safely resolve those blockers.";
-        }
-        else
-        {
-            WindowsOlderPcButton.Content =
-                _windowsOlderPcCompatibility
-                    ? "Older PC compatibility: ON"
-                    : "Older PC compatibility: OFF";
-
-            WindowsCompatibilityStatus = _windowsOlderPcCompatibility
-                ? "ON · Prepare wider BIOS/UEFI boot media and apply the documented Windows Setup TPM / Secure Boot / RAM bypasses."
-                : "OFF · Prepare standard Windows 11 installation media. The target PC must satisfy normal Windows 11 hardware requirements.";
-        }
+        TargetModeStatus =
+            SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
+                ? "Other computer · macOS needs the target computer's hardware before CorePilot can safely build a hardware-specific installer."
+                : "Other computer · Windows/Linux media is prepared without using this PC's TPM, CPU, Secure Boot or firmware state as a compatibility gate.";
     }
 
     private void SetSegmentButtonState(Button button, bool selected)
@@ -1117,12 +1066,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 findings.Add(new(
                     CompatibilityState.Supported,
                     "Windows media mode",
-                    _windowsOlderPcCompatibility
-                        ? "Older-PC compatibility selected"
-                        : "Standard Windows 11 media selected",
-                    _windowsOlderPcCompatibility
-                        ? "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented Windows Setup TPM, Secure Boot and RAM compatibility bypasses."
-                        : "CorePilot will prepare standard Windows 11 media. Compatibility with the target PC itself is not asserted because its hardware was not scanned."));
+                    "Standard Windows 11 media for another computer",
+                    "CorePilot prepares the installation media without asserting the unknown target PC's TPM, CPU, Secure Boot or firmware compatibility."));
             }
 
             _compatibilityReport = new(
