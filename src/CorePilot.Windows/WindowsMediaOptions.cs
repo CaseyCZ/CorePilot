@@ -12,10 +12,10 @@ public sealed record WindowsMediaOptions(
     public static WindowsMediaOptions OlderPc { get; } =
         new(
             ExtendedHardwareCompatibility: true,
-            LegacyBiosCompatible: true);
+            LegacyBiosCompatible: false);
 
     public string ModeText =>
-        ExtendedHardwareCompatibility || LegacyBiosCompatible
-            ? "Older PC compatibility"
+        ExtendedHardwareCompatibility
+            ? "Windows 11 compatibility media"
             : "Standard Windows media";
 }
