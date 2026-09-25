@@ -1,5 +1,11 @@
 namespace CorePilot.Core;
 
+public enum InstallationTargetMode
+{
+    ThisComputer,
+    OtherComputer
+}
+
 public enum PreparationItemState
 {
     Detected,
