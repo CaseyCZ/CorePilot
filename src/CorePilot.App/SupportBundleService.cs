@@ -13,6 +13,8 @@ public sealed record SupportBundleContext(
     MacOSWorkflowSnapshot Workflow,
     string SelectedSystem,
     string SelectedVariant,
+    string TargetMode,
+    string? WindowsMediaMode,
     HardwareReport? Hardware,
     CompatibilityReport? Compatibility,
     MacOSAutomationProfile? AutomationProfile,
@@ -193,7 +195,9 @@ public sealed class SupportBundleService
             selection = new
             {
                 system = context.SelectedSystem,
-                variant = context.SelectedVariant
+                variant = context.SelectedVariant,
+                targetMode = context.TargetMode,
+                windowsMediaMode = context.WindowsMediaMode
             },
             workflow = context.Workflow,
             activity = new
