@@ -20,6 +20,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly HardwareSnifferBridge _hardwareSniffer = new();
     private readonly HardwareSnifferReportParser _hardwareSnifferParser = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
+    private readonly GenericCompatibilityAnalyzer _genericAnalyzer = new();
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
     private readonly MacOSAutomationProfileStore _macProfileStore = new();
     private readonly OpCoreSimplifyStager _opCoreStager = new();
@@ -31,6 +32,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbExecutionPreflightService _usbExecutionPreflightService = new();
     private readonly MacOSUsbTypedConfirmationService _usbTypedConfirmationService = new();
     private readonly MacOSUsbWriteSimulationService _usbWriteSimulationService = new();
+    private readonly MacOSUsbPhysicalWriteService _usbPhysicalWriteService = new();
     private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
     private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
     private readonly MacOSWorkflowActionPolicy _actionPolicy = new();
@@ -87,13 +89,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool CanWriteToDisk =>
         !ActivityLog.IsBusy &&
         _verificationCompleted &&
-        _compatibilityReport?.CanProceed == true;
+        _compatibilityReport?.CanProceed == true &&
+        SystemCombo.SelectedItem is ISystemModule { Id: "macos" } &&
+        _automationProfile is { CanBuildEfi: true, RequiresReview: false };
     public string WriteToDiskToolTip =>
         !_verificationCompleted
-            ? "Run Verify first. USB is not required for verification."
+            ? "Run Verify first. Critical online sources must be live before writing."
             : _compatibilityReport?.CanProceed != true
                 ? "The selected system did not pass compatibility verification."
-                : "Select/connect a USB target. This development build performs the final target safety check but physical disk writing is still disabled.";
+                : SystemCombo.SelectedItem is not ISystemModule { Id: "macos" }
+                    ? "Windows/Linux verification is available, but their physical media writer is not enabled in this build."
+                    : _automationProfile is null
+                        ? "This Apple-Mac target needs the dedicated native-media path; the OpenCore writer is intentionally not used."
+                        : _automationProfile.RequiresReview || !_automationProfile.CanBuildEfi
+                            ? "The macOS automation profile requires review before physical writing."
+                            : "Build all hidden safety stages, require exact typed confirmation, then write the verified macOS installer to the selected USB.";
 
     public string ScanHardwareToolTip => Decision(CorePilotWorkflowAction.ScanHardware).Reason;
     public string DeepScanToolTip => Decision(CorePilotWorkflowAction.DeepScan).Reason;
@@ -276,20 +286,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        _verificationCompleted = true;
+        var onlineReady =
+            _lastOnlineSourceSnapshot is not null &&
+            _lastOnlineSourceSnapshot.CriticalFailures == 0;
+
+        _verificationCompleted =
+            _compatibilityReport.CanProceed &&
+            onlineReady;
+
         RefreshActionAvailability();
 
-        if (_compatibilityReport.CanProceed)
+        if (_compatibilityReport.CanProceed && onlineReady)
         {
             var nativeApple =
                 _hardwareReport is not null &&
                 MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
 
-            var sourceSuffix = _lastOnlineSourceSnapshot is null
-                ? " Online source status unavailable."
-                : _lastOnlineSourceSnapshot.CriticalFailures == 0
-                    ? $" Online sources: {_lastOnlineSourceSnapshot.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live."
-                    : $" Online source warning: {_lastOnlineSourceSnapshot.CriticalFailures} critical source(s) were not refreshed live.";
+            var sourceSuffix =
+                $" Online sources: {_lastOnlineSourceSnapshot!.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.";
 
             PlanStatus = (nativeApple
                 ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
@@ -297,6 +311,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 + sourceSuffix;
 
             ActivityLog.Success("Verification", PlanStatus);
+        }
+        else if (_compatibilityReport.CanProceed)
+        {
+            var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
+            PlanStatus =
+                $"Compatibility passed, but writing is not ready: {failures} critical online source(s) were not refreshed live. " +
+                "Reconnect to the internet and run Verify again.";
+            ActivityLog.Warning("Verification", PlanStatus);
         }
         else
         {
@@ -313,39 +335,268 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" } ||
+            VariantCombo.SelectedItem is not SystemVariant variant)
+        {
+            PlanStatus =
+                "Windows/Linux verification is available, but their physical media writer is not enabled in this build.";
+            return;
+        }
+
+        if (_automationProfile is null)
+        {
+            PlanStatus =
+                "This target uses the genuine-Apple/native path. CorePilot will not substitute the Hackintosh/OpenCore writer.";
+            return;
+        }
+
+        if (!_automationProfile.CanBuildEfi || _automationProfile.RequiresReview)
+        {
+            PlanStatus =
+                "Automatic physical writing is blocked because the macOS automation profile requires review.";
+            return;
+        }
+
         if (UsbCombo.SelectedItem is not UsbDriveInfo)
             await RefreshDrivesAsync(silentNoUsb: true);
 
         if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
         {
-            PlanStatus = "Connect a USB flash drive, open the USB list, then press Write to disk again.";
+            PlanStatus = "Connect a USB drive, select it, then press Write to disk again.";
             UsbSafetyStatus = "No USB target selected.";
             return;
         }
 
         try
         {
-            ActivityLog.Start("Write readiness", "Checking the selected USB target before write…");
-            var report = await _usbSafetyInspector.InspectAsync(usb);
-            _usbSafetyReport = report;
-            UsbSafetyStatus = report.Summary;
+            ActivityLog.Start(
+                "Write workflow",
+                $"Re-validating live sources for {variant.DisplayName}…");
 
-            if (report.IsBlocked)
+            _lastOnlineSourceSnapshot =
+                await _onlineSources.ResolveForSystemAsync("macos");
+
+            if (_lastOnlineSourceSnapshot.CriticalFailures != 0)
+                throw new InvalidOperationException(
+                    $"{_lastOnlineSourceSnapshot.CriticalFailures} critical online source(s) are not live. Physical writing was blocked.");
+
+            if (_deepScanExport is null)
             {
-                PlanStatus = $"Write blocked: {report.Summary}";
-                ActivityLog.Warning("Write readiness", PlanStatus);
-                return;
+                DeepScanStatus = "Running automatic Hardware Sniffer deep scan…";
+                ActivityLog.Progress("Write workflow", DeepScanStatus);
+
+                var deepProgress = new Progress<string>(message =>
+                {
+                    DeepScanStatus = message;
+                    ActivityLog.Progress("Deep Scan", message);
+                });
+
+                _deepScanExport = await _hardwareSniffer.ExportAsync(deepProgress);
+                _hardwareReport ??= await _scanner.ScanAsync();
+                _hardwareReport = await _hardwareSnifferParser.MergeAsync(
+                    _deepScanExport.ReportPath,
+                    _hardwareReport);
+
+                RefreshHardwareView();
+                _workflowStateMachine.Reset(
+                    "Automatic Deep Scan refreshed hardware identity.");
+                AdvanceWorkflow(
+                    MacOSWorkflowPhase.DeepScanned,
+                    "Hardware Sniffer Report.json + ACPI imported.");
+                RunCompatibilityAnalysis();
+
+                if (_compatibilityReport?.CanProceed != true ||
+                    _automationProfile is not { CanBuildEfi: true, RequiresReview: false })
+                    throw new InvalidOperationException(
+                        "Deep Scan changed the compatibility result. Run Verify again and review the Compatibility tab.");
             }
 
+            ActivityLog.Progress(
+                "Write workflow",
+                "Staging the current verified OpenCore automation engine…");
+
+            _opCoreStage = await _opCoreStager.StageAsync(
+                _deepScanExport.ReportPath,
+                _deepScanExport.AcpiDirectory,
+                _automationProfile,
+                new Progress<string>(message =>
+                    ActivityLog.Progress("Workspace", message)));
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.WorkspaceStaged,
+                $"OpenCore workspace staged for {variant.DisplayName}.");
+
+            ActivityLog.Progress(
+                "Write workflow",
+                "Building and validating EFI…");
+
+            _lastEfiBuild = await _opCoreBuilder.BuildAsync(
+                _opCoreStage,
+                _automationProfile,
+                new Progress<string>(message =>
+                    ActivityLog.Progress("EFI Build", message)));
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.EfiValidated,
+                "EFI passed ocvalidate and structural validation.");
+
+            ActivityLog.Progress(
+                "Write workflow",
+                "Downloading and verifying Apple Recovery…");
+
+            _lastRecovery = await _appleRecoveryDownloader.DownloadAsync(
+                _opCoreStage,
+                _automationProfile,
+                _lastEfiBuild,
+                new Progress<string>(message =>
+                    ActivityLog.Progress("Recovery", message)));
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.RecoveryVerified,
+                "Apple Recovery downloaded and verified.");
+
+            _lastInstallerManifest = await _installerManifestService.CreateAsync(
+                _opCoreStage,
+                _automationProfile,
+                _lastEfiBuild,
+                _lastRecovery);
+
+            var manifestVerification = await _installerManifestService.VerifyAsync(
+                _lastInstallerManifest.ManifestPath,
+                _opCoreStage.WorkspaceDirectory);
+
+            if (!manifestVerification.Success)
+                throw new InvalidOperationException(
+                    "Installer manifest verification failed: " +
+                    string.Join("; ", manifestVerification.Errors.Take(4)));
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.ManifestVerified,
+                "Final installer manifest created and re-verified.");
+
+            ActivityLog.Progress(
+                "Write workflow",
+                "Inspecting the exact physical USB target…");
+
+            _usbSafetyReport = await _usbSafetyInspector.InspectAsync(usb);
+            UsbSafetyStatus = _usbSafetyReport.Summary;
+
+            if (_usbSafetyReport.IsBlocked)
+                throw new InvalidOperationException(
+                    $"USB target is blocked: {_usbSafetyReport.Summary}");
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.UsbInspected,
+                $"USB safety inspected: {_usbSafetyReport.LevelText}.");
+
+            _lastUsbWritePlan = await _usbWritePlanService.CreateDryRunAsync(
+                _opCoreStage,
+                _lastInstallerManifest,
+                _usbSafetyReport);
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.DryRunPlanned,
+                "Manifest-bound USB write plan created and verified.");
+
+            var preflightTarget = await _usbSafetyInspector.InspectAsync(usb);
+            if (preflightTarget.IsBlocked ||
+                !preflightTarget.IdentityFingerprint.Equals(
+                    _usbSafetyReport.IdentityFingerprint,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "USB identity or safety state changed before execution preflight.");
+
+            _usbSafetyReport = preflightTarget;
+            _lastUsbExecutionPreflight =
+                await _usbExecutionPreflightService.CreateAsync(
+                    _opCoreStage,
+                    _lastInstallerManifest,
+                    _lastUsbWritePlan,
+                    preflightTarget);
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.PreflightReady,
+                "Atomic execution preflight passed.",
+                _lastUsbExecutionPreflight.ExpiresAt);
+
+            var phrase = _lastUsbExecutionPreflight.RequiredConfirmationPhrase;
+            var typed = Microsoft.VisualBasic.Interaction.InputBox(
+                "CorePilot is ready to ERASE the selected USB disk.\n\n" +
+                $"Disk: {preflightTarget.DiskIndex} · {preflightTarget.Model}\n" +
+                $"Size: {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
+                "Type this exact phrase to continue:\n\n" +
+                phrase,
+                "CorePilot — confirm physical USB erase",
+                "");
+
+            if (!typed.Equals(phrase, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Exact destructive confirmation phrase was not entered. Nothing was written.");
+
+            var confirmationTarget = await _usbSafetyInspector.InspectAsync(usb);
+            if (confirmationTarget.IsBlocked)
+                throw new InvalidOperationException(
+                    $"USB became unsafe before confirmation: {confirmationTarget.Summary}");
+
+            _lastUsbTypedConfirmation =
+                await _usbTypedConfirmationService.CreateAsync(
+                    _opCoreStage,
+                    _lastInstallerManifest,
+                    _lastUsbWritePlan,
+                    _lastUsbExecutionPreflight,
+                    confirmationTarget,
+                    typed);
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.Confirmed,
+                "Exact typed confirmation accepted.",
+                _lastUsbTypedConfirmation.ExpiresAt);
+
+            var finalTarget = await _usbSafetyInspector.InspectAsync(usb);
+            if (finalTarget.IsBlocked ||
+                !finalTarget.IdentityFingerprint.Equals(
+                    confirmationTarget.IdentityFingerprint,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "USB identity changed immediately before physical writing.");
+
             PlanStatus =
-                "Compatibility and USB safety checks passed ✅ " +
-                "Physical disk writing is intentionally disabled in this development build, so CorePilot stopped before changing the disk.";
-            ActivityLog.Success("Write readiness", PlanStatus);
+                $"Writing verified installer to Disk {finalTarget.DiskIndex}…";
+            ActivityLog.Progress("Physical write", PlanStatus);
+
+            var physicalResult = await _usbPhysicalWriteService.WriteAsync(
+                _opCoreStage,
+                _lastEfiBuild,
+                _lastRecovery,
+                _lastInstallerManifest,
+                _lastUsbWritePlan,
+                _lastUsbExecutionPreflight,
+                _lastUsbTypedConfirmation,
+                finalTarget,
+                new Progress<string>(message =>
+                {
+                    PlanStatus = message;
+                    ActivityLog.Progress("Physical write", message);
+                }));
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.Written,
+                "Verified installer was physically written to the confirmed USB target.");
+
+            PlanStatus =
+                $"USB ready ✅ Disk {physicalResult.TargetDiskIndex} · {physicalResult.DriveLetter} · " +
+                $"{physicalResult.VerifiedFiles} files re-verified · " +
+                $"write transcript SHA256 {physicalResult.TranscriptSha256[..16]}….";
+            ActivityLog.Success("Physical write", PlanStatus);
         }
         catch (Exception ex)
         {
-            PlanStatus = $"USB write readiness check failed: {ex.Message}";
-            ActivityLog.Error("Write readiness", PlanStatus, ex);
+            PlanStatus = $"Write stopped safely: {ex.Message}";
+            ActivityLog.Error("Write workflow", PlanStatus, ex);
+        }
+        finally
+        {
+            RefreshActionAvailability();
         }
     }
 
@@ -813,26 +1064,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" } ||
+        if (SystemCombo.SelectedItem is not ISystemModule system ||
             VariantCombo.SelectedItem is not SystemVariant target)
         {
-            CompatibilitySummary = "Compatibility rules for this system module are not enabled yet.";
+            CompatibilitySummary = "Choose a system and version first.";
             return;
         }
 
-        _compatibilityReport = _macAnalyzer.Analyze(_hardwareReport, target);
-        _automationProfile = MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport)
-            ? null
-            : _macAutomationPlanner.Build(_hardwareReport, target, _compatibilityReport);
+        if (system.Id == "macos")
+        {
+            _compatibilityReport = _macAnalyzer.Analyze(_hardwareReport, target);
+            _automationProfile = MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport)
+                ? null
+                : _macAutomationPlanner.Build(_hardwareReport, target, _compatibilityReport);
+
+            MacPlanDetails = BuildPlanText(_compatibilityReport, _automationProfile);
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.CompatibilityReady,
+                $"Compatibility evaluated for {target.DisplayName}.");
+        }
+        else
+        {
+            _compatibilityReport = _genericAnalyzer.Analyze(
+                system.Id,
+                _hardwareReport,
+                target);
+            _automationProfile = null;
+            MacPlanDetails = "";
+        }
 
         foreach (var finding in _compatibilityReport.Findings)
             CompatibilityItems.Add(finding);
 
         CompatibilitySummary = _compatibilityReport.Summary;
-        MacPlanDetails = BuildPlanText(_compatibilityReport, _automationProfile);
-        AdvanceWorkflow(
-            MacOSWorkflowPhase.CompatibilityReady,
-            $"Compatibility evaluated for {target.DisplayName}.");
         OnPropertyChanged(nameof(MacPlanVisibility));
     }
 
