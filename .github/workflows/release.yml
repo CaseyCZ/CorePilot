@@ -65,6 +65,8 @@ jobs:
             "manifestVerification",
             "IdentityFingerprint",
             'Verb = "runas"',
+            "Get-CimInstance Win32_DiskDrive",
+            "VerifyMountedVolumeBelongsToTargetAsync",
             "diskpart.exe",
             "CopyAndVerifyFileAsync"
           )) {
