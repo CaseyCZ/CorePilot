@@ -199,7 +199,14 @@ def main():
                 "CorePilot will not enable OCLP automatically without an explicit Advanced approval."
             )
 
-        smbios_model = profile["SmbiosModel"]
+        # Use the upstream SMBIOS selector on the full enriched hardware report.
+        # The C# profile value is a preview/fallback, not an override.
+        smbios_model = ocpe.s.select_smbios_model(customized, target)
+        if not smbios_model:
+            smbios_model = profile.get("SmbiosModel", "")
+        if not smbios_model:
+            raise RuntimeError("Unable to resolve an SMBIOS model.")
+
         ocpe.ac.select_acpi_patches(customized, disabled_devices)
 
         needs_oclp = ocpe.k.select_required_kexts(
