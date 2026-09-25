@@ -14,7 +14,7 @@ Latest continuously tested build:
 
 https://github.com/CaseyCZ/CorePilot/releases/latest
 
-A push/merge to `main` first runs the full **Build** workflow. Only after that workflow succeeds, the **Latest Release** workflow may promote its exact `CorePilot-win-x64` artifact. Promotion is fail-closed:
+A push/merge to `main` first runs the full **Build** workflow. Only after that workflow succeeds, the rolling-latest job inside the **Release** workflow may promote its exact `CorePilot-win-x64` artifact. Promotion is fail-closed:
 
 - the Build run must be a successful `push` on `main`
 - the built commit must still be the current `main`
