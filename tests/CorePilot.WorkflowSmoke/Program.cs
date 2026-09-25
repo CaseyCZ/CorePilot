@@ -637,6 +637,28 @@ Assert(windows11Ok.Findings.Any(x =>
         x.State == CompatibilityState.Supported),
     "Windows 11 must require and confirm TPM 2.0 before reporting a usable path");
 
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "CPU" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must not claim an exact supported-CPU-list match from processor detection alone");
+
+var windows11LowRam = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        Tpm20 = true,
+        MemoryBytes = 2L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11LowRam.CanProceed &&
+       windows11LowRam.Findings.Any(x =>
+           x.Component == "Memory" &&
+           x.State == CompatibilityState.Blocked),
+    "Windows 11 below 4 GB RAM must remain a real blocker and must not be auto-bypassed");
+
 var windows11NoTpm = genericAnalyzer.Analyze(
     "windows",
     testHardware with
