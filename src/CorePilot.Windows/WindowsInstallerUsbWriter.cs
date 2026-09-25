@@ -192,6 +192,27 @@ public sealed class WindowsInstallerUsbWriter
             throw new InvalidOperationException(
                 "Windows USB writer did not report successful completion.");
 
+        var writtenExtended =
+            resultRoot.TryGetProperty("extendedHardwareCompatibility", out var extendedNode) &&
+            extendedNode.ValueKind == JsonValueKind.True;
+        var writtenLegacy =
+            resultRoot.TryGetProperty("legacyBiosCompatible", out var legacyNode) &&
+            legacyNode.ValueKind == JsonValueKind.True;
+        var customizationSha256 =
+            resultRoot.TryGetProperty("customizationSha256", out var customizationNode)
+                ? customizationNode.GetString() ?? ""
+                : "";
+
+        if (writtenExtended != options.ExtendedHardwareCompatibility ||
+            writtenLegacy != options.LegacyBiosCompatible)
+            throw new InvalidOperationException(
+                "Windows USB writer result does not match the media mode prepared by Verify.");
+
+        if (options.ExtendedHardwareCompatibility &&
+            !IsSha256(customizationSha256))
+            throw new InvalidOperationException(
+                "Windows compatibility customization was requested but its written SHA-256 was not returned.");
+
         var writtenDrive = resultRoot.GetProperty("driveLetter").GetString()
             ?? $"{driveLetter}:";
 
@@ -218,6 +239,10 @@ public sealed class WindowsInstallerUsbWriter
             windowsMediaMode = options.ModeText,
             extendedHardwareCompatibility = options.ExtendedHardwareCompatibility,
             legacyBiosCompatible = options.LegacyBiosCompatible,
+            customizationSha256 =
+                string.IsNullOrWhiteSpace(customizationSha256)
+                    ? null
+                    : customizationSha256,
             splitInstallWim =
                 resultRoot.TryGetProperty("splitInstallWim", out var splitNode) &&
                 splitNode.ValueKind == JsonValueKind.True,
@@ -617,6 +642,10 @@ finally {
         throw new InvalidOperationException(
             "No free drive letter is available for the Windows installer USB.");
     }
+
+    private static bool IsSha256(string value) =>
+        value.Length == 64 &&
+        value.All(Uri.IsHexDigit);
 
     private static async Task<string> ComputeSha256Async(
         string path,
