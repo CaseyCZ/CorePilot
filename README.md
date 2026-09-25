@@ -63,7 +63,13 @@ For supported Hackintosh/OpenCore targets, **Verify** now performs the non-destr
 
 If a critical source goes offline, a component version changes while the installer is being prepared, the USB identity changes, authorization expires, or any hash check fails, physical writing stops.
 
-Windows and Linux now have real **Verify** compatibility reports. Their physical media writers are still intentionally disabled until their dedicated image paths are implemented.
+### Windows / Linux guarded media ✅
+
+**Windows 11** is not reported ready unless CorePilot confirms UEFI, sufficient memory and an enabled TPM 2.0 device. Verify resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, and re-hashes critical boot files.
+
+**Linux** verification is scoped to the selected distribution only. Verify downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
+
+Windows and Linux now use the same **Verify → READY TO WRITE → Write to disk** model. Verify prepares the selected official installer image before USB is selected; Write to disk consumes that exact prepared image through a guarded physical writer.
 
 ## Support Bundle
 
@@ -97,9 +103,9 @@ The log window also has **Copy selected**, which copies the selected timestamp, 
 
 ## Next
 
-1. Add the dedicated native-Apple media path for genuine Macs.
-2. Add physical Windows and Linux media writers; their compatibility verification is already enabled.
-3. Add a dedicated FAT32 strategy for payloads/layouts that exceed the Windows built-in FAT32 formatter limit.
+1. Add the dedicated native-Apple/OCLP media writer for genuine Macs that need legacy patching.
+2. Expand hardware-specific Windows/Linux remediation only where a real installer dependency requires it.
+3. Add further media-layout fallbacks if future Windows images exceed the current guarded FAT32 + DISM split strategy.
 
 ## Build
 
@@ -123,7 +129,11 @@ The development UI now keeps the normal flow intentionally small:
 
 For supported Hackintosh/OpenCore targets the flow is now: **Verify** → Hardware Sniffer Deep Scan → current verified OpCore-Simplify staging → hardware-specific EFI/kext/patch configuration → `ocvalidate` + structural/integrity audit → Apple Recovery → final installer manifest. Then **Write to disk** → live-source revalidation → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
 
-Windows and Linux now produce real compatibility reports during **Verify**, but their physical media writers are intentionally disabled until their system-specific image/write paths are implemented. Genuine Apple Macs also stay on the native-media path instead of being forced through the Hackintosh writer.
+For **Windows 10/11**, Verify checks hardware (including TPM 2.0 for Windows 11), resolves the current official Microsoft retail ISO through the GitHub-verified Fido source, downloads it, records its SHA-256 and prepares it for the guarded Windows USB writer. The writer creates a UEFI FAT32 installer and automatically splits an oversized `install.wim` with DISM when required.
+
+For **Ubuntu, Fedora, Debian and Linux Mint**, Verify resolves the current official x86_64 image, downloads the publisher checksum, verifies the ISO SHA-256, and prepares it for the guarded Linux raw-image writer. After writing, CorePilot reads back the full image-length region from the USB and requires the SHA-256 to match before reporting success.
+
+Genuine Apple Macs stay on their dedicated native/OCLP media path instead of being forced through the Hackintosh writer.
 
 ### Genuine Apple Mac path
 
