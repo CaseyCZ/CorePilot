@@ -21,28 +21,32 @@ Explicit Deep Scan, exact PCI/USB identities, Report.json + ACPI export and impo
 Deterministic automation profile, pinned OpCore Simplify source, SHA-256 workspace manifest and Python detection.
 
 ### v0.5 — Non-interactive EFI builder ✅
+Pinned upstream internals, fail-closed automation bridge and mandatory `ocvalidate`.
 
-- deterministic bridge into pinned OpCore Simplify internals
-- strict fail-closed handling for upstream prompts
-- upstream compatibility, ACPI, SMBIOS, kext and config generation
-- workspace-only EFI generation
-- mandatory upstream `ocvalidate`
+### v0.6 — EFI structure audit ✅
+CorePilot independently checks enabled ACPI, kext, driver and tool references from `config.plist`.
 
-### v0.6 — EFI structure audit 🚧
+### v0.7 — Apple Recovery 🚧
 
-After `ocvalidate`, CorePilot now independently parses the generated XML `config.plist` and verifies every enabled file reference:
+CorePilot now uses the **macrecovery.py shipped with the same OpenCorePkg gathered for the EFI build**.
 
-- required `EFI/BOOT/BOOTx64.efi`
-- required `EFI/OC/OpenCore.efi`
-- `ACPI -> Add -> Path`
-- `Kernel -> Add -> BundlePath`
-- kext `PlistPath` and `ExecutablePath`
-- `UEFI -> Drivers -> Path`
-- `Misc -> Tools -> Path`
-- duplicate enabled references are surfaced as warnings
-- referenced paths are constrained to their expected EFI directory to reject traversal such as `../`
+Supported target profiles currently use the official examples from OpenCorePkg `Utilities/macrecovery/recovery_urls.txt`:
 
-The structural result is appended to `CorePilotEfiBuild.json`. EFI is accepted only when both `ocvalidate` and the CorePilot structure audit succeed.
+- Ventura 13
+- Sonoma 14
+- Sequoia 15
+- Tahoe 26
+
+Recovery flow:
+
+1. EFI must pass both `ocvalidate` and the CorePilot structure audit.
+2. CorePilot launches the local OpenCorePkg `macrecovery.py` with the official board-ID/MLB profile for the selected target.
+3. The payload is written only to the isolated workspace as `com.apple.recovery.boot/BaseSystem.dmg` and `BaseSystem.chunklist`.
+4. `macrecovery.py` verifies the signed chunklist and every image chunk.
+5. CorePilot computes its own SHA-256 for both files.
+6. The result is saved as `CorePilotRecovery.json`.
+
+The UI exposes this as **Download Recovery** after **Build EFI**.
 
 ## Safety model
 
@@ -50,19 +54,19 @@ The structural result is appended to `CorePilotEfiBuild.json`. EFI is accepted o
 2. **Deep Scan** — explicit Hardware Sniffer download/run.
 3. **Plan** — compatibility + automatic choices.
 4. **Stage** — pinned upstream source + isolated workspace.
-5. **Build EFI** — generates files only inside the workspace.
-6. **Validate EFI** — upstream `ocvalidate` + independent CorePilot structure audit.
-7. **Write USB** — **still disabled**.
+5. **Build EFI** — workspace only.
+6. **Validate EFI** — `ocvalidate` + CorePilot structure audit.
+7. **Download Recovery** — Apple payload into the workspace + signed chunk verification + SHA-256.
+8. **Write USB** — **still disabled**.
 
-No build step writes to a physical disk.
+No current CorePilot step writes to a physical disk.
 
 ## Next
 
-1. Add Apple Recovery download using OpenCore `macrecovery.py`.
-2. Hash the completed EFI + recovery payload into a final installer manifest.
-3. Add recovery/EFI integrity re-check before any removable disk operation.
-4. Only then implement guarded USB partition/write operations.
-5. Then add Windows/Linux media engines and multiboot.
+1. Create a final installer manifest containing EFI tree hashes + Recovery hashes.
+2. Re-verify that manifest immediately before any removable-disk action.
+3. Add guarded GPT/EFI/recovery USB creation with strong target-disk confirmation.
+4. Then add Windows/Linux media engines and multiboot.
 
 ## Build
 
