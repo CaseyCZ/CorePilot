@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -1381,11 +1382,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _lastOnlineSourceSnapshot,
                 mediaWriterAvailable: imagePrepared);
 
-            var items = generic.Items.ToList();
+            var genericItems = generic.Items.ToList();
 
             if (imagePrepared)
             {
-                items.Add(new(
+                genericItems.Add(new(
                     PreparationItemState.ResolvedAutomatically,
                     "Installer image",
                     _preparedIso!.FileName,
@@ -1397,21 +1398,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (!string.IsNullOrWhiteSpace(_preparationFailure))
             {
-                items.Add(new(
+                genericItems.Add(new(
                     PreparationItemState.Unresolved,
                     "Preparation",
                     "Automatic preparation failed",
                     _preparationFailure));
             }
 
-            var unresolved = items.Any(x =>
+            var unresolved = genericItems.Any(x =>
                 x.State == PreparationItemState.Unresolved);
-            var manual = items.Any(x =>
+            var manual = genericItems.Any(x =>
                 x.State == PreparationItemState.ManualActionRequired);
 
             return generic with
             {
-                Items = items,
+                Items = genericItems,
                 ConfigurationPrepared =
                     generic.ConfigurationPrepared &&
                     imagePrepared &&
