@@ -91,12 +91,18 @@ public sealed class OpCoreDownloadedComponentAuditService
 
             var folder = Path.Combine(ockRoot, name);
             var folderPresent = Directory.Exists(folder);
+            var folderManifestPath = Path.Combine(folder, "manifest.json");
             var manifestPresent = folderPresent &&
-                                  File.Exists(Path.Combine(folder, "manifest.json"));
+                                  File.Exists(folderManifestPath);
 
             if (!folderPresent || !manifestPresent)
                 throw new InvalidDataException(
                     $"Downloaded component '{name}' is missing its integrity-manifested cache folder.");
+
+            await VerifyFolderManifestAsync(
+                folder,
+                folderManifestPath,
+                cancellationToken);
 
             var catalogMatch = ResolveCatalogMatch(
                 name,
@@ -202,6 +208,89 @@ public sealed class OpCoreDownloadedComponentAuditService
             entries.Count,
             entries);
     }
+
+    private static async Task VerifyFolderManifestAsync(
+        string folder,
+        string manifestPath,
+        CancellationToken cancellationToken)
+    {
+        var manifestJson = await File.ReadAllTextAsync(
+            manifestPath,
+            cancellationToken);
+
+        var manifest = JsonSerializer.Deserialize<Dictionary<string, string>>(
+            manifestJson,
+            JsonOptions)
+            ?? throw new InvalidDataException(
+                $"Component integrity manifest is invalid: {manifestPath}");
+
+        var expected = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pair in manifest)
+        {
+            var relative = pair.Key.Replace('/', Path.DirectorySeparatorChar);
+            if (Path.IsPathRooted(relative) ||
+                relative.Split(
+                        Path.DirectorySeparatorChar,
+                        StringSplitOptions.RemoveEmptyEntries)
+                    .Any(x => x == ".."))
+                throw new InvalidDataException(
+                    $"Component integrity manifest contains an unsafe path: {pair.Key}");
+
+            if (!IsSha256(pair.Value))
+                throw new InvalidDataException(
+                    $"Component integrity manifest contains an invalid SHA-256 for {pair.Key}.");
+
+            var fullPath = Path.GetFullPath(Path.Combine(folder, relative));
+            var root = Path.GetFullPath(folder) + Path.DirectorySeparatorChar;
+
+            if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"Component integrity manifest escapes its cache folder: {pair.Key}");
+
+            expected[NormalizeRelativePath(pair.Key)] = pair.Value;
+        }
+
+        var actualFiles = Directory
+            .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+            .Where(path => !Path.GetFullPath(path).Equals(
+                Path.GetFullPath(manifestPath),
+                StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                FullPath = path,
+                Relative = NormalizeRelativePath(
+                    Path.GetRelativePath(folder, path))
+            })
+            .ToArray();
+
+        if (actualFiles.Length != expected.Count)
+            throw new InvalidDataException(
+                $"Component cache file count does not match its integrity manifest: {folder}");
+
+        foreach (var file in actualFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!expected.TryGetValue(file.Relative, out var expectedHash))
+                throw new InvalidDataException(
+                    $"Component cache contains an untracked file: {file.Relative}");
+
+            var actualHash = await ComputeSha256Async(
+                file.FullPath,
+                cancellationToken);
+
+            if (!actualHash.Equals(
+                    expectedHash,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"Component cache SHA-256 mismatch: {file.Relative}");
+        }
+    }
+
+    private static string NormalizeRelativePath(string path) =>
+        path.Replace('\\', '/').TrimStart('/');
 
     private static readonly IReadOnlyDictionary<string, string> CatalogSourceByProduct =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
