@@ -832,7 +832,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (!silentNoUsb)
                     PlanStatus = "No USB disk detected. Verification still works without one.";
 
-                ActivityLog.Info("Drives", "No USB disk detected. Verification can continue without a target disk.");
+                ActivityLog.Success(
+                    "Drives",
+                    "Physical disk list refreshed. No USB disk detected; verification can continue without a target disk.");
             }
             else
             {
