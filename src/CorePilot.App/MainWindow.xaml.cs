@@ -176,6 +176,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DataContext = this;
         ActivityLog.Info("UI", "Main window initialized.");
         ActivityLog.PropertyChanged += ActivityLog_OnPropertyChanged;
+        ActivityLog.EntryAdded += ActivityLog_OnEntryAdded;
         _authorizationTimer.Tick += AuthorizationTimer_OnTick;
         _authorizationTimer.Start();
         Closed += (_, _) =>
@@ -183,6 +184,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _authorizationTimer.Stop();
             _authorizationTimer.Tick -= AuthorizationTimer_OnTick;
             ActivityLog.PropertyChanged -= ActivityLog_OnPropertyChanged;
+            ActivityLog.EntryAdded -= ActivityLog_OnEntryAdded;
         };
 
         Systems.Add(new MacOSModule());
@@ -232,6 +234,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Dispatcher.BeginInvoke(RefreshActionAvailability);
         }
+    }
+
+    private void ActivityLog_OnEntryAdded(
+        object? sender,
+        ActivityLogEntry entry)
+    {
+        if (entry.Level != ActivityLogLevel.Error)
+            return;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsLoaded)
+                return;
+
+            ShowLogWindow(entry);
+        });
     }
 
     private void AuthorizationTimer_OnTick(object? sender, EventArgs e)
@@ -284,7 +302,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(NextActionText));
     }
 
-    private void OpenLog_OnClick(object sender, RoutedEventArgs e)
+    private void OpenLog_OnClick(object sender, RoutedEventArgs e) =>
+        ShowLogWindow();
+
+    private void ShowLogWindow(ActivityLogEntry? focusEntry = null)
     {
         if (_logWindow is null || !_logWindow.IsLoaded)
         {
@@ -295,13 +316,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _logWindow.Closed += (_, _) => _logWindow = null;
             _logWindow.Show();
             ActivityLog.Info("Log", "Activity Log window opened.");
-            return;
         }
 
         if (_logWindow.WindowState == WindowState.Minimized)
             _logWindow.WindowState = WindowState.Normal;
 
+        if (focusEntry is not null)
+            _logWindow.FocusEntry(focusEntry);
+
         _logWindow.Activate();
+        _logWindow.Topmost = true;
+        _logWindow.Topmost = false;
+        _logWindow.Focus();
     }
 
     private async void CreateSupportBundle_OnClick(object sender, RoutedEventArgs e)

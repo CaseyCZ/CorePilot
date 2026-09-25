@@ -94,11 +94,18 @@ CorePilot does not copy arbitrary user files or documents into the bundle.
 
 Before packaging, it redacts known computer/user names and local profile paths, USB serial numbers, target identity fingerprints and destructive confirmation phrases.
 
+## Error focus
+
+A real `ERROR` now automatically opens or focuses the Activity Log and selects the exact error entry so the stack trace is immediately visible.
+
+Warnings do not pop the window.
+
+The log window also has **Copy selected**, which copies the selected timestamp, level, subsystem, message and stack trace to the clipboard.
+
 ## Next
 
-1. Optionally auto-open/focus Activity Log on ERROR.
-2. Add dedicated FAT32 strategy handling for larger USB media.
-3. Continue simulation coverage before considering a real physical-disk writer.
+1. Add dedicated FAT32 strategy handling for larger USB media.
+2. Continue simulation coverage before considering a real physical-disk writer.
 
 ## Build
 
