@@ -8,69 +8,38 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.14 ✅
+### v0.1–v0.15 ✅
 
-The non-destructive macOS pipeline covers hardware discovery, compatibility, OpenCore EFI generation and validation, verified Apple Recovery, installer-manifest hashing, USB safety inspection, dry-run planning, short-lived preflight, exact typed confirmation, logging-only write simulation and a generation-based execution state machine.
+The current non-destructive pipeline includes hardware discovery, compatibility, OpenCore EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, execution preflight, exact typed confirmation, logging-only write simulation, a central state machine and persistent Activity/Error logging.
 
-### v0.15 — Live Activity / Error Log 🚧
+### v0.16 — Searchable / filterable Activity Log 🚧
 
-CorePilot now includes a persistent live activity log designed specifically for diagnosing test failures on different PCs.
+The Activity Log now supports fast diagnosis during long test runs.
 
-The main window shows:
+New controls:
 
-- **RUNNING / READY** state
-- current subsystem/operation
-- live current status text
-- current workflow phase/generation
-- accumulated error count
-- an **Open log** button
+- level filter: **All / Errors / Warnings / Success / Info**
+- live text search
+- search across timestamp, level, subsystem, message and full exception/stack-trace detail
+- visible result count in the form `shown / total`
+- **Clear filters** without deleting log data
+- auto-scroll follows the newest entry that matches the current filter
+- persistent session log remains unchanged on disk
 
-The Activity Log window shows every entry with:
+The main CorePilot window also shows an indeterminate progress bar while `ActivityLog.IsBusy=true`, so it is visually obvious that a long-running operation is still active.
 
-- timestamp including milliseconds
-- level: `INFO / SUCCESS / WARNING / ERROR`
-- subsystem/area
-- human-readable status message
-- full selected exception detail and stack trace
-
-Major operations report live progress:
-
-- local hardware scan
-- Hardware Sniffer Deep Scan
-- physical disk refresh
-- USB safety inspection
-- OpenCore workspace staging
-- EFI build and validation
-- Apple Recovery + installer manifest
-- USB dry-run planning
-- execution preflight
-- typed confirmation
-- logging-only write simulation
-- workflow phase/invalidation changes
-
-Every session is also persisted automatically under:
+The persistent log remains stored under:
 
 `%LocalAppData%\CorePilot\logs\CorePilot-YYYYMMDD-HHmmss.log`
-
-Clearing the Activity Log window clears only the visible list; the persistent session log remains on disk.
-
-CorePilot also records:
-
-- unhandled WPF/UI exceptions
-- unhandled application-domain exceptions
-- unobserved background task exceptions
-- full `Exception.ToString()` output including stack traces
-
-This makes a failed test report usable even when the application closes unexpectedly.
 
 Physical-disk writes remain disabled.
 
 ## Next
 
-1. Add state-driven enabled/disabled buttons so only valid next actions can be clicked.
-2. Add log filters for errors/warnings and search.
-3. Add a one-click support bundle containing the session log, workflow snapshot, hardware report and non-sensitive manifests.
-4. Keep improving simulation coverage before considering a real physical-disk writer.
+1. Bind action buttons to workflow state so invalid steps are disabled in advance.
+2. Add a one-click support bundle containing the session log, workflow snapshot, hardware report and non-sensitive manifests.
+3. Add optional automatic opening/focus of the log window on ERROR.
+4. Continue improving simulation coverage before considering a real physical-disk writer.
 
 ## Build
 
