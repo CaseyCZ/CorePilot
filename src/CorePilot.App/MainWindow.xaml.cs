@@ -339,9 +339,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        var relevantCriticalFailures =
+            CountRelevantCriticalSourceFailures(module, target);
         var onlineReady =
             _lastOnlineSourceSnapshot is not null &&
-            _lastOnlineSourceSnapshot.CriticalFailures == 0;
+            relevantCriticalFailures == 0;
 
         _preparationResult = BuildPreparationResult(module, target);
         _verificationCompleted = true;
@@ -365,7 +367,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!onlineReady)
         {
-            var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
+            var failures = relevantCriticalFailures;
             PlanStatus =
                 $"NOT READY · {failures} critical online source(s) could not be refreshed live. " +
                 "CorePilot will not prepare writable media from stale critical data.";
@@ -404,6 +406,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"{_preparationResult.Summary}. Open Preparation to see what remains unresolved.";
             ActivityLog.Warning("Preparation", PlanStatus);
         }
+    }
+
+    private int CountRelevantCriticalSourceFailures(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        if (_lastOnlineSourceSnapshot is null)
+            return 1;
+
+        if (module.Id == "macos" &&
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _hardwareReport is not null &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
+        {
+            var requiredIds = target.Id == "ventura-13"
+                ? new HashSet<string>(
+                    new[]
+                    {
+                        "macos.apple-download-install",
+                        "macos.apple-version-index"
+                    },
+                    StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(
+                    new[]
+                    {
+                        "macos.apple-download-install",
+                        "macos.apple-version-index"
+                    },
+                    StringComparer.OrdinalIgnoreCase);
+
+            return _lastOnlineSourceSnapshot.Sources.Count(x =>
+                requiredIds.Contains(x.Id) &&
+                (!x.Success || !x.Live));
+        }
+
+        return _lastOnlineSourceSnapshot.CriticalFailures;
     }
 
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
