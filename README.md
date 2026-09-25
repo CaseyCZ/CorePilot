@@ -8,70 +8,58 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.11 ✅
+### v0.1–v0.12 ✅
 
-CorePilot now covers the complete non-destructive preparation chain:
+The non-destructive pipeline now includes hardware discovery, macOS policy, EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, two-minute atomic execution preflight and exact typed confirmation.
 
-- hardware + Deep Scan
-- deterministic macOS compatibility policy
-- non-interactive OpenCore EFI generation
-- `ocvalidate` + independent EFI structure audit
-- verified Apple Recovery
-- SHA-256 installer manifest
-- fail-closed USB safety inspection
-- stable USB target fingerprint
-- manifest-bound USB dry-run plan
-- short-lived atomic execution preflight
+### v0.13 — Logging-only disk backend 🚧
 
-### v0.12 — Exact typed confirmation 🚧
+CorePilot now passes the fully confirmed USB write plan through a common disk-operation backend, but the only backend that exists is:
 
-CorePilot now accepts a destructive confirmation phrase only when a fresh execution preflight is still valid.
+`LoggingDiskOperationBackend`
 
-Example shape:
+Hard guarantees in this version:
 
-`ERASE DISK <physical-number> <fingerprint-prefix>`
-
-Rules:
-
-- comparison is exact and case-sensitive
-- the USB is re-inspected again immediately before confirmation
-- the complete execution preflight is re-verified
-- installer manifest and dry-run plan must still verify
-- confirmation expiry is exactly the original preflight expiry
-- confirmation **never extends** the two-minute preflight lifetime
-- a changed/blocked USB invalidates confirmation
-- the accepted confirmation is stored with SHA-256 in the workspace
-- `PhysicalDiskWritesEnabled=false` remains hard-coded
+- `CanWritePhysicalDisks=false`
+- the simulator rejects any backend reporting write capability
+- every planned destructive action is recorded as **SIMULATED ONLY**
+- no command preview is executed
+- no process is launched
+- no physical-disk handle is opened
+- no partition, format, mount or raw-disk API is used
+- the full plan is still reverified before simulation
+- typed confirmation is reverified and must remain inside the original preflight expiry
+- the target USB is re-inspected again before simulation
 
 Generated files:
 
-- `CorePilotUsbTypedConfirmation.json`
-- `CorePilotUsbTypedConfirmation.sha256`
+- `CorePilotUsbSimulationTranscript.json`
+- `CorePilotUsbSimulationTranscript.sha256`
 
-This version still has **no implementation capable of formatting or writing a physical disk**.
+The transcript records every would-be step, including which steps would be destructive in a future real backend.
+
+GitHub Actions contains a safety guard that rejects forbidden physical-disk/process capability markers in the logging backend source.
 
 ## Safety model
 
 1. Scan / Deep Scan
-2. Plan / Stage
-3. Build + validate EFI
-4. Verify Apple Recovery
-5. Build + verify installer manifest
-6. Inspect USB target
-7. Build + verify dry-run write plan
-8. Short-lived atomic execution preflight
-9. Exact typed confirmation
-10. Logging-only disk backend — next
-11. **Real physical USB writer — disabled**
+2. Build + validate EFI
+3. Verify Recovery + installer manifest
+4. Inspect USB
+5. Build dry-run write plan
+6. Atomic preflight
+7. Exact typed confirmation
+8. Execute entire plan through logging-only backend
+9. Review SHA-256 simulation transcript
+10. **Real physical USB backend — still absent**
 
 ## Next
 
-1. Introduce a common disk-operation interface.
-2. Implement only a logging/dry-run backend first.
-3. Feed the already-verified write-plan actions through that backend and generate an execution transcript.
-4. Require valid typed confirmation even for the simulated destructive sequence.
-5. Add tests that prove the simulated backend cannot touch a physical disk.
-6. Only then evaluate a real GPT/FAT32 backend behind the same gates.
+1. Add deterministic simulator assertions: action count/order, all destructive actions remain simulated, hashes remain stable.
+2. Add an execution state machine so stale confirmation/preflight objects cannot be reused after target refresh.
+3. Add a dedicated FAT32 strategy abstraction for >32 GB USB media.
+4. Only after simulation tests are exhaustive, design the real backend behind a feature flag that defaults permanently off.
+5. Continue Windows/Linux media engines using the same common safety gates.
 
 ## Build
 
@@ -83,4 +71,4 @@ dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
-GitHub Actions validates the Python bridge and publishes a self-contained `CorePilot-win-x64` test artifact.
+GitHub Actions validates the Python bridge, enforces the logging-backend safety guard and publishes a self-contained `CorePilot-win-x64` test artifact.
