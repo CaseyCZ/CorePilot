@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
     private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
     private readonly MacOSWorkflowActionPolicy _actionPolicy = new();
+    private readonly SupportBundleService _supportBundleService = new();
     private readonly DispatcherTimer _authorizationTimer = new()
     {
         Interval = TimeSpan.FromSeconds(1)
@@ -77,6 +79,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool CanRunPreflight => Decision(CorePilotWorkflowAction.RunPreflight).Enabled;
     public bool CanConfirmTarget => Decision(CorePilotWorkflowAction.ConfirmTarget).Enabled;
     public bool CanSimulateWrite => Decision(CorePilotWorkflowAction.SimulateWrite).Enabled;
+    public bool CanCreateSupportBundle => !ActivityLog.IsBusy;
 
     public string ScanHardwareToolTip => Decision(CorePilotWorkflowAction.ScanHardware).Reason;
     public string DeepScanToolTip => Decision(CorePilotWorkflowAction.DeepScan).Reason;
@@ -265,6 +268,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanRunPreflight));
         OnPropertyChanged(nameof(CanConfirmTarget));
         OnPropertyChanged(nameof(CanSimulateWrite));
+        OnPropertyChanged(nameof(CanCreateSupportBundle));
 
         OnPropertyChanged(nameof(ScanHardwareToolTip));
         OnPropertyChanged(nameof(DeepScanToolTip));
@@ -298,6 +302,55 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _logWindow.WindowState = WindowState.Normal;
 
         _logWindow.Activate();
+    }
+
+    private async void CreateSupportBundle_OnClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ActivityLog.Start(
+                "Support Bundle",
+                "Collecting and redacting CorePilot diagnostics…");
+
+            var selectedSystem =
+                (SystemCombo.SelectedItem as ISystemModule)?.DisplayName
+                ?? "Not selected";
+
+            var selectedVariant =
+                (VariantCombo.SelectedItem as SystemVariant)?.DisplayName
+                ?? "Not selected";
+
+            var result = await _supportBundleService.CreateAsync(
+                ActivityLog,
+                new SupportBundleContext(
+                    _workflowStateMachine.Current,
+                    selectedSystem,
+                    selectedVariant,
+                    _hardwareReport,
+                    _compatibilityReport,
+                    _automationProfile,
+                    _usbSafetyReport,
+                    _opCoreStage));
+
+            PlanStatus =
+                $"Support bundle ready ✅ {result.FileCount} files · " +
+                $"{result.SizeBytes / 1024d / 1024d:0.0} MB · " +
+                result.BundlePath;
+
+            ActivityLog.Success("Support Bundle", PlanStatus);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{result.BundlePath}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"Support bundle failed: {ex.Message}";
+            ActivityLog.Error("Support Bundle", PlanStatus, ex);
+        }
     }
 
     private MacOSWorkflowPhase HardwareBaselinePhase =>

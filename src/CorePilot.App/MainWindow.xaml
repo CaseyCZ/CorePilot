@@ -42,11 +42,19 @@
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,3,0,0"/>
                     </StackPanel>
-                    <Button Grid.Column="1"
-                            Content="Open log"
-                            Click="OpenLog_OnClick"
-                            VerticalAlignment="Top"
-                            Margin="12,0,0,0"/>
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Top"
+                                Margin="12,0,0,0">
+                        <Button Content="Open log"
+                                Click="OpenLog_OnClick"
+                                Margin="0,0,0,6"/>
+                        <Button Content="Support bundle"
+                                Click="CreateSupportBundle_OnClick"
+                                IsEnabled="{Binding CanCreateSupportBundle}"
+                                ToolTip="Create a redacted troubleshooting ZIP from CorePilot diagnostics."
+                                ToolTipService.ShowOnDisabled="True"
+                                Margin="0"/>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>
