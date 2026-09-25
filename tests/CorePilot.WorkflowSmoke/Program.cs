@@ -609,3 +609,119 @@ finally
 }
 
 Console.WriteLine("CorePilot downloaded-component integrity smoke test OK");
+
+
+var sourceTestTemp = Path.Combine(
+    Path.GetTempPath(),
+    "CorePilot-source-tests-" + Guid.NewGuid().ToString("N"));
+
+try
+{
+    Directory.CreateDirectory(sourceTestTemp);
+
+    var bundledCatalog = OnlineSourceCatalogService.LoadBundledCatalog();
+    var bundledJson = System.Text.Json.JsonSerializer.Serialize(bundledCatalog);
+    var verifiedSha = new string('d', 40);
+
+    using var verifiedHttp = new HttpClient(new DelegateHttpHandler(request =>
+    {
+        if (request.RequestUri?.AbsoluteUri ==
+            "https://api.github.com/repos/CaseyCZ/CorePilot/commits/main")
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"sha":"{{verifiedSha}}","commit":{"verification":{"verified":true}}}""")
+            };
+        }
+
+        if (request.RequestUri?.AbsoluteUri ==
+            $"https://raw.githubusercontent.com/CaseyCZ/CorePilot/{verifiedSha}/src/CorePilot.Core/Data/source-catalog.json")
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(bundledJson)
+            };
+        }
+
+        return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+    }));
+
+    var verifiedService = new OnlineSourceCatalogService(
+        verifiedHttp,
+        Path.Combine(sourceTestTemp, "verified"));
+
+    var verifiedLoad = await verifiedService.LoadCatalogAsync();
+    Assert(
+        verifiedLoad.FromRemote &&
+        verifiedLoad.Origin.Contains(verifiedSha, StringComparison.OrdinalIgnoreCase),
+        "online catalog must load only from the immutable GitHub-verified main commit SHA");
+
+    using var unverifiedHttp = new HttpClient(new DelegateHttpHandler(request =>
+    {
+        if (request.RequestUri?.AbsoluteUri ==
+            "https://api.github.com/repos/CaseyCZ/CorePilot/commits/main")
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"sha":"{{new string('e', 40)}}","commit":{"verification":{"verified":false}}}""")
+            };
+        }
+
+        return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+    }));
+
+    var unverifiedService = new OnlineSourceCatalogService(
+        unverifiedHttp,
+        Path.Combine(sourceTestTemp, "unverified"));
+
+    var unverifiedLoad = await unverifiedService.LoadCatalogAsync();
+    Assert(
+        !unverifiedLoad.FromRemote,
+        "unverified CorePilot main commit must never authorize a remote source catalog");
+
+    var corruptCacheDir = Path.Combine(sourceTestTemp, "corrupt-cache");
+    Directory.CreateDirectory(corruptCacheDir);
+    await File.WriteAllTextAsync(
+        Path.Combine(corruptCacheDir, "source-catalog.json"),
+        "{ definitely-not-json");
+
+    using var offlineHttp = new HttpClient(new DelegateHttpHandler(_ =>
+        new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable)));
+
+    var offlineService = new OnlineSourceCatalogService(
+        offlineHttp,
+        corruptCacheDir);
+
+    var offlineLoad = await offlineService.LoadCatalogAsync();
+    Assert(
+        !offlineLoad.FromRemote &&
+        offlineLoad.Catalog.Sources.Count > 0,
+        "offline/corrupt catalog cache must fail safely to the bundled trusted catalog");
+
+    var offlineSnapshot = await offlineService.ResolveForSystemAsync("macos");
+    Assert(
+        offlineSnapshot.CriticalFailures > 0,
+        "cached/offline critical sources must not authorize physical writing");
+}
+finally
+{
+    if (Directory.Exists(sourceTestTemp))
+        Directory.Delete(sourceTestTemp, recursive: true);
+}
+
+Console.WriteLine("CorePilot online-source fallback and trust regression smoke test OK");
+
+sealed class DelegateHttpHandler : HttpMessageHandler
+{
+    private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+    public DelegateHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) =>
+        _handler = handler;
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(_handler(request));
+}
