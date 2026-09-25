@@ -1220,7 +1220,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CompatibilityState.Supported,
             "Installer media",
             "Older-PC compatibility enabled automatically",
-            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented TPM and Secure Boot Windows Setup bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
+            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply TPM and Secure Boot Windows Setup compatibility bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
+
+        remediated.Add(new(
+            CompatibilityState.Warning,
+            "Microsoft support",
+            "This Windows 11 path does not meet the standard minimum-requirements policy",
+            "Microsoft does not recommend Windows 11 on ineligible hardware and does not guarantee support or updates for devices that do not meet the minimum requirements.",
+            "Use this compatibility path only if you accept the unsupported-hardware risk.",
+            "https://support.microsoft.com/windows/experience/compatibility/windows-11-on-devices-that-don-t-meet-minimum-system-requirements"));
 
         _compatibilityReport = _compatibilityReport with
         {
