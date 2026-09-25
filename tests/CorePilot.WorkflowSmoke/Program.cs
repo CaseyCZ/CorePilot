@@ -631,7 +631,7 @@ try
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    $$"""{"sha":"{{verifiedSha}}","commit":{"verification":{"verified":true}}}""")
+                    "{\\\"sha\\\":\\\"" + verifiedSha + "\\\",\\\"commit\\\":{\\\"verification\\\":{\\\"verified\\\":true}}}")
             };
         }
 
@@ -665,7 +665,7 @@ try
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    $$"""{"sha":"{{new string('e', 40)}}","commit":{"verification":{"verified":false}}}""")
+                    "{\\\"sha\\\":\\\"" + new string('e', 40) + "\\\",\\\"commit\\\":{\\\"verification\\\":{\\\"verified\\\":false}}}")
             };
         }
 
