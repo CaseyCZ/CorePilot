@@ -99,7 +99,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparationResult is null
             ? "Run Verify first. CorePilot must scan the hardware, search for solutions, configure the target and validate the result."
             : _preparationResult.ReadyToWrite
-                ? "The installation is prepared and validated for this computer. Write the prepared system to the selected USB."
+                ? "The selected installation target is prepared and validated. Write the prepared system to the selected USB."
                 : _preparationResult.SystemPrepared
                     ? "The system configuration is prepared, but a guarded physical writer for this installation path is not available yet."
                     : _preparationResult.ManualCount > 0
@@ -200,7 +200,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
-            PlanStatus = "Choose a system and version, then press Verify. CorePilot will scan, search for solutions, configure and validate automatically.";
+            PlanStatus = "Choose a system, version and target computer, then press Verify. CorePilot will prepare and validate the selected installation path automatically.";
             UsbSafetyStatus = "USB is optional while preparing the system. Connect it when CorePilot reports READY TO WRITE.";
         };
     }
@@ -972,17 +972,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedIso = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
+        _hardwareReport = null;
+        _deepScanExport = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        HardwareItems.Clear();
 
         if (_targetMode == InstallationTargetMode.OtherComputer)
         {
-            HardwareItems.Clear();
-            _hardwareReport = null;
-            _deepScanExport = null;
             ScanStatus = "Other computer · target hardware not scanned";
             DeepScanStatus =
                 "Universal Windows/Linux media preparation does not use this PC's hardware. macOS requires target hardware.";
         }
+        else
+        {
+            ScanStatus = "Not scanned";
+            DeepScanStatus =
+                "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
+        }
 
+        _workflowStateMachine.Reset(reason);
+        UpdateWorkflowStatus();
         ResetCompatibilityDecision("Press Verify to prepare the selected target mode.");
         PlanStatus = reason;
         RefreshActionAvailability();
@@ -1221,9 +1237,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedIso = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
-        CompatibilitySummary = "Press Verify to prepare this system for the detected hardware.";
+        CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify to prepare this system for the detected hardware."
+            : "Press Verify to prepare universal Windows/Linux media for another computer; macOS requires target hardware.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
-        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
+        PlanStatus = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify. CorePilot will scan this PC, search, configure and validate before USB writing."
+            : "Press Verify. CorePilot will prepare the selected system without using this PC's hardware as the target.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "System selection changed; verification required.");
@@ -1244,9 +1264,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedIso = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
-        CompatibilitySummary = "Press Verify to prepare this version for the detected hardware.";
+        CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify to prepare this version for the detected hardware."
+            : "Press Verify to prepare this version for another computer without using this PC as the compatibility target.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
-        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
+        PlanStatus = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify. CorePilot will scan this PC, search, configure and validate before USB writing."
+            : "Press Verify. CorePilot will prepare the selected version for another computer.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "Version selection changed; verification required.");
