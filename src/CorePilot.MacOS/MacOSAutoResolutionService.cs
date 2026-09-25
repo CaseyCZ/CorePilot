@@ -255,10 +255,13 @@ public sealed class MacOSAutoResolutionService
 
         var unresolved = items.Any(x =>
             x.State == MacOSAutoResolutionState.Unresolved);
+        var manual = items.Any(x =>
+            x.State == MacOSAutoResolutionState.ManualAction);
 
         var automaticReady =
             compatibility.CanProceed &&
             !unresolved &&
+            !manual &&
             (genuineApple || hasDeepScan) &&
             (genuineApple || profile is { CanBuildEfi: true, RequiresReview: false });
 
