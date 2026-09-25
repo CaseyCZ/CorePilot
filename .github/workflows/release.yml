@@ -10,6 +10,7 @@ on:
   workflow_run:
     workflows: ["Build"]
     types: [completed]
+    branches: [main]
 
 permissions:
   actions: read
@@ -17,15 +18,41 @@ permissions:
 
 jobs:
   rolling-latest:
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: windows-latest
+    concurrency:
+      group: corepilot-rolling-latest
+      cancel-in-progress: true
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
       SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
+      - name: Validate verified current main
+        shell: pwsh
+        run: |
+          $currentMain = gh api "repos/$env:GITHUB_REPOSITORY/branches/main" --jq ".commit.sha"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to resolve current main."
+          }
+
+          if ($currentMain -ne $env:SOURCE_SHA) {
+            Write-Host "A newer main commit exists. This older Build will not replace Latest."
+            "SKIP_LATEST=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            exit 0
+          }
+
+          $verified = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:SOURCE_SHA" --jq ".commit.verification.verified"
+          if ($LASTEXITCODE -ne 0 -or $verified -ne "true") {
+            throw "Rolling Latest requires a GitHub-verified current main commit."
+          }
+
+          "SKIP_LATEST=false" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Download successful main artifact
+        if: env.SKIP_LATEST != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/CorePilot-win-x64 | Out-Null
@@ -34,11 +61,16 @@ jobs:
             --name "CorePilot-win-x64" `
             --dir "artifacts/CorePilot-win-x64"
 
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to download the successful Build artifact."
+          }
+
           if (-not (Test-Path "artifacts/CorePilot-win-x64/CorePilot.exe")) {
             throw "CorePilot.exe is missing from the successful main-build artifact."
           }
 
       - name: Package rolling latest
+        if: env.SKIP_LATEST != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/release | Out-Null
@@ -46,31 +78,73 @@ jobs:
           $shaName = "CorePilot-latest-win-x64.sha256"
           $zipPath = Join-Path "artifacts/release" $zipName
           $shaPath = Join-Path "artifacts/release" $shaName
-          Compress-Archive -Path "artifacts/CorePilot-win-x64/*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+          Compress-Archive `
+            -Path "artifacts/CorePilot-win-x64/*" `
+            -DestinationPath $zipPath `
+            -CompressionLevel Optimal `
+            -Force
+
           $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
           "$hash  $zipName" | Set-Content $shaPath -Encoding ascii
+
           "ROLLING_ZIP=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append
           "ROLLING_SHA=$shaPath" | Out-File -FilePath $env:GITHUB_ENV -Append
           "ROLLING_DIGEST=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Update rolling latest release
+        if: env.SKIP_LATEST != 'true'
         shell: pwsh
         run: |
-          $notes = "Rolling development build from the latest successful main branch.`n`nCommit: $env:SOURCE_SHA`nBuild run: $env:SOURCE_RUN_ID`nPlatform: Windows x64`nPackage: CorePilot-latest-win-x64.zip`nSHA256: $env:ROLLING_DIGEST`n`nThis release is updated automatically only after the complete CorePilot CI pipeline succeeds."
+          $notes = "Rolling development build from successful Build #$env:SOURCE_RUN_NUMBER on current main.`n`nCommit: $env:SOURCE_SHA`nBuild run: $env:SOURCE_RUN_ID`nPlatform: Windows x64`nPackage: CorePilot-latest-win-x64.zip`nSHA256: $env:ROLLING_DIGEST`n`nThe source commit is GitHub-verified and passed the complete CorePilot CI pipeline."
 
           gh release view "latest" --repo "$env:GITHUB_REPOSITORY" *> $null
           $exists = $LASTEXITCODE -eq 0
 
           if ($exists) {
-            gh release upload "latest" "$env:ROLLING_ZIP" "$env:ROLLING_SHA" --repo "$env:GITHUB_REPOSITORY" --clobber
-            if ($LASTEXITCODE -ne 0) { throw "Unable to replace rolling latest assets." }
+            gh api `
+              --method PATCH `
+              "repos/$env:GITHUB_REPOSITORY/git/refs/tags/latest" `
+              -f "sha=$env:SOURCE_SHA" `
+              -F "force=true"
 
-            gh release edit "latest" --repo "$env:GITHUB_REPOSITORY" --target "$env:SOURCE_SHA" --title "CorePilot Latest" --notes "$notes" --latest
-            if ($LASTEXITCODE -ne 0) { throw "Unable to update rolling latest release metadata." }
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to move the latest tag to current verified main."
+            }
+
+            gh release upload "latest" `
+              "$env:ROLLING_ZIP" `
+              "$env:ROLLING_SHA" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --clobber
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to replace rolling Latest assets."
+            }
+
+            gh release edit "latest" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --title "CorePilot Latest" `
+              --notes "$notes" `
+              --latest
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to update rolling Latest metadata."
+            }
           }
           else {
-            gh release create "latest" "$env:ROLLING_ZIP" "$env:ROLLING_SHA" --repo "$env:GITHUB_REPOSITORY" --target "$env:SOURCE_SHA" --title "CorePilot Latest" --notes "$notes" --latest
-            if ($LASTEXITCODE -ne 0) { throw "Unable to create rolling latest release." }
+            gh release create "latest" `
+              "$env:ROLLING_ZIP" `
+              "$env:ROLLING_SHA" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --target "$env:SOURCE_SHA" `
+              --title "CorePilot Latest" `
+              --notes "$notes" `
+              --latest
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to create rolling Latest."
+            }
           }
 
   windows-release:
