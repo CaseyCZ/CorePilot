@@ -15,7 +15,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · simple two-step workflow"
+                <TextBlock Text="Hardware-aware boot media assistant · simple two-step workflow"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -137,7 +137,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,4,0,8"/>
 
-                        <TextBlock Text="Development safety: physical disk writing is still disabled. The current button performs the final USB safety/readiness check only."
+                        <TextBlock Text="Write to disk runs the hidden safety/build stages automatically. The selected USB is erased only after a fresh identity check, verified manifest/preflight and an exact typed confirmation phrase."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"/>
 
@@ -201,7 +201,7 @@
                         <Grid Margin="6,12,6,6">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="12"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <StackPanel>
-                                <TextBlock Text="macOS compatibility" FontSize="20" FontWeight="SemiBold"/>
+                                <TextBlock Text="Compatibility" FontSize="20" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding CompatibilitySummary}" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
 
@@ -235,7 +235,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Physical disk writing remains disabled."
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded macOS physical USB writing enabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
