@@ -8,38 +8,61 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.15 ✅
+### v0.1–v0.16 ✅
 
-The current non-destructive pipeline includes hardware discovery, compatibility, OpenCore EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, execution preflight, exact typed confirmation, logging-only write simulation, a central state machine and persistent Activity/Error logging.
+The current non-destructive pipeline includes hardware discovery, compatibility, OpenCore EFI generation and validation, Apple Recovery verification, installer-manifest hashing, USB safety inspection, dry-run planning, execution preflight, exact typed confirmation, logging-only write simulation, a central state machine and persistent searchable Activity/Error logging.
 
-### v0.16 — Searchable / filterable Activity Log 🚧
+### v0.17 — State-driven guided actions 🚧
 
-The Activity Log now supports fast diagnosis during long test runs.
+CorePilot now decides whether each action is valid **before the user can click it**.
 
-New controls:
+The action policy is a pure state-machine layer covered by the existing CI smoke test.
 
-- level filter: **All / Errors / Warnings / Success / Info**
-- live text search
-- search across timestamp, level, subsystem, message and full exception/stack-trace detail
-- visible result count in the form `shown / total`
-- **Clear filters** without deleting log data
-- auto-scroll follows the newest entry that matches the current filter
-- persistent session log remains unchanged on disk
+Examples:
 
-The main CorePilot window also shows an indeterminate progress bar while `ActivityLog.IsBusy=true`, so it is visually obvious that a long-running operation is still active.
+- **Deep scan** requires a local hardware scan.
+- **Prepare plan** requires macOS compatibility + Deep Scan + a selected USB + an automation profile cleared for automatic building.
+- **Build EFI** is enabled only at `WORKSPACE STAGED`.
+- **Download Recovery** is enabled only at `EFI VALIDATED`.
+- **Check USB safety** becomes part of the guided flow after `MANIFEST VERIFIED`.
+- **Dry-run USB plan** requires an inspected, non-blocked target.
+- **Execution preflight** requires `DRY-RUN PLANNED`.
+- **Confirm target** requires a live, unexpired `PREFLIGHT READY`.
+- **Simulate write** requires exact `CONFIRMED` state and remains one-shot.
+- while any logged operation is `RUNNING`, conflicting workflow actions and input selectors are disabled.
 
-The persistent log remains stored under:
+Disabled buttons expose the reason through tooltips even while disabled.
 
-`%LocalAppData%\CorePilot\logs\CorePilot-YYYYMMDD-HHmmss.log`
+The main workflow card also displays a **Next · …** hint showing the expected next step.
+
+### v0.17 state-machine fixes
+
+While wiring the guided actions, two missing phase transitions from the earlier UI integration were found and corrected:
+
+- successful EFI generation now explicitly advances to `EFI VALIDATED`
+- successful Apple Recovery + installer-manifest verification now advances through `RECOVERY VERIFIED → MANIFEST VERIFIED`
+
+CI now exercises the action policy together with the state-machine smoke test so these transitions have usable downstream actions.
+
+### RUNNING-state correction
+
+Safety-stop branches after a started operation now finish the Activity Log as `WARNING` instead of leaving the app visually stuck on `RUNNING`.
+
+This covers:
+
+- changed USB identity during dry-run
+- blocked target during execution preflight
+- blocked target during typed confirmation
+- blocked target during write simulation
 
 Physical-disk writes remain disabled.
 
 ## Next
 
-1. Bind action buttons to workflow state so invalid steps are disabled in advance.
-2. Add a one-click support bundle containing the session log, workflow snapshot, hardware report and non-sensitive manifests.
-3. Add optional automatic opening/focus of the log window on ERROR.
-4. Continue improving simulation coverage before considering a real physical-disk writer.
+1. Add a one-click support bundle with session log, workflow snapshot, hardware report and non-sensitive manifests.
+2. Optionally auto-open/focus Activity Log on ERROR.
+3. Add dedicated FAT32 strategy handling for larger USB media.
+4. Continue simulation coverage before considering a real physical-disk writer.
 
 ## Build
 
@@ -51,4 +74,4 @@ dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
-GitHub Actions validates the Python bridge, logging-backend safety guard and workflow state-machine smoke tests, then publishes a self-contained `CorePilot-win-x64` test artifact.
+GitHub Actions validates the Python bridge, logging-backend safety guard, state-machine transitions and workflow action policy, then publishes a self-contained `CorePilot-win-x64` test artifact.

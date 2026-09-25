@@ -102,3 +102,123 @@ Assert(workflow.Current.Phase == MacOSWorkflowPhase.Idle, "Reset must return to 
 Assert(workflow.Current.AuthorizationExpiresAt is null, "Reset must clear authorization");
 
 Console.WriteLine("CorePilot state-machine smoke test OK");
+
+
+var policy = new MacOSWorkflowActionPolicy();
+
+MacOSWorkflowActionContext Context(
+    bool busy = false,
+    bool hardware = true,
+    bool deep = true,
+    bool usb = true,
+    bool compat = true,
+    bool autoBuild = true,
+    bool review = false,
+    bool workspace = false,
+    bool efi = false,
+    bool manifest = false,
+    bool usbReport = false,
+    bool usbBlocked = false,
+    bool dryRun = false,
+    bool preflight = false,
+    bool confirmation = false) =>
+    new(
+        IsMacOSSelected: true,
+        IsBusy: busy,
+        HasHardware: hardware,
+        HasDeepScan: deep,
+        HasUsbSelection: usb,
+        CompatibilityCanProceed: compat,
+        AutomationCanBuild: autoBuild,
+        AutomationRequiresReview: review,
+        HasWorkspace: workspace,
+        HasEfi: efi,
+        HasManifest: manifest,
+        HasUsbSafetyReport: usbReport,
+        UsbIsBlocked: usbBlocked,
+        HasDryRun: dryRun,
+        HasPreflight: preflight,
+        HasConfirmation: confirmation);
+
+var actionWorkflow = new MacOSWorkflowStateMachine();
+actionWorkflow.Advance(MacOSWorkflowPhase.HardwareScanned, "hardware");
+actionWorkflow.Advance(MacOSWorkflowPhase.CompatibilityReady, "compat");
+
+Assert(!policy.Evaluate(
+        CorePilotWorkflowAction.PreparePlan,
+        actionWorkflow.Current,
+        Context(deep: false)).Enabled,
+    "PreparePlan must stay disabled without Deep Scan");
+
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.PreparePlan,
+        actionWorkflow.Current,
+        Context()).Enabled,
+    "PreparePlan must enable when compatibility and Deep Scan are ready");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.WorkspaceStaged, "workspace");
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.BuildEfi,
+        actionWorkflow.Current,
+        Context(workspace: true)).Enabled,
+    "BuildEfi must enable only at WorkspaceStaged");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.EfiValidated, "efi");
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.DownloadRecovery,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true)).Enabled,
+    "DownloadRecovery must enable after EFI validation");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.RecoveryVerified, "recovery");
+actionWorkflow.Advance(MacOSWorkflowPhase.ManifestVerified, "manifest");
+
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.InspectUsb,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true)).Enabled,
+    "USB inspection must enable after manifest verification");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.UsbInspected, "usb");
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.CreateUsbDryRun,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true, usbReport: true)).Enabled,
+    "Dry-run must enable after safe USB inspection");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.DryRunPlanned, "dry");
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.RunPreflight,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true, usbReport: true, dryRun: true)).Enabled,
+    "Preflight must enable after dry-run planning");
+
+var actionExpiry = DateTimeOffset.UtcNow.AddMinutes(2);
+actionWorkflow.Advance(MacOSWorkflowPhase.PreflightReady, "preflight", actionExpiry);
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.ConfirmTarget,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true, usbReport: true, dryRun: true, preflight: true)).Enabled,
+    "Confirmation must enable only for a live preflight");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.Confirmed, "confirmed", actionExpiry);
+Assert(policy.Evaluate(
+        CorePilotWorkflowAction.SimulateWrite,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true, usbReport: true, dryRun: true, preflight: true, confirmation: true)).Enabled,
+    "Simulation must enable after exact confirmation");
+
+Assert(!policy.Evaluate(
+        CorePilotWorkflowAction.SimulateWrite,
+        actionWorkflow.Current,
+        Context(busy: true, workspace: true, efi: true, manifest: true, usbReport: true, dryRun: true, preflight: true, confirmation: true)).Enabled,
+    "Busy state must disable workflow actions");
+
+actionWorkflow.Advance(MacOSWorkflowPhase.Simulated, "simulated");
+Assert(!policy.Evaluate(
+        CorePilotWorkflowAction.SimulateWrite,
+        actionWorkflow.Current,
+        Context(workspace: true, efi: true, manifest: true, usbReport: true, dryRun: true, preflight: true, confirmation: true)).Enabled,
+    "Simulation must be one-shot in the action policy");
+
+Console.WriteLine("CorePilot workflow action-policy smoke test OK");

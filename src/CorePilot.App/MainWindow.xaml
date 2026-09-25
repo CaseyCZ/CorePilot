@@ -15,7 +15,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · v0.16 searchable activity log"
+                <TextBlock Text="Universal OS installer · v0.17 guided workflow actions"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -64,14 +64,17 @@
 
                         <TextBlock Text="System" FontWeight="SemiBold"/>
                         <ComboBox x:Name="SystemCombo" ItemsSource="{Binding Systems}" DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="SystemCombo_OnSelectionChanged"/>
 
                         <TextBlock Text="Version / distribution" FontWeight="SemiBold"/>
                         <ComboBox x:Name="VariantCombo" ItemsSource="{Binding Variants}" DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="VariantCombo_OnSelectionChanged"/>
 
                         <TextBlock Text="USB drive" FontWeight="SemiBold"/>
                         <ComboBox x:Name="UsbCombo" ItemsSource="{Binding UsbDrives}" DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="UsbCombo_OnSelectionChanged"/>
 
                         <Border Background="#12151A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
@@ -80,23 +83,72 @@
                                        Foreground="{StaticResource MutedBrush}"/>
                         </Border>
 
+                        <Border Background="#12151A"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10"
+                                Margin="0,6,0,10">
+                            <TextBlock Text="{Binding NextActionText}"
+                                       TextWrapping="Wrap"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+
                         <WrapPanel Margin="0,6,0,0">
-                            <Button Content="Refresh drives" Click="RefreshDrives_OnClick"/>
-                            <Button Content="Check USB safety" Click="InspectUsb_OnClick"/>
-                            <Button Content="Prepare plan" Click="PreparePlan_OnClick"/>
-                            <Button Content="Build EFI" Click="BuildEfi_OnClick"/>
-                            <Button Content="Download Recovery" Click="DownloadRecovery_OnClick"/>
-                            <Button Content="Dry-run USB plan" Click="CreateUsbDryRun_OnClick"/>
-                            <Button Content="Execution preflight" Click="RunExecutionPreflight_OnClick"/>
+                            <Button Content="Refresh drives"
+                                    Click="RefreshDrives_OnClick"
+                                    IsEnabled="{Binding CanRefreshDrives}"
+                                    ToolTip="{Binding RefreshDrivesToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Check USB safety"
+                                    Click="InspectUsb_OnClick"
+                                    IsEnabled="{Binding CanInspectUsb}"
+                                    ToolTip="{Binding InspectUsbToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Prepare plan"
+                                    Click="PreparePlan_OnClick"
+                                    IsEnabled="{Binding CanPreparePlan}"
+                                    ToolTip="{Binding PreparePlanToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Build EFI"
+                                    Click="BuildEfi_OnClick"
+                                    IsEnabled="{Binding CanBuildEfi}"
+                                    ToolTip="{Binding BuildEfiToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Download Recovery"
+                                    Click="DownloadRecovery_OnClick"
+                                    IsEnabled="{Binding CanDownloadRecovery}"
+                                    ToolTip="{Binding DownloadRecoveryToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Dry-run USB plan"
+                                    Click="CreateUsbDryRun_OnClick"
+                                    IsEnabled="{Binding CanCreateUsbDryRun}"
+                                    ToolTip="{Binding CreateUsbDryRunToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Execution preflight"
+                                    Click="RunExecutionPreflight_OnClick"
+                                    IsEnabled="{Binding CanRunPreflight}"
+                                    ToolTip="{Binding RunPreflightToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
                         </WrapPanel>
 
                         <TextBlock Text="Typed confirmation" FontWeight="SemiBold" Margin="0,12,0,0"/>
                         <TextBox x:Name="ConfirmationTextBox"
                                  MinWidth="300"
-                                 ToolTip="Type the exact confirmation phrase shown after execution preflight."/>
+                                 IsEnabled="{Binding CanConfirmTarget}"
+                                 ToolTip="{Binding ConfirmTargetToolTip}"
+                                 ToolTipService.ShowOnDisabled="True"/>
                         <WrapPanel Margin="0,2,0,0">
-                            <Button Content="Confirm target" Click="ConfirmTarget_OnClick"/>
-                            <Button Content="Simulate write" Click="SimulateWrite_OnClick"/>
+                            <Button Content="Confirm target"
+                                    Click="ConfirmTarget_OnClick"
+                                    IsEnabled="{Binding CanConfirmTarget}"
+                                    ToolTip="{Binding ConfirmTargetToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Simulate write"
+                                    Click="SimulateWrite_OnClick"
+                                    IsEnabled="{Binding CanSimulateWrite}"
+                                    ToolTip="{Binding SimulateWriteToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"/>
                         </WrapPanel>
 
                         <Border Background="#12151A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
@@ -132,8 +184,16 @@
                                                Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
                                 </StackPanel>
                                 <WrapPanel Grid.Column="1">
-                                    <Button Content="Scan hardware" Click="ScanHardware_OnClick"/>
-                                    <Button Content="Deep scan" Click="DeepScan_OnClick"/>
+                                    <Button Content="Scan hardware"
+                                            Click="ScanHardware_OnClick"
+                                            IsEnabled="{Binding CanScanHardware}"
+                                            ToolTip="{Binding ScanHardwareToolTip}"
+                                            ToolTipService.ShowOnDisabled="True"/>
+                                    <Button Content="Deep scan"
+                                            Click="DeepScan_OnClick"
+                                            IsEnabled="{Binding CanDeepScan}"
+                                            ToolTip="{Binding DeepScanToolTip}"
+                                            ToolTipService.ShowOnDisabled="True"/>
                                 </WrapPanel>
                             </Grid>
 
@@ -201,7 +261,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="CorePilot v0.16 preview · Searchable/filterable activity log · Physical disk writing remains disabled."
+        <TextBlock Grid.Row="3" Text="CorePilot v0.17 preview · State-driven guided actions · Physical disk writing remains disabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
