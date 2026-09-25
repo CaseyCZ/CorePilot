@@ -246,7 +246,7 @@ public sealed class LinuxIsoPreparationService
 
         var match = Regex.Match(
             checksumText,
-            @"SHA256\s*\((?<file>Fedora-Workstation-Live-[^)]+-x86_64\.iso)\)\s*=\s*(?<hash>[0-9A-Fa-f]{64})",
+            @"SHA256\s*\((?<file>Fedora-Workstation-Live-[^)]+(?:\.|-)x86_64\.iso)\)\s*=\s*(?<hash>[0-9A-Fa-f]{64})",
             RegexOptions.IgnoreCase);
 
         if (!match.Success)
