@@ -27,6 +27,25 @@ jobs:
           python -m py_compile src/CorePilot.MacOS/Bridge/opcore_bridge.py
           python src/CorePilot.MacOS/Bridge/opcore_bridge.py --self-test
 
+      - name: Enforce logging-only disk backend
+        shell: pwsh
+        run: |
+          $path = "src/CorePilot.MacOS/LoggingDiskOperationBackend.cs"
+          $text = Get-Content $path -Raw
+          $forbidden = @(
+            "System.Diagnostics",
+            "Process.Start",
+            "CreateFile",
+            "DeviceIoControl",
+            "PhysicalDrive",
+            "diskpart.exe"
+          )
+          foreach ($needle in $forbidden) {
+            if ($text.Contains($needle)) {
+              throw "Forbidden physical-disk capability marker '$needle' found in $path"
+            }
+          }
+
       - name: Build
         run: dotnet build CorePilot.sln --configuration Release --no-restore
 

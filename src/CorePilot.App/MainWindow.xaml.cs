@@ -27,6 +27,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbWritePlanService _usbWritePlanService = new();
     private readonly MacOSUsbExecutionPreflightService _usbExecutionPreflightService = new();
     private readonly MacOSUsbTypedConfirmationService _usbTypedConfirmationService = new();
+    private readonly MacOSUsbWriteSimulationService _usbWriteSimulationService = new();
+    private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
@@ -693,6 +695,59 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _lastUsbTypedConfirmation = null;
             PlanStatus = $"Confirmation rejected: {ex.Message}";
+        }
+    }
+
+    private async void SimulateWrite_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_opCoreStage is null ||
+            _lastInstallerManifest is null ||
+            _lastUsbWritePlan is null ||
+            _lastUsbExecutionPreflight is null ||
+            _lastUsbTypedConfirmation is null)
+        {
+            PlanStatus = "Complete fresh preflight and exact typed confirmation before simulation.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Select the same USB target used by the confirmed plan.";
+            return;
+        }
+
+        try
+        {
+            PlanStatus = "Re-inspecting USB and simulating the confirmed write plan…";
+            var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
+
+            if (freshTarget.IsBlocked)
+            {
+                PlanStatus = $"Simulation BLOCKED: {freshTarget.Summary}";
+                return;
+            }
+
+            _usbSafetyReport = freshTarget;
+            UsbSafetyStatus = freshTarget.Summary;
+
+            var result = await _usbWriteSimulationService.SimulateAsync(
+                _opCoreStage,
+                _lastInstallerManifest,
+                _lastUsbWritePlan,
+                _lastUsbExecutionPreflight,
+                _lastUsbTypedConfirmation,
+                freshTarget,
+                _loggingDiskBackend);
+
+            PlanStatus =
+                $"Write simulation complete ✅ {result.SimulatedSteps} steps · " +
+                $"transcript SHA256 {result.TranscriptSha256[..16]}… · " +
+                $"backend can write physical disks: {result.CanWritePhysicalDisks}. " +
+                "No disk, partition, filesystem or volume was modified.";
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"Write simulation failed: {ex.Message}";
         }
     }
 
