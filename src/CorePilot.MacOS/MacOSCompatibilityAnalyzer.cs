@@ -10,6 +10,8 @@ public sealed class MacOSCompatibilityAnalyzer
     private const string IntelGuide = "https://dortania.github.io/GPU-Buyers-Guide/modern-gpus/intel-gpu.html";
     private const string AmdVanilla = "https://github.com/AMD-OSX/AMD_Vanilla";
     private const string BiosGuide = "https://dortania.github.io/OpenCore-Install-Guide/config.plist/kaby-lake.html";
+    private const string OclpModels = "https://dortania.github.io/OpenCore-Legacy-Patcher/MODELS.html";
+    private const string OclpTahoeTracking = "https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1167";
 
     public CompatibilityReport Analyze(HardwareReport hardware, SystemVariant target)
     {
@@ -108,11 +110,47 @@ public sealed class MacOSCompatibilityAnalyzer
             }
 
             findings.Add(new(
+                CompatibilityState.ActionRequired,
+                "Patcher",
+                "OpenCore Legacy Patcher is required",
+                $"{hardware.Model} is listed by OpenCore Legacy Patcher, but this selected macOS is newer than the Mac's native Apple support.",
+                "Use the OCLP legacy-Mac path for this target. CorePilot must verify that path before enabling Write to disk.",
+                OclpModels));
+
+            if (hardware.Model.Equals(
+                    "MacBookPro14,2",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                findings.Add(new(
+                    CompatibilityState.Supported,
+                    "GPU",
+                    "Intel Iris Plus Graphics 650 has an OCLP native-graphics path",
+                    "The OCLP supported-model table lists MacBookPro14,2 with native graphics support.",
+                    "No legacy graphics root patch should be assumed from the model alone; the selected macOS still needs its own patch-readiness checks.",
+                    OclpModels));
+
+                findings.Add(new(
+                    CompatibilityState.ActionRequired,
+                    "T1 / Wi-Fi / USB",
+                    "Selected macOS needs legacy hardware patch readiness checks",
+                    "MacBookPro14,2 includes legacy components whose patch requirements can change between macOS releases.",
+                    "Before CorePilot enables this installation, verify the current OCLP status for T1, wireless and USB on the selected macOS.",
+                    target.Id == "tahoe-26"
+                        ? OclpTahoeTracking
+                        : OclpModels));
+            }
+
+            findings.Add(new(
                 CompatibilityState.Blocked,
                 "macOS",
-                $"{target.DisplayName} is not natively supported on a 2017 MacBook Pro",
-                "Apple lists macOS Ventura as the last natively compatible macOS for the 2017 MacBook Pro generation.",
-                "A newer macOS requires an OpenCore Legacy Patcher path, which CorePilot has not enabled in the simple native-Mac writer yet."));
+                $"{target.DisplayName} is not install-ready in CorePilot on this 2017 MacBook Pro",
+                "Apple lists macOS Ventura as the last natively compatible macOS for the 2017 MacBook Pro generation. The selected target therefore requires a verified legacy-Mac patcher path.",
+                target.Id == "tahoe-26"
+                    ? "Do not treat Tahoe as ready from model support alone. CorePilot keeps writing blocked until the current OCLP Tahoe path and required hardware patches are verified."
+                    : "CorePilot keeps writing blocked until the required OCLP path is implemented and verified for this target.",
+                target.Id == "tahoe-26"
+                    ? OclpTahoeTracking
+                    : OclpModels));
 
             return new(
                 target.Id,
