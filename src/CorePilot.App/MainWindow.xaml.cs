@@ -24,6 +24,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
     private readonly OpCoreSimplifyStager _opCoreStager = new();
     private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
+    private readonly OpCoreDownloadedComponentAuditService _componentAuditService = new();
     private readonly AppleRecoveryDownloader _appleRecoveryDownloader = new();
     private readonly InstallerManifestService _installerManifestService = new();
     private readonly UsbTargetSafetyInspector _usbSafetyInspector = new();
@@ -365,9 +366,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 new Progress<string>(message =>
                     ActivityLog.Progress("EFI Build", message)));
 
+            ActivityLog.Progress(
+                "Supply chain",
+                "Auditing downloaded OpenCore/kext source URLs and SHA-256 metadata…");
+
+            var componentAudit = await _componentAuditService.AuditAsync(
+                _opCoreStage);
+
+            ActivityLog.Info(
+                "Supply chain",
+                $"{componentAudit.ComponentCount} downloaded component(s) have HTTPS sources, SHA-256 metadata and integrity manifests · audit {componentAudit.AuditSha256[..16]}…");
+
             AdvanceWorkflow(
                 MacOSWorkflowPhase.EfiValidated,
-                "EFI passed ocvalidate and structural validation.");
+                "EFI passed ocvalidate, structural validation and downloaded-component integrity audit.");
 
             ActivityLog.Progress(
                 "Write workflow",
