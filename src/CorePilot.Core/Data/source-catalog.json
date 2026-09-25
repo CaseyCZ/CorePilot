@@ -412,7 +412,12 @@
       "url": "https://www.microsoft.com/software-download/windows11",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "windows.microsoft-windows10",
@@ -426,7 +431,12 @@
       "url": "https://www.microsoft.com/software-download/windows10",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "windows.rufus-site",
@@ -441,7 +451,12 @@
       "url": "https://rufus.ie/",
       "critical": false,
       "resolveOnVerify": false,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "media-writer",
+        "remediation"
+      ]
     },
     {
       "id": "windows.rufus",
@@ -456,7 +471,12 @@
       "repository": "pbatard/rufus",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "media-writer",
+        "remediation"
+      ]
     },
     {
       "id": "linux.ubuntu",
@@ -470,7 +490,12 @@
       "url": "https://ubuntu.com/download/desktop",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "linux.fedora",
@@ -484,7 +509,12 @@
       "url": "https://fedoraproject.org/workstation/download",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "linux.debian",
@@ -498,7 +528,12 @@
       "url": "https://www.debian.org/distrib/",
       "critical": true,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "linux.mint",
@@ -512,7 +547,12 @@
       "url": "https://linuxmint.com/download.php",
       "critical": false,
       "resolveOnVerify": true,
-      "requireVerifiedCommit": false
+      "requireVerifiedCommit": false,
+      "useFor": [
+        "installation",
+        "versions",
+        "compatibility"
+      ]
     },
     {
       "id": "macos.kext.itlwm",
