@@ -1127,7 +1127,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var bypassable = blockers.All(x =>
-            x.Component is "TPM" or "Memory" or "Firmware");
+            x.Component is "TPM" or "Firmware");
 
         if (!bypassable)
         {
@@ -1142,7 +1142,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .Select(finding =>
             {
                 if (finding.State == CompatibilityState.Blocked &&
-                    finding.Component is "TPM" or "Memory" or "Firmware")
+                    finding.Component is "TPM" or "Firmware")
                 {
                     return finding with
                     {
@@ -1173,7 +1173,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CompatibilityState.Supported,
             "Installer media",
             "Older-PC compatibility enabled automatically",
-            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented TPM, Secure Boot and RAM Windows Setup bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
+            "CorePilot will prepare MBR/FAT32 BIOS+UEFI-capable media and apply the documented TPM and Secure Boot Windows Setup bypasses. CPU-specific requirements are not falsely claimed as bypassed."));
 
         _compatibilityReport = _compatibilityReport with
         {
@@ -1793,7 +1793,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         "Windows media mode",
                         _preparedWindowsMediaOptions.ModeText,
                         _preparedWindowsMediaOptions.ExtendedHardwareCompatibility
-                            ? "Verify locked the wider MBR/FAT32 BIOS+UEFI compatibility path with the documented Windows Setup TPM, Secure Boot and RAM remediation."
+                            ? "Verify locked the wider MBR/FAT32 BIOS+UEFI compatibility path with the documented Windows Setup TPM and Secure Boot remediation."
                             : "Verify locked the standard Windows media path for Write to disk."));
                 }
             }
