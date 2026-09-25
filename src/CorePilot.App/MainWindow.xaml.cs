@@ -29,6 +29,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbTypedConfirmationService _usbTypedConfirmationService = new();
     private readonly MacOSUsbWriteSimulationService _usbWriteSimulationService = new();
     private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
+    private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
@@ -48,6 +49,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _usbSafetyStatus = "USB target not inspected. No physical-disk writes are enabled.";
     private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
     private string _macPlanDetails = "";
+    private string _workflowStatus = "Workflow · IDLE · Not started.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
     public ObservableCollection<SystemVariant> Variants { get; } = [];
@@ -91,6 +93,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set { _macPlanDetails = value; OnPropertyChanged(); }
     }
 
+    public string WorkflowStatus
+    {
+        get => _workflowStatus;
+        private set { _workflowStatus = value; OnPropertyChanged(); }
+    }
+
     public Visibility MacPlanVisibility =>
         string.IsNullOrWhiteSpace(MacPlanDetails) ? Visibility.Collapsed : Visibility.Visible;
 
@@ -113,6 +121,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void ScanHardware_OnClick(object sender, RoutedEventArgs e) => await ScanHardwareAsync();
 
+    private MacOSWorkflowPhase HardwareBaselinePhase =>
+        _deepScanExport is not null
+            ? MacOSWorkflowPhase.DeepScanned
+            : _hardwareReport is not null
+                ? MacOSWorkflowPhase.HardwareScanned
+                : MacOSWorkflowPhase.Idle;
+
+    private void UpdateWorkflowStatus()
+    {
+        var state = _workflowStateMachine.Current;
+        var expiry = state.AuthorizationExpiresAt is null
+            ? ""
+            : $" · expires {state.AuthorizationExpiresAt.Value.ToLocalTime():HH:mm:ss}";
+
+        WorkflowStatus =
+            $"Workflow · {state.PhaseText} · gen {state.Generation}{expiry} · {state.Reason}";
+    }
+
+    private void InvalidateWorkflowAfter(
+        MacOSWorkflowPhase preserveThrough,
+        string reason)
+    {
+        _workflowStateMachine.InvalidateAfter(preserveThrough, reason);
+        UpdateWorkflowStatus();
+    }
+
+    private void AdvanceWorkflow(
+        MacOSWorkflowPhase phase,
+        string reason,
+        DateTimeOffset? authorizationExpiresAt = null)
+    {
+        _workflowStateMachine.Advance(phase, reason, authorizationExpiresAt);
+        UpdateWorkflowStatus();
+    }
+
     private async void DeepScan_OnClick(object sender, RoutedEventArgs e)
     {
         try
@@ -126,6 +169,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _hardwareReport = await _hardwareSnifferParser.MergeAsync(result.ReportPath, _hardwareReport);
 
             RefreshHardwareView();
+            _workflowStateMachine.Reset("Deep Scan refreshed hardware identity.");
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.DeepScanned,
+                "Hardware Sniffer Report.json + ACPI imported.");
             RunCompatibilityAnalysis();
 
             DeepScanStatus =
@@ -145,6 +192,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             ScanStatus = "Scanning…";
             _hardwareReport = await _scanner.ScanAsync();
+            _deepScanExport = null;
+            _workflowStateMachine.Reset("Local hardware scan refreshed; previous downstream state revoked.");
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.HardwareScanned,
+                "Local hardware scan complete.");
             RefreshHardwareView();
             ScanStatus = $"Detected {HardwareItems.Count} hardware items";
             RunCompatibilityAnalysis();
@@ -177,6 +229,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _lastUsbWritePlan = null;
         _lastUsbExecutionPreflight = null;
         _lastUsbTypedConfirmation = null;
+        InvalidateWorkflowAfter(
+            MacOSWorkflowPhase.ManifestVerified,
+            "USB target changed; target-specific authorization revoked.");
         UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
             ? "USB target changed — safety inspection required."
             : "USB target not selected.";
@@ -198,7 +253,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbWritePlan = null;
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.ManifestVerified,
+                "USB safety inspection refreshed; previous target authorization revoked.");
             UsbSafetyStatus = report.Summary;
+
+            if (_workflowStateMachine.Current.Phase >= MacOSWorkflowPhase.ManifestVerified)
+            {
+                AdvanceWorkflow(
+                    MacOSWorkflowPhase.UsbInspected,
+                    $"USB safety inspected: {report.LevelText}.");
+            }
         }
         catch (Exception ex)
         {
@@ -218,6 +283,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbWritePlan = null;
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.ManifestVerified,
+                "USB device list refreshed; target-specific authorization revoked.");
             UsbSafetyStatus = "USB list refreshed — safety inspection required.";
 
             UsbDrives.Clear();
@@ -261,6 +329,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RunCompatibilityAnalysis()
     {
         CompatibilityItems.Clear();
+        InvalidateWorkflowAfter(
+            HardwareBaselinePhase,
+            "System/version or hardware compatibility inputs changed.");
         _compatibilityReport = null;
         _automationProfile = null;
         _opCoreStage = null;
@@ -294,6 +365,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         CompatibilitySummary = _compatibilityReport.Summary;
         MacPlanDetails = BuildPlanText(_compatibilityReport, _automationProfile);
+        AdvanceWorkflow(
+            MacOSWorkflowPhase.CompatibilityReady,
+            $"Compatibility evaluated for {target.DisplayName}.");
         OnPropertyChanged(nameof(MacPlanVisibility));
     }
 
@@ -351,6 +425,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (system.Id == "macos" && _automationProfile is not null)
         {
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.CompatibilityReady,
+                "Workspace preparation restarted; generated artifacts revoked.");
+            _opCoreStage = null;
+            _lastEfiBuild = null;
+            _lastRecovery = null;
+            _lastInstallerManifest = null;
+            _lastUsbWritePlan = null;
+            _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
+
             var profilePath = await _macProfileStore.SaveAsync(_automationProfile);
 
             if (_deepScanExport is null)
@@ -366,6 +451,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _deepScanExport.AcpiDirectory,
                 _automationProfile);
             _opCoreStage = stage;
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.WorkspaceStaged,
+                $"OpenCore workspace staged for {variant.DisplayName}.");
 
             var review = _automationProfile.RequiresReview
                 ? " Advanced review is required before EFI generation."
@@ -416,6 +504,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.WorkspaceStaged,
+                "EFI build restarted; recovery, manifest and USB authorization revoked.");
+            _lastEfiBuild = null;
+            _lastRecovery = null;
+            _lastInstallerManifest = null;
+            _lastUsbWritePlan = null;
+            _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
+
             var progress = new Progress<string>(message => PlanStatus = message);
             var result = await _opCoreBuilder.BuildAsync(
                 _opCoreStage,
@@ -462,6 +560,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.EfiValidated,
+                "Recovery generation restarted; manifest and USB authorization revoked.");
+            _lastRecovery = null;
+            _lastInstallerManifest = null;
+            _lastUsbWritePlan = null;
+            _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
+
             var progress = new Progress<string>(message => PlanStatus = message);
             var result = await _appleRecoveryDownloader.DownloadAsync(
                 _opCoreStage,
@@ -555,6 +662,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _usbSafetyReport = freshReport;
             UsbSafetyStatus = freshReport.Summary;
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.ManifestVerified,
+                "USB dry-run restarted; previous target authorization revoked.");
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.UsbInspected,
+                $"USB identity re-inspected for dry-run: {freshReport.LevelText}.");
 
             PlanStatus = "Creating manifest-bound USB dry-run plan…";
             var plan = await _usbWritePlanService.CreateDryRunAsync(
@@ -564,7 +677,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _lastUsbWritePlan = plan;
             _lastUsbExecutionPreflight = null;
-        _lastUsbTypedConfirmation = null;
+            _lastUsbTypedConfirmation = null;
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.DryRunPlanned,
+                "Manifest-bound USB dry-run plan created and verified.");
 
             var confirmation = plan.RequiresStrongConfirmation
                 ? " · future strong confirmation required"
@@ -601,6 +717,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            InvalidateWorkflowAfter(
+                MacOSWorkflowPhase.DryRunPlanned,
+                "Execution preflight restarted; previous confirmation revoked.");
+            _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
+
             PlanStatus = "Running atomic execution preflight…";
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
@@ -626,6 +748,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbExecutionPreflight = result;
             _lastUsbTypedConfirmation = null;
             ConfirmationTextBox.Text = "";
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.PreflightReady,
+                "Atomic execution preflight passed.",
+                result.ExpiresAt);
 
             PlanStatus =
                 $"Execution preflight ready ✅ ID {result.PreflightId[..8]} · " +
@@ -660,6 +786,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            if (_workflowStateMachine.InvalidateIfAuthorizationExpired(
+                    DateTimeOffset.UtcNow,
+                    "Execution preflight expired before typed confirmation."))
+            {
+                _lastUsbExecutionPreflight = null;
+                _lastUsbTypedConfirmation = null;
+                ConfirmationTextBox.Text = "";
+                UpdateWorkflowStatus();
+                PlanStatus = "Execution preflight expired. Run it again before confirmation.";
+                return;
+            }
+
+            _workflowStateMachine.EnsureExactly(MacOSWorkflowPhase.PreflightReady);
             PlanStatus = "Re-inspecting USB before accepting typed confirmation…";
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
@@ -685,6 +824,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ConfirmationTextBox.Text);
 
             _lastUsbTypedConfirmation = result;
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.Confirmed,
+                "Exact typed confirmation accepted.",
+                result.ExpiresAt);
 
             PlanStatus =
                 $"Typed confirmation accepted ✅ ID {result.ConfirmationId[..8]} · " +
@@ -718,6 +861,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            if (_workflowStateMachine.InvalidateIfAuthorizationExpired(
+                    DateTimeOffset.UtcNow,
+                    "Execution authorization expired before simulation."))
+            {
+                _lastUsbExecutionPreflight = null;
+                _lastUsbTypedConfirmation = null;
+                ConfirmationTextBox.Text = "";
+                UpdateWorkflowStatus();
+                PlanStatus = "Execution authorization expired. Run preflight and confirmation again.";
+                return;
+            }
+
+            _workflowStateMachine.EnsureExactly(MacOSWorkflowPhase.Confirmed);
             PlanStatus = "Re-inspecting USB and simulating the confirmed write plan…";
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
@@ -738,6 +894,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _lastUsbTypedConfirmation,
                 freshTarget,
                 _loggingDiskBackend);
+
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.Simulated,
+                "Confirmed USB write plan completed through logging-only simulation.");
 
             PlanStatus =
                 $"Write simulation complete ✅ {result.SimulatedSteps} steps · " +
