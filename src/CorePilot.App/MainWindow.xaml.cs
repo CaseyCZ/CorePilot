@@ -254,9 +254,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
             UsbSafetyStatus = report.Summary;
-            AdvanceWorkflow(
-                MacOSWorkflowPhase.UsbInspected,
-                $"USB safety inspected: {report.LevelText}.");
+
+            if (_workflowStateMachine.Current.Phase >= MacOSWorkflowPhase.ManifestVerified)
+            {
+                AdvanceWorkflow(
+                    MacOSWorkflowPhase.UsbInspected,
+                    $"USB safety inspected: {report.LevelText}.");
+            }
         }
         catch (Exception ex)
         {
