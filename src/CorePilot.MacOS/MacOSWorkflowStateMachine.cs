@@ -130,6 +130,16 @@ public sealed class MacOSWorkflowStateMachine
         }
     }
 
+    public void EnsureExactly(MacOSWorkflowPhase required)
+    {
+        lock (_gate)
+        {
+            if (_phase != required)
+                throw new InvalidOperationException(
+                    $"Workflow is {_phase}; exact state {required} is required.");
+        }
+    }
+
     public bool InvalidateIfAuthorizationExpired(
         DateTimeOffset now,
         string reason = "Execution authorization expired.")
