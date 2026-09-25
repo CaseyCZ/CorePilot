@@ -637,6 +637,38 @@ Assert(windows11Ok.Findings.Any(x =>
         x.State == CompatibilityState.Supported),
     "Windows 11 must require and confirm TPM 2.0 before reporting a usable path");
 
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "CPU" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must not claim an exact supported-CPU-list match from processor detection alone");
+
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "Graphics" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 must disclose that DirectX 12 / WDDM 2.0 is not fully verified");
+
+Assert(windows11Ok.Findings.Any(x =>
+        x.Component == "Storage" &&
+        x.State == CompatibilityState.Warning),
+    "Windows 11 media preparation must not assume the final installation drive satisfies the 64 GB requirement");
+
+var windows11LowRam = genericAnalyzer.Analyze(
+    "windows",
+    testHardware with
+    {
+        FirmwareMode = "UEFI",
+        SecureBoot = true,
+        Tpm20 = true,
+        MemoryBytes = 2L * 1024 * 1024 * 1024
+    },
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(!windows11LowRam.CanProceed &&
+       windows11LowRam.Findings.Any(x =>
+           x.Component == "Memory" &&
+           x.State == CompatibilityState.Blocked),
+    "Windows 11 below 4 GB RAM must remain a real blocker and must not be auto-bypassed");
+
 var windows11NoTpm = genericAnalyzer.Analyze(
     "windows",
     testHardware with
@@ -653,6 +685,14 @@ Assert(!windows11NoTpm.CanProceed &&
            x.Component == "TPM" &&
            x.State == CompatibilityState.Blocked),
     "Windows 11 must fail closed when TPM 2.0 is absent or disabled");
+
+// MainWindow's automatic compatibility-media remediation is intentionally
+// UI/state logic; the generic analyzer must preserve the original TPM blocker
+// so the app can make that transition explicitly and attach the unsupported-hardware warning.
+Assert(!windows11NoTpm.Findings.Any(x =>
+        x.Component == "Microsoft support" &&
+        x.State == CompatibilityState.Supported),
+    "generic compatibility must never silently convert unsupported Windows 11 hardware into a fully supported result");
 
 var windows11Legacy = genericAnalyzer.Analyze(
     "windows",
@@ -681,6 +721,48 @@ Assert(ubuntuOk.CanProceed,
     "Linux generic verification must produce a usable report instead of failing because it is not macOS");
 
 Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
+
+var otherWindows11 = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "windows",
+    "Windows",
+    new SystemVariant("windows-11", "Windows 11"));
+
+Assert(otherWindows11.CanProceed &&
+       otherWindows11.Findings.Any(x =>
+           x.Component == "Target mode" &&
+           x.State == CompatibilityState.Supported) &&
+       !otherWindows11.Findings.Any(x =>
+           x.Component is "TPM" or "CPU" or "Firmware"),
+    "Other computer Windows 11 preparation must not reuse this PC's TPM/CPU/firmware as compatibility blockers");
+
+var otherUbuntu = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "linux",
+    "Linux",
+    new SystemVariant("ubuntu", "Ubuntu"));
+
+Assert(otherUbuntu.CanProceed,
+    "Other computer Linux media must be preparable without scanning this PC as the target");
+
+var otherMac = InstallationTargetCompatibilityBuilder.ForOtherComputer(
+    "macos",
+    "macOS",
+    new SystemVariant("tahoe-26", "macOS Tahoe 26"));
+
+Assert(!otherMac.CanProceed &&
+       otherMac.Findings.Any(x =>
+           x.Component == "Target hardware" &&
+           x.State == CompatibilityState.Blocked),
+    "Other computer macOS must stay blocked until target hardware is available");
+
+Assert(Enum.IsDefined(
+           typeof(InstallationTargetMode),
+           InstallationTargetMode.ThisComputer) &&
+       Enum.IsDefined(
+           typeof(InstallationTargetMode),
+           InstallationTargetMode.OtherComputer),
+    "Target computer mode must expose both This computer and Other computer states");
+
+Console.WriteLine("CorePilot target-computer mode smoke test OK");
 
 var windowsPreparationSources = new OnlineSourceSnapshot(
     "windows",
@@ -791,6 +873,11 @@ var windowsPhrase =
     WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
         windowsTestImage);
+var windowsCompatibilityPhrase =
+    WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        windowsTestImage,
+        WindowsMediaOptions.Compatibility);
 var linuxPhrase =
     LinuxRawUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
@@ -798,8 +885,19 @@ var linuxPhrase =
 
 Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        windowsPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
-       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal),
-    "Windows writer confirmation must bind the exact disk identity and prepared target");
+       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       !windowsPhrase.Contains("WINDOWS11-COMPAT", StringComparison.Ordinal),
+    "standard Windows writer confirmation must bind the exact disk identity and prepared target");
+
+Assert(windowsCompatibilityPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       windowsCompatibilityPhrase.Contains("WINDOWS11-COMPAT", StringComparison.Ordinal),
+    "Windows compatibility writer confirmation must explicitly bind the compatibility mode");
+
+Assert(WindowsMediaOptions.Compatibility.ExtendedHardwareCompatibility &&
+       !WindowsMediaOptions.Standard.ExtendedHardwareCompatibility,
+    "Windows media options must keep standard and Windows 11 compatibility paths distinct");
 
 Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        linuxPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
@@ -848,6 +946,22 @@ Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&
        opCoreSimplifySource.Critical,
     "execution-critical OpCore Simplify trust policy must stay pinned to the expected upstream");
+
+var openCoreSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "macos.opencore");
+Assert(openCoreSource.Repository == "acidanthera/OpenCorePkg" &&
+       openCoreSource.Strategy == "githubRelease" &&
+       openCoreSource.Critical,
+    "critical OpenCorePkg trust policy must stay pinned to the expected upstream");
+
+var pinnedFidoSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.fido");
+Assert(pinnedFidoSource.Repository == "pbatard/Fido" &&
+       pinnedFidoSource.Branch == "master" &&
+       pinnedFidoSource.Strategy == "githubBranchHead" &&
+       pinnedFidoSource.RequireVerifiedCommit &&
+       pinnedFidoSource.Critical,
+    "execution-critical Fido trust policy must stay pinned to the expected upstream");
 
 Console.WriteLine("CorePilot execution-critical source trust smoke test OK");
 
