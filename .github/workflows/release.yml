@@ -87,11 +87,20 @@ jobs:
             "dism.exe",
             "VerifyMountedVolumeBelongsToTargetAsync",
             "Target PNP identity changed after formatting.",
-            "Get-FileHash"
+            "Get-FileHash",
+            "BypassTPMCheck",
+            "BypassSecureBootCheck",
+            "convert gpt",
+            "customizationSha256",
+            "result does not match the media mode prepared by Verify"
           )) {
             if (-not $windowsWriter.Contains($needle)) {
               throw "Guarded Windows writer is missing required safety marker '$needle'."
             }
+          }
+
+          if ($windowsWriter.Contains("BypassRAMCheck")) {
+            throw "Automatic Windows media must not bypass the Windows 11 minimum RAM requirement."
           }
 
           $linuxWriterPath = "src/CorePilot.Linux/LinuxRawUsbWriter.cs"
@@ -125,6 +134,37 @@ jobs:
           foreach ($match in $clearDiskReferences) {
             if ($match.Path -notlike "*LinuxRawUsbWriter.cs") {
               throw "Clear-Disk reference escaped the guarded Linux writer: $($match.Path)"
+            }
+          }
+
+      - name: Enforce readable desktop UI theme
+        shell: pwsh
+        run: |
+          $appXaml = Get-Content "src/CorePilot.App/App.xaml" -Raw
+          $mainXaml = Get-Content "src/CorePilot.App/MainWindow.xaml" -Raw
+          $logXaml = Get-Content "src/CorePilot.App/LogWindow.xaml" -Raw
+
+          if ($appXaml.Contains('<Style TargetType="TextBlock">')) {
+            throw "A global TextBlock style can make system-templated controls unreadable. Use explicit text colors or control-specific styles."
+          }
+
+          foreach ($needle in @(
+            '<Style TargetType="ComboBox">',
+            '<Style TargetType="ComboBoxItem">',
+            'x:Name="PART_Popup"',
+            '<Style TargetType="TabItem">',
+            '<Style TargetType="TextBox">',
+            '<Style TargetType="GridViewColumnHeader">'
+          )) {
+            if (-not $appXaml.Contains($needle)) {
+              throw "Desktop theme is missing required control styling marker '$needle'."
+            }
+          }
+
+          foreach ($window in @($mainXaml, $logXaml)) {
+            if (-not $window.Contains('Background="{StaticResource PageBrush}"') -or
+                -not $window.Contains('Foreground="{StaticResource TextBrush}"')) {
+              throw "CorePilot windows must explicitly bind dark background and readable foreground."
             }
           }
 
