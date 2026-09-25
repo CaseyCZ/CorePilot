@@ -975,6 +975,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
+        _lastOnlineSourceSnapshot = null;
         _hardwareReport = null;
         _deepScanExport = null;
         _opCoreStage = null;
@@ -1241,6 +1242,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
+        _lastOnlineSourceSnapshot = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
         CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
             ? "Press Verify to prepare this system for the detected hardware."
             : "Press Verify to prepare universal Windows/Linux media for another computer; macOS requires target hardware.";
@@ -1269,6 +1279,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
+        _lastOnlineSourceSnapshot = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
         CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
             ? "Press Verify to prepare this version for the detected hardware."
             : "Press Verify to prepare this version for another computer without using this PC as the compatibility target.";
