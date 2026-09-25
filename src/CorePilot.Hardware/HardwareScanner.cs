@@ -6,11 +6,13 @@ namespace CorePilot.Hardware;
 
 public sealed class HardwareScanner
 {
+    private static readonly UsbTargetInspector DiskInspector = new();
+
     public Task<HardwareReport> ScanAsync(CancellationToken cancellationToken = default) =>
         Task.Run(Scan, cancellationToken);
 
     public Task<IReadOnlyList<UsbDriveInfo>> ScanDisksAsync(CancellationToken cancellationToken = default) =>
-        Task.Run<IReadOnlyList<UsbDriveInfo>>(ScanDisks, cancellationToken);
+        DiskInspector.InspectAsync(cancellationToken);
 
     private static HardwareReport Scan()
     {
@@ -37,33 +39,7 @@ public sealed class HardwareScanner
             ReadSecureBoot(),
             LongValue(computer, "TotalPhysicalMemory"),
             devices.DistinctBy(x => $"{x.Category}|{x.Name}|{x.PnpDeviceId}", StringComparer.OrdinalIgnoreCase).ToArray(),
-            ScanDisks());
-    }
-
-    private static IReadOnlyList<UsbDriveInfo> ScanDisks()
-    {
-        var result = new List<UsbDriveInfo>();
-        using var searcher = new ManagementObjectSearcher(
-            "SELECT DeviceID, Model, InterfaceType, Size, PNPDeviceID FROM Win32_DiskDrive");
-
-        foreach (ManagementObject item in searcher.Get())
-        {
-            var interfaceType = Value(item, "InterfaceType");
-            var pnpId = Value(item, "PNPDeviceID");
-            var isUsb = interfaceType.Equals("USB", StringComparison.OrdinalIgnoreCase)
-                        || pnpId.Contains("USBSTOR", StringComparison.OrdinalIgnoreCase)
-                        || pnpId.StartsWith("USB", StringComparison.OrdinalIgnoreCase);
-
-            result.Add(new UsbDriveInfo(
-                Value(item, "DeviceID"),
-                Value(item, "Model", "Unknown disk"),
-                LongValue(item, "Size"),
-                isUsb));
-        }
-
-        return result.OrderByDescending(x => x.IsUsb)
-            .ThenBy(x => x.Model, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            DiskInspector.Inspect());
     }
 
     private static IReadOnlyList<HardwareDeviceInfo> QueryDevices(string category, string query)
@@ -72,10 +48,19 @@ public sealed class HardwareScanner
         using var searcher = new ManagementObjectSearcher(query);
         foreach (ManagementObject item in searcher.Get())
         {
-            var name = Value(item, "Name");
-            if (string.IsNullOrWhiteSpace(name)) continue;
-            values.Add(new HardwareDeviceInfo(category, name, Value(item, "PNPDeviceID")));
+            using (item)
+            {
+                var name = Value(item, "Name");
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                values.Add(new HardwareDeviceInfo(
+                    category,
+                    name,
+                    Value(item, "PNPDeviceID")));
+            }
         }
+
         return values;
     }
 
@@ -89,34 +74,50 @@ public sealed class HardwareScanner
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure");
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT ChassisTypes FROM Win32_SystemEnclosure");
+
             foreach (ManagementObject item in searcher.Get())
             {
-                if (item["ChassisTypes"] is not ushort[] types) continue;
-                if (types.Any(x => x is 8 or 9 or 10 or 11 or 12 or 14 or 18 or 21 or 30 or 31 or 32))
-                    return "Laptop";
+                using (item)
+                {
+                    if (item["ChassisTypes"] is not ushort[] types)
+                        continue;
+
+                    if (types.Any(x => x is 8 or 9 or 10 or 11 or 12 or 14 or 18 or 21 or 30 or 31 or 32))
+                        return "Laptop";
+                }
             }
         }
-        catch { }
+        catch
+        {
+        }
+
         return "Desktop";
     }
 
     private static string Value(ManagementBaseObject? item, string property, string fallback = "")
     {
-        if (item is null) return fallback;
+        if (item is null)
+            return fallback;
+
         var value = item[property]?.ToString()?.Trim();
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
     private static int IntValue(ManagementBaseObject? item, string property)
     {
-        if (item is null) return 0;
+        if (item is null)
+            return 0;
+
         return int.TryParse(item[property]?.ToString(), out var value) ? value : 0;
     }
 
     private static long LongValue(ManagementBaseObject? item, string property)
     {
-        if (item is null) return 0;
+        if (item is null)
+            return 0;
+
         return long.TryParse(item[property]?.ToString(), out var value) ? value : 0;
     }
 
@@ -135,11 +136,16 @@ public sealed class HardwareScanner
     {
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+
             var value = key?.GetValue("UEFISecureBootEnabled");
             return value is null ? null : Convert.ToInt32(value) == 1;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string JoinNonEmpty(params string[] values) =>

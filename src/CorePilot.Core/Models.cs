@@ -39,10 +39,113 @@ public sealed record HardwareDeviceInfo(
     }
 }
 
-public sealed record UsbDriveInfo(string DeviceId, string Model, long SizeBytes, bool IsUsb)
+public sealed record DiskVolumeInfo(
+    string DriveLetter,
+    string Label,
+    string FileSystem,
+    long SizeBytes,
+    long FreeBytes,
+    bool IsSystemVolume)
 {
-    public string SizeText => SizeBytes <= 0 ? "Unknown size" : $"{SizeBytes / 1024d / 1024d / 1024d:0.#} GB";
-    public string DisplayName => $"{Model} — {SizeText}";
+    public string SizeText => SizeBytes <= 0
+        ? "Unknown size"
+        : $"{SizeBytes / 1024d / 1024d / 1024d:0.#} GB";
+
+    public string DisplayName
+    {
+        get
+        {
+            var name = string.IsNullOrWhiteSpace(Label)
+                ? DriveLetter
+                : $"{DriveLetter} ({Label})";
+
+            var fileSystem = string.IsNullOrWhiteSpace(FileSystem)
+                ? ""
+                : $" · {FileSystem}";
+
+            var system = IsSystemVolume ? " · SYSTEM" : "";
+            return $"{name} · {SizeText}{fileSystem}{system}";
+        }
+    }
+}
+
+public enum UsbTargetSafetyState
+{
+    SafeCandidate,
+    Warning,
+    Blocked
+}
+
+public sealed record UsbDriveInfo(
+    string DeviceId,
+    int DiskNumber,
+    string Model,
+    string SerialNumber,
+    string InterfaceType,
+    string MediaType,
+    long SizeBytes,
+    bool IsUsb,
+    bool IsRemovable,
+    bool IsSystemDisk,
+    IReadOnlyList<DiskVolumeInfo> Volumes)
+{
+    public string SizeText => SizeBytes <= 0
+        ? "Unknown size"
+        : $"{SizeBytes / 1024d / 1024d / 1024d:0.#} GB";
+
+    public UsbTargetSafetyState SafetyState
+    {
+        get
+        {
+            if (IsSystemDisk)
+                return UsbTargetSafetyState.Blocked;
+
+            if (!IsUsb || SizeBytes <= 0 || string.IsNullOrWhiteSpace(DeviceId))
+                return UsbTargetSafetyState.Warning;
+
+            return UsbTargetSafetyState.SafeCandidate;
+        }
+    }
+
+    public string SafetyText => SafetyState switch
+    {
+        UsbTargetSafetyState.SafeCandidate => "SAFE CANDIDATE",
+        UsbTargetSafetyState.Warning => "WARNING",
+        _ => "BLOCKED"
+    };
+
+    public string DisplayName =>
+        $"Disk {DiskNumber} · {Model} — {SizeText}{(IsSystemDisk ? " [SYSTEM]" : "")}";
+
+    public string SafetyDetails
+    {
+        get
+        {
+            var details = new List<string>
+            {
+                $"Physical disk: {DeviceId}",
+                $"Bus: {(string.IsNullOrWhiteSpace(InterfaceType) ? "Unknown" : InterfaceType)}",
+                $"Media: {(string.IsNullOrWhiteSpace(MediaType) ? "Unknown" : MediaType)}",
+                $"Removable flag: {(IsRemovable ? "Yes" : "No")}",
+                $"System disk: {(IsSystemDisk ? "YES" : "No")}",
+                $"Serial: {(string.IsNullOrWhiteSpace(SerialNumber) ? "Unavailable" : SerialNumber)}"
+            };
+
+            if (Volumes.Count == 0)
+                details.Add("Volumes: none mounted");
+            else
+                details.Add("Volumes: " + string.Join("; ", Volumes.Select(x => x.DisplayName)));
+
+            if (SafetyState == UsbTargetSafetyState.Blocked)
+                details.Add("CorePilot will never allow destructive writes to this target.");
+            else if (SafetyState == UsbTargetSafetyState.Warning)
+                details.Add("Target identity is incomplete or not clearly USB; destructive writes must remain blocked.");
+            else
+                details.Add("Read-only inspection passed. This does NOT enable USB writing.");
+
+            return string.Join(Environment.NewLine, details);
+        }
+    }
 }
 
 public sealed record HardwareReport(

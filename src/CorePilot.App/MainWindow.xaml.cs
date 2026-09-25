@@ -37,6 +37,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
     private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
     private string _macPlanDetails = "";
+    private string _usbSafetyStatus = "USB target not inspected";
+    private string _usbSafetyDetails = "Select a USB drive to inspect its physical identity and mounted volumes.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
     public ObservableCollection<SystemVariant> Variants { get; } = [];
@@ -72,6 +74,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _macPlanDetails;
         private set { _macPlanDetails = value; OnPropertyChanged(); }
+    }
+
+    public string UsbSafetyStatus
+    {
+        get => _usbSafetyStatus;
+        private set { _usbSafetyStatus = value; OnPropertyChanged(); }
+    }
+
+    public string UsbSafetyDetails
+    {
+        get => _usbSafetyDetails;
+        private set { _usbSafetyDetails = value; OnPropertyChanged(); }
     }
 
     public Visibility MacPlanVisibility =>
@@ -171,12 +185,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     : UsbDrives.FirstOrDefault(x => x.DeviceId == current.DeviceId) ?? UsbDrives[0];
 
             if (UsbDrives.Count == 0)
+            {
                 PlanStatus = "No USB disk detected. Connect a USB flash drive and press Refresh drives.";
+                UsbSafetyStatus = "No USB target";
+                UsbSafetyDetails = "No physical USB disk is currently available for inspection.";
+            }
+            else
+            {
+                InspectSelectedTarget();
+            }
         }
         catch (Exception ex)
         {
             PlanStatus = $"Disk scan failed: {ex.Message}";
         }
+    }
+
+    private void UsbCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        InspectSelectedTarget();
+
+    private void InspectTarget_OnClick(object sender, RoutedEventArgs e) =>
+        InspectSelectedTarget();
+
+    private void InspectSelectedTarget()
+    {
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            UsbSafetyStatus = "USB target not selected";
+            UsbSafetyDetails = "Select a physical USB disk.";
+            return;
+        }
+
+        UsbSafetyStatus = $"{usb.SafetyText} · Disk {usb.DiskNumber} · {usb.SizeText}";
+        UsbSafetyDetails = usb.SafetyDetails;
     }
 
     private void SystemCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -284,6 +325,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
         {
             PlanStatus = "Connect and select a USB flash drive.";
+            return;
+        }
+
+        if (usb.SafetyState == UsbTargetSafetyState.Blocked)
+        {
+            PlanStatus = "Selected target is BLOCKED because it contains the running Windows system volume. Choose another USB disk.";
+            return;
+        }
+
+        if (usb.SafetyState == UsbTargetSafetyState.Warning)
+        {
+            PlanStatus = "Selected target could not be positively classified as a safe USB candidate. CorePilot will not prepare it for future writing.";
             return;
         }
 

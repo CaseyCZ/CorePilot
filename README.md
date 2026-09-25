@@ -29,26 +29,28 @@ Independent verification that enabled ACPI, kext, driver and tool references phy
 ### v0.7 — Apple Recovery ✅
 Official OpenCorePkg `macrecovery.py`, signed chunk verification and local SHA-256 hashes.
 
-### v0.8 — Final installer manifest 🚧
+### v0.8 — Final installer manifest ✅
+A deterministic SHA-256 manifest covers the validated EFI tree and verified Apple Recovery payload.
 
-After Recovery succeeds, CorePilot now automatically creates:
+### v0.9 — USB target safety inspector 🚧
 
-- `CorePilotInstallerManifest.json`
-- `CorePilotInstallerManifest.sha256`
+The first USB-media phase is deliberately **read-only**.
 
-The manifest contains:
+CorePilot now inventories each physical USB target with:
 
-- selected macOS target and Darwin version
-- actual SMBIOS used by the EFI builder
-- pinned OpCore Simplify commit + source archive SHA-256
-- `ocvalidate` and CorePilot structural-audit status
-- every file below the generated EFI tree
-- path, role, size and SHA-256 for every EFI file
-- verified `BaseSystem.dmg` and `BaseSystem.chunklist` hashes
+- Windows physical disk number and device path
+- model, serial number and total size
+- interface/bus type and media type
+- Windows removable-media flag
+- all mounted logical volumes, filesystem, size and label
+- detection of the currently running Windows system volume
+- safety classification: **SAFE CANDIDATE / WARNING / BLOCKED**
 
-CorePilot immediately re-reads the manifest and re-hashes all referenced files. Workspace path traversal and reparse-point files are rejected.
+A disk containing the running Windows system volume is always **BLOCKED**, even if Windows reports it through a USB interface.
 
-This gives the future USB writer a deterministic pre-write contract: **the bytes written to USB must match the already-validated installer manifest.**
+A target with incomplete identity is **WARNING** and is also rejected by the current planning flow.
+
+**SAFE CANDIDATE only means the read-only identity checks passed. It does not enable disk writing.**
 
 ## Safety model
 
@@ -60,17 +62,20 @@ This gives the future USB writer a deterministic pre-write contract: **the bytes
 6. Validate EFI
 7. Download + verify Apple Recovery
 8. Create + verify final installer manifest
-9. **Write USB — still disabled**
+9. Inspect physical USB target
+10. Dry-run partition/write plan — next
+11. **Destructive USB write — still disabled**
 
 No current step writes to a physical disk.
 
 ## Next
 
-1. Build a read-only USB target safety inspector: removable status, system-disk detection, model/serial/size and mounted volumes.
-2. Design the exact GPT/EFI/recovery layout.
-3. Add a dry-run USB write plan that must match the installer manifest.
-4. Only after those safeguards pass, enable the destructive write behind explicit confirmation.
-5. Then continue Windows/Linux media engines and multiboot.
+1. Define the exact GPT layout for macOS recovery media.
+2. Generate a dry-run write plan bound to disk number + model + serial + size.
+3. Re-scan the target immediately before execution and reject any identity change.
+4. Re-verify the installer manifest immediately before execution.
+5. Only then add destructive writes behind explicit typed confirmation.
+6. Continue Windows/Linux media engines and multiboot later.
 
 ## Build
 
