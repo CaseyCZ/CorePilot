@@ -920,9 +920,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityItems.Clear();
         _compatibilityReport = null;
         _automationProfile = null;
-        CompatibilitySummary = "Press Verify to check this system against the detected hardware.";
-        ResetCompatibilityDecision("Press Verify to evaluate this system.");
-        PlanStatus = "Press Verify. USB is not required for compatibility checking.";
+        _autoResolution = null;
+        _preparationResult = null;
+        _preparationFailure = null;
+        _preparationResult = null;
+        _preparationFailure = null;
+        CompatibilitySummary = "Press Verify to prepare this system for the detected hardware.";
+        ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
+        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "System selection changed; verification required.");
@@ -935,9 +940,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityItems.Clear();
         _compatibilityReport = null;
         _automationProfile = null;
-        CompatibilitySummary = "Press Verify to check this version against the detected hardware.";
-        ResetCompatibilityDecision("Press Verify to evaluate this version.");
-        PlanStatus = "Press Verify. USB is not required for compatibility checking.";
+        _autoResolution = null;
+        _preparationResult = null;
+        _preparationFailure = null;
+        CompatibilitySummary = "Press Verify to prepare this version for the detected hardware.";
+        ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
+        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "Version selection changed; verification required.");
@@ -1005,7 +1013,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetCompatibilityDecision(string message)
     {
-        CompatibilityVerdict = "NOT CHECKED";
+        CompatibilityVerdict = "NOT PREPARED";
         CompatibilityInstallPath = message;
         CompatibilityRequirements =
             "Required fixes, patches, drivers and boot arguments will appear here after Verify.";
@@ -1123,6 +1131,245 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return result.Summary +
                Environment.NewLine +
                string.Join(Environment.NewLine, lines);
+    }
+
+    private async Task PrepareMacOSPayloadAsync(SystemVariant target)
+    {
+        if (_deepScanExport is null ||
+            _automationProfile is not { CanBuildEfi: true, RequiresReview: false })
+            throw new InvalidOperationException(
+                "Exact hardware data and a fully automatic macOS profile are required before preparing the installer.");
+
+        ActivityLog.Progress(
+            "Preparation",
+            "Staging the current verified OpenCore automation engine…");
+
+        _opCoreStage = await _opCoreStager.StageAsync(
+            _deepScanExport.ReportPath,
+            _deepScanExport.AcpiDirectory,
+            _automationProfile,
+            new Progress<string>(message =>
+                ActivityLog.Progress("Workspace", message)));
+
+        AdvanceWorkflow(
+            MacOSWorkflowPhase.WorkspaceStaged,
+            $"OpenCore workspace staged for {target.DisplayName}.");
+
+        ActivityLog.Progress(
+            "Preparation",
+            "Building and validating the hardware-specific EFI…");
+
+        _lastEfiBuild = await _opCoreBuilder.BuildAsync(
+            _opCoreStage,
+            _automationProfile,
+            new Progress<string>(message =>
+                ActivityLog.Progress("EFI Build", message)));
+
+        if (_lastOnlineSourceSnapshot is null)
+            throw new InvalidOperationException(
+                "Live source snapshot is required before auditing the prepared EFI.");
+
+        var componentAudit = await _componentAuditService.AuditAsync(
+            _opCoreStage,
+            _lastOnlineSourceSnapshot);
+
+        ActivityLog.Info(
+            "Supply chain",
+            $"{componentAudit.ComponentCount} downloaded OpenCore/kext component(s) passed source, SHA-256 and manifest checks.");
+
+        AdvanceWorkflow(
+            MacOSWorkflowPhase.EfiValidated,
+            "EFI passed structural validation and downloaded-component integrity audit.");
+
+        ActivityLog.Progress(
+            "Preparation",
+            "Downloading and verifying Apple Recovery…");
+
+        _lastRecovery = await _appleRecoveryDownloader.DownloadAsync(
+            _opCoreStage,
+            _automationProfile,
+            _lastEfiBuild,
+            new Progress<string>(message =>
+                ActivityLog.Progress("Recovery", message)));
+
+        AdvanceWorkflow(
+            MacOSWorkflowPhase.RecoveryVerified,
+            "Apple Recovery downloaded and verified.");
+
+        _lastInstallerManifest = await _installerManifestService.CreateAsync(
+            _opCoreStage,
+            _automationProfile,
+            _lastEfiBuild,
+            _lastRecovery);
+
+        var manifestVerification = await _installerManifestService.VerifyAsync(
+            _lastInstallerManifest.ManifestPath,
+            _opCoreStage.WorkspaceDirectory);
+
+        if (!manifestVerification.Success)
+            throw new InvalidOperationException(
+                "Prepared installer manifest verification failed: " +
+                string.Join("; ", manifestVerification.Errors.Take(4)));
+
+        AdvanceWorkflow(
+            MacOSWorkflowPhase.ManifestVerified,
+            "Prepared installer payload and manifest verified.");
+
+        ActivityLog.Progress(
+            "Preparation",
+            "macOS payload is prepared. USB writing can now remain a separate destructive step.");
+    }
+
+    private InstallationPreparationResult BuildPreparationResult(
+        ISystemModule system,
+        SystemVariant target)
+    {
+        if (_compatibilityReport is null)
+            throw new InvalidOperationException(
+                "Compatibility analysis must run before installation preparation.");
+
+        if (system.Id != "macos")
+        {
+            var generic = InstallationPreparationBuilder.FromGenericCompatibility(
+                system.Id,
+                target,
+                _compatibilityReport,
+                _lastOnlineSourceSnapshot,
+                mediaWriterAvailable: false);
+
+            if (!string.IsNullOrWhiteSpace(_preparationFailure))
+            {
+                return generic with
+                {
+                    Items = generic.Items.Concat(new[]
+                    {
+                        new PreparationItem(
+                            PreparationItemState.Unresolved,
+                            "Preparation",
+                            "Automatic preparation failed",
+                            _preparationFailure)
+                    }).ToArray(),
+                    ConfigurationPrepared = false
+                };
+            }
+
+            return generic;
+        }
+
+        var items = new List<PreparationItem>();
+        if (_autoResolution is not null)
+        {
+            foreach (var item in _autoResolution.Items)
+            {
+                items.Add(new(
+                    item.State switch
+                    {
+                        MacOSAutoResolutionState.Prepared =>
+                            PreparationItemState.ResolvedAutomatically,
+                        MacOSAutoResolutionState.SourceReady =>
+                            PreparationItemState.SourceResolved,
+                        MacOSAutoResolutionState.ManualAction =>
+                            PreparationItemState.ManualActionRequired,
+                        _ => PreparationItemState.Unresolved
+                    },
+                    item.Category,
+                    item.Requirement,
+                    item.Resolution,
+                    item.SourceId));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_preparationFailure))
+        {
+            items.Add(new(
+                PreparationItemState.Unresolved,
+                "Preparation",
+                "Automatic preparation failed",
+                _preparationFailure));
+        }
+
+        var genuineApple =
+            _hardwareReport is not null &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
+
+        var payloadPrepared =
+            _opCoreStage is not null &&
+            _lastEfiBuild is not null &&
+            _lastRecovery is not null &&
+            _lastInstallerManifest is not null;
+
+        if (payloadPrepared)
+        {
+            items.Add(new(
+                PreparationItemState.ResolvedAutomatically,
+                "Installer payload",
+                "Boot environment and recovery payload",
+                "Hardware-specific EFI, Apple Recovery and the final integrity manifest were prepared and verified."));
+        }
+
+        var autoReady = _autoResolution?.AutomaticConfigurationReady == true;
+        var configurationPrepared = genuineApple
+            ? autoReady
+            : autoReady && payloadPrepared;
+
+        var writerAvailable =
+            !genuineApple &&
+            payloadPrepared &&
+            _automationProfile is { CanBuildEfi: true, RequiresReview: false };
+
+        return new(
+            system.Id,
+            target.Id,
+            items,
+            CompatibilityEvaluated: true,
+            SearchCompleted: _lastOnlineSourceSnapshot is not null,
+            ConfigurationPrepared: configurationPrepared,
+            MediaWriterAvailable: writerAvailable);
+    }
+
+    private void ApplyPreparationResultToUi(
+        ISystemModule system,
+        SystemVariant target)
+    {
+        if (_preparationResult is null)
+            return;
+
+        CompatibilityVerdict = _preparationResult.Verdict;
+
+        CompatibilityInstallPath = _preparationResult.ReadyToWrite
+            ? $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for this computer."
+            : _preparationResult.SystemPrepared
+                ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
+                : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
+
+        if (system.Id != "macos")
+        {
+            CompatibilityAutoConfiguration = FormatPreparationResult(
+                _preparationResult);
+        }
+        else if (_autoResolution is not null)
+        {
+            CompatibilityAutoConfiguration =
+                FormatAutoResolution(_autoResolution) +
+                Environment.NewLine +
+                (_preparationResult.ReadyToWrite
+                    ? "PREPARED · Boot payload and integrity manifest are ready for USB writing."
+                    : "");
+        }
+    }
+
+    private static string FormatPreparationResult(
+        InstallationPreparationResult result)
+    {
+        if (result.Items.Count == 0)
+            return result.Summary;
+
+        return result.Summary +
+               Environment.NewLine +
+               string.Join(
+                   Environment.NewLine,
+                   result.Items.Select(x =>
+                       $"{x.StateText} · {x.Category} · {x.Problem} — {x.Resolution}"));
     }
 
     private void UpdateCompatibilityDecision(
