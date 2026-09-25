@@ -13,6 +13,9 @@ public sealed class MacOSCompatibilityAnalyzer
 
     public CompatibilityReport Analyze(HardwareReport hardware, SystemVariant target)
     {
+        if (IsGenuineAppleMac(hardware))
+            return AnalyzeGenuineAppleMac(hardware, target);
+
         var findings = new List<CompatibilityFinding>();
         var kexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -36,6 +39,116 @@ public sealed class MacOSCompatibilityAnalyzer
             kexts.OrderBy(x => x).ToArray(),
             patches.OrderBy(x => x).ToArray(),
             bootArgs.OrderBy(x => x).ToArray());
+    }
+
+
+    public static bool IsGenuineAppleMac(HardwareReport hardware)
+    {
+        if (hardware.Manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return Regex.IsMatch(
+            hardware.Model,
+            @"^(MacBook(Pro|Air)?|Macmini|MacPro|MacStudio|iMac)\d+[,\.]\d+$",
+            RegexOptions.IgnoreCase);
+    }
+
+    private static CompatibilityReport AnalyzeGenuineAppleMac(
+        HardwareReport hardware,
+        SystemVariant target)
+    {
+        var findings = new List<CompatibilityFinding>
+        {
+            new(
+                CompatibilityState.Supported,
+                "System",
+                "Genuine Apple Mac detected",
+                $"{hardware.Manufacturer} {hardware.Model}".Trim(),
+                "CorePilot uses the native Apple-Mac compatibility path instead of Hackintosh/OpenCore hardware rules.")
+        };
+
+        if (Is2017MacBookPro(hardware))
+        {
+            if (target.Id == "ventura-13")
+            {
+                findings.Add(new(
+                    CompatibilityState.Supported,
+                    "macOS",
+                    "macOS Ventura 13 is officially supported",
+                    $"{hardware.Model} is a 2017 MacBook Pro generation.",
+                    "Use the native Apple installer path. OpenCore and third-party kexts are not required for Ventura on this Mac."));
+
+                findings.Add(new(
+                    CompatibilityState.Supported,
+                    "CPU",
+                    "Intel Kaby Lake platform is supported by Ventura on this Mac",
+                    hardware.Cpu));
+
+                var physicalGpus = hardware.DevicesByCategory("GPU")
+                    .Where(x => !IsVirtualDisplayAdapter(x))
+                    .ToArray();
+
+                foreach (var gpu in physicalGpus)
+                {
+                    findings.Add(new(
+                        CompatibilityState.Supported,
+                        "GPU",
+                        $"{gpu.Name} is part of the supported Apple platform",
+                        string.IsNullOrWhiteSpace(gpu.PnpDeviceId)
+                            ? "Native Apple graphics path."
+                            : gpu.PnpDeviceId));
+                }
+
+                return new(
+                    target.Id,
+                    findings,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<string>());
+            }
+
+            findings.Add(new(
+                CompatibilityState.Blocked,
+                "macOS",
+                $"{target.DisplayName} is not natively supported on a 2017 MacBook Pro",
+                "Apple lists macOS Ventura as the last natively compatible macOS for the 2017 MacBook Pro generation.",
+                "A newer macOS requires an OpenCore Legacy Patcher path, which CorePilot has not enabled in the simple native-Mac writer yet."));
+
+            return new(
+                target.Id,
+                findings,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        findings.Add(new(
+            CompatibilityState.Unknown,
+            "System",
+            "Apple Mac model needs exact native-support mapping",
+            hardware.Model,
+            "CorePilot detected genuine Apple hardware but this model is not yet in the native support table."));
+
+        return new(
+            target.Id,
+            findings,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>());
+    }
+
+    private static bool Is2017MacBookPro(HardwareReport hardware)
+    {
+        if (Regex.IsMatch(
+                hardware.Model,
+                @"^MacBookPro14,[123]$",
+                RegexOptions.IgnoreCase))
+            return true;
+
+        return IsGenuineAppleMac(hardware)
+               && hardware.FormFactor.Equals("Laptop", StringComparison.OrdinalIgnoreCase)
+               && ResolveIntelCoreGeneration(hardware.Cpu) == 7
+               && hardware.DevicesByCategory("GPU").Any(IsIntelKabyLakeGraphics);
     }
 
     private static void AnalyzeFirmware(HardwareReport hardware, ICollection<CompatibilityFinding> findings)

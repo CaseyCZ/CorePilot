@@ -15,7 +15,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · v0.17 guided workflow actions"
+                <TextBlock Text="Universal OS installer · simple two-step workflow"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -66,109 +66,83 @@
                     BorderThickness="1" CornerRadius="12" Padding="20">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Create boot media" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                        <TextBlock Text="CorePilot checks the selected target against detected hardware before media creation."
-                                   TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,20"/>
+                        <TextBlock Text="Create boot media"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <TextBlock Text="1. Verify compatibility without a USB disk.  2. Connect a USB disk only when you are ready to write."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,6,0,20"/>
 
-                        <TextBlock Text="System" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                        <ComboBox x:Name="SystemCombo" ItemsSource="{Binding Systems}" DisplayMemberPath="DisplayName"
+                        <TextBlock Text="System"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="SystemCombo"
+                                  ItemsSource="{Binding Systems}"
+                                  DisplayMemberPath="DisplayName"
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="SystemCombo_OnSelectionChanged"/>
 
-                        <TextBlock Text="Version / distribution" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                        <ComboBox x:Name="VariantCombo" ItemsSource="{Binding Variants}" DisplayMemberPath="DisplayName"
+                        <TextBlock Text="Version"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="VariantCombo"
+                                  ItemsSource="{Binding Variants}"
+                                  DisplayMemberPath="DisplayName"
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="VariantCombo_OnSelectionChanged"/>
 
-                        <TextBlock Text="USB drive" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                        <ComboBox x:Name="UsbCombo" ItemsSource="{Binding UsbDrives}" DisplayMemberPath="DisplayName"
-                                  IsEnabled="{Binding CanChangeInputs}"
-                                  SelectionChanged="UsbCombo_OnSelectionChanged"/>
-
-                        <Border Background="#12151A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="8" Padding="10" Margin="0,0,0,10">
-                            <TextBlock Text="{Binding UsbSafetyStatus}" TextWrapping="Wrap"
-                                       Foreground="{StaticResource MutedBrush}"/>
-                        </Border>
+                        <Button Content="Verify"
+                                Click="Verify_OnClick"
+                                IsEnabled="{Binding CanVerify}"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Margin="0,12,0,10"/>
 
                         <Border Background="#12151A"
                                 BorderBrush="{StaticResource BorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
-                                Padding="10"
-                                Margin="0,6,0,10">
-                            <TextBlock Text="{Binding NextActionText}"
+                                Padding="12"
+                                Margin="0,0,0,18">
+                            <TextBlock Text="{Binding PlanStatus}"
                                        TextWrapping="Wrap"
-                                       FontWeight="SemiBold"
                                        Foreground="{StaticResource TextBrush}"/>
                         </Border>
 
-                        <WrapPanel Margin="0,6,0,0">
-                            <Button Content="Refresh drives"
-                                    Click="RefreshDrives_OnClick"
-                                    IsEnabled="{Binding CanRefreshDrives}"
-                                    ToolTip="{Binding RefreshDrivesToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Check USB safety"
-                                    Click="InspectUsb_OnClick"
-                                    IsEnabled="{Binding CanInspectUsb}"
-                                    ToolTip="{Binding InspectUsbToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Prepare plan"
-                                    Click="PreparePlan_OnClick"
-                                    IsEnabled="{Binding CanPreparePlan}"
-                                    ToolTip="{Binding PreparePlanToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Build EFI"
-                                    Click="BuildEfi_OnClick"
-                                    IsEnabled="{Binding CanBuildEfi}"
-                                    ToolTip="{Binding BuildEfiToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Download Recovery"
-                                    Click="DownloadRecovery_OnClick"
-                                    IsEnabled="{Binding CanDownloadRecovery}"
-                                    ToolTip="{Binding DownloadRecoveryToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Dry-run USB plan"
-                                    Click="CreateUsbDryRun_OnClick"
-                                    IsEnabled="{Binding CanCreateUsbDryRun}"
-                                    ToolTip="{Binding CreateUsbDryRunToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Execution preflight"
-                                    Click="RunExecutionPreflight_OnClick"
-                                    IsEnabled="{Binding CanRunPreflight}"
-                                    ToolTip="{Binding RunPreflightToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                        </WrapPanel>
+                        <TextBlock Text="USB drive · only needed for writing"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="UsbCombo"
+                                  ItemsSource="{Binding UsbDrives}"
+                                  DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
+                                  DropDownOpened="UsbCombo_OnDropDownOpened"
+                                  SelectionChanged="UsbCombo_OnSelectionChanged"/>
 
-                        <TextBlock Text="Typed confirmation" FontWeight="SemiBold" Margin="0,12,0,0" Foreground="{StaticResource TextBrush}"/>
+                        <TextBlock Text="{Binding UsbSafetyStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,4,0,10"/>
+
+                        <Button Content="Write to disk"
+                                Click="WriteToDisk_OnClick"
+                                IsEnabled="{Binding CanWriteToDisk}"
+                                ToolTip="{Binding WriteToDiskToolTip}"
+                                ToolTipService.ShowOnDisabled="True"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Margin="0,4,0,8"/>
+
+                        <TextBlock Text="Development safety: physical disk writing is still disabled. The current button performs the final USB safety/readiness check only."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"/>
+
                         <TextBox x:Name="ConfirmationTextBox"
-                                 MinWidth="300"
-                                 IsEnabled="{Binding CanConfirmTarget}"
-                                 ToolTip="{Binding ConfirmTargetToolTip}"
-                                 ToolTipService.ShowOnDisabled="True"/>
-                        <WrapPanel Margin="0,2,0,0">
-                            <Button Content="Confirm target"
-                                    Click="ConfirmTarget_OnClick"
-                                    IsEnabled="{Binding CanConfirmTarget}"
-                                    ToolTip="{Binding ConfirmTargetToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                            <Button Content="Simulate write"
-                                    Click="SimulateWrite_OnClick"
-                                    IsEnabled="{Binding CanSimulateWrite}"
-                                    ToolTip="{Binding SimulateWriteToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"/>
-                        </WrapPanel>
-
-                        <Border Background="#12151A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="8" Padding="12" Margin="0,14,0,0">
-                            <TextBlock Text="{Binding PlanStatus}" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"/>
-                        </Border>
-
-                        <StackPanel Margin="0,14,0,0" Visibility="{Binding MacPlanVisibility}">
-                            <TextBlock Text="macOS plan" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="{StaticResource TextBrush}"/>
-                            <TextBlock Text="{Binding MacPlanDetails}" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"/>
-                        </StackPanel>
+                                 Visibility="Collapsed"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -188,22 +162,13 @@
                             <Grid Grid.Row="0">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Hardware scan" FontSize="20" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Fast local inventory + optional Hardware Sniffer deep export."
-                                               Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
+                                    <TextBlock Text="Hardware"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Hardware is scanned automatically when you press Verify."
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Margin="0,4,0,0"/>
                                 </StackPanel>
-                                <WrapPanel Grid.Column="1">
-                                    <Button Content="Scan hardware"
-                                            Click="ScanHardware_OnClick"
-                                            IsEnabled="{Binding CanScanHardware}"
-                                            ToolTip="{Binding ScanHardwareToolTip}"
-                                            ToolTipService.ShowOnDisabled="True"/>
-                                    <Button Content="Deep scan"
-                                            Click="DeepScan_OnClick"
-                                            IsEnabled="{Binding CanDeepScan}"
-                                            ToolTip="{Binding DeepScanToolTip}"
-                                            ToolTipService.ShowOnDisabled="True"/>
-                                </WrapPanel>
                             </Grid>
 
                             <Border Grid.Row="1" Background="#12151A" BorderBrush="{StaticResource BorderBrush}"
@@ -270,7 +235,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="CorePilot v0.17 preview · State-driven guided actions · Physical disk writing remains disabled."
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Physical disk writing remains disabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
