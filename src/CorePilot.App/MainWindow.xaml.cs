@@ -22,6 +22,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private readonly GenericCompatibilityAnalyzer _genericAnalyzer = new();
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
+    private readonly MacOSAutoResolutionService _macAutoResolver;
+    private readonly MacOSAutomationProfileStore _automationProfileStore = new();
     private readonly OpCoreSimplifyStager _opCoreStager = new();
     private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
     private readonly OpCoreDownloadedComponentAuditService _componentAuditService = new();
@@ -51,6 +53,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
+    private MacOSAutoResolutionResult? _autoResolution;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
 
@@ -62,6 +65,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _compatibilityVerdict = "NOT CHECKED";
     private string _compatibilityInstallPath = "Press Verify to determine whether the selected system is installable on this computer.";
     private string _compatibilityRequirements = "Required fixes, patches, drivers and boot arguments will appear here.";
+    private string _compatibilityAutoConfiguration = "Automatic configuration has not run yet.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
@@ -141,6 +145,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set { _compatibilityRequirements = value; OnPropertyChanged(); }
     }
 
+    public string CompatibilityAutoConfiguration
+    {
+        get => _compatibilityAutoConfiguration;
+        private set { _compatibilityAutoConfiguration = value; OnPropertyChanged(); }
+    }
+
     public string WorkflowStatus
     {
         get => _workflowStatus;
@@ -150,6 +160,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        _macAutoResolver = new MacOSAutoResolutionService(_onlineSources);
         DataContext = this;
         ActivityLog.Info("UI", "Main window initialized.");
         ActivityLog.PropertyChanged += ActivityLog_OnPropertyChanged;
@@ -230,6 +241,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         PlanStatus = $"Verifying {target.DisplayName} against this computer…";
         await ScanHardwareAsync();
 
+        if (module.Id == "macos" && _hardwareReport is not null)
+            await TryAutomaticMacResolutionAsync(target);
+
         if (_compatibilityReport is null)
         {
             PlanStatus = "Verification could not be completed. Open the Activity Log for details.";
@@ -241,13 +255,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastOnlineSourceSnapshot is not null &&
             _lastOnlineSourceSnapshot.CriticalFailures == 0;
 
+        var automaticConfigurationReady =
+            module.Id != "macos" ||
+            _autoResolution?.AutomaticConfigurationReady == true;
+
         _verificationCompleted =
             _compatibilityReport.CanProceed &&
-            onlineReady;
+            onlineReady &&
+            automaticConfigurationReady;
 
         RefreshActionAvailability();
 
-        if (_compatibilityReport.CanProceed && onlineReady)
+        if (_compatibilityReport.CanProceed &&
+            onlineReady &&
+            automaticConfigurationReady)
         {
             var nativeApple =
                 _hardwareReport is not null &&
@@ -256,19 +277,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var sourceSuffix =
                 $" Online sources: {_lastOnlineSourceSnapshot!.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.";
 
+            var autoSuffix = _autoResolution is null
+                ? ""
+                : $" {_autoResolution.Summary}.";
+
             PlanStatus = (nativeApple
                 ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
-                : $"Verified ✅ {_compatibilityReport.Summary}. USB was not required for this check.")
-                + sourceSuffix;
+                : $"Verified ✅ {_compatibilityReport.Summary}. Hardware-specific configuration was prepared automatically.")
+                + sourceSuffix
+                + autoSuffix;
 
             ActivityLog.Success("Verification", PlanStatus);
         }
-        else if (_compatibilityReport.CanProceed)
+        else if (_compatibilityReport.CanProceed && !onlineReady)
         {
             var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
             PlanStatus =
                 $"Compatibility passed, but writing is not ready: {failures} critical online source(s) were not refreshed live. " +
                 "Reconnect to the internet and run Verify again.";
+            ActivityLog.Warning("Verification", PlanStatus);
+        }
+        else if (_compatibilityReport.CanProceed)
+        {
+            PlanStatus =
+                $"Compatibility passed, but automatic configuration is not complete. " +
+                $"{_autoResolution?.Summary ?? "Review the Compatibility tab."}.";
             ActivityLog.Warning("Verification", PlanStatus);
         }
         else
@@ -920,6 +953,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             "System/version or hardware compatibility inputs changed.");
         _compatibilityReport = null;
         _automationProfile = null;
+        _autoResolution = null;
         _opCoreStage = null;
         _lastEfiBuild = null;
         _lastRecovery = null;
@@ -976,6 +1010,120 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityInstallPath = message;
         CompatibilityRequirements =
             "Required fixes, patches, drivers and boot arguments will appear here after Verify.";
+        CompatibilityAutoConfiguration =
+            "Automatic configuration has not run yet.";
+    }
+
+    private async Task TryAutomaticMacResolutionAsync(SystemVariant target)
+    {
+        if (_hardwareReport is null || _compatibilityReport is null)
+            return;
+
+        var genuineApple =
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
+
+        if (!genuineApple && _deepScanExport is null)
+        {
+            try
+            {
+                DeepScanStatus =
+                    "Verify is running the automatic Hardware Sniffer deep scan…";
+                ActivityLog.Progress(
+                    "Auto configuration",
+                    "Resolving exact ACPI/PCI hardware before choosing fixes, kexts and EFI settings…");
+
+                var progress = new Progress<string>(message =>
+                {
+                    DeepScanStatus = message;
+                    ActivityLog.Progress("Deep Scan", message);
+                });
+
+                _deepScanExport = await _hardwareSniffer.ExportAsync(progress);
+                _hardwareReport = await _hardwareSnifferParser.MergeAsync(
+                    _deepScanExport.ReportPath,
+                    _hardwareReport);
+
+                RefreshHardwareView();
+                _workflowStateMachine.Reset(
+                    "Automatic Verify deep scan refreshed hardware identity.");
+                AdvanceWorkflow(
+                    MacOSWorkflowPhase.DeepScanned,
+                    "Hardware Sniffer Report.json + ACPI imported automatically during Verify.");
+
+                RunCompatibilityAnalysis();
+            }
+            catch (Exception ex)
+            {
+                DeepScanStatus =
+                    $"Automatic Deep Scan could not complete: {ex.Message}";
+                ActivityLog.Info(
+                    "Auto configuration",
+                    "Deep Scan could not be completed automatically; unresolved hardware-dependent settings will remain blocked.");
+            }
+        }
+
+        if (_hardwareReport is null || _compatibilityReport is null)
+            return;
+
+        ActivityLog.Progress(
+            "Auto configuration",
+            "Finding current hardware-specific fixes, drivers, patches and settings…");
+
+        _autoResolution = await _macAutoResolver.ResolveAsync(
+            _hardwareReport,
+            target,
+            _compatibilityReport,
+            _automationProfile,
+            _lastOnlineSourceSnapshot,
+            _deepScanExport is not null);
+
+        if (_automationProfile is not null)
+        {
+            var profilePath =
+                await _automationProfileStore.SaveAsync(_automationProfile);
+
+            ActivityLog.Info(
+                "Auto configuration",
+                $"Hardware-specific macOS automation profile saved: {profilePath}");
+        }
+
+        CompatibilityAutoConfiguration =
+            FormatAutoResolution(_autoResolution);
+
+        if (_compatibilityReport.CanProceed)
+        {
+            if (_autoResolution.AutomaticConfigurationReady)
+                CompatibilityVerdict = "READY — AUTO-CONFIGURED";
+            else if (_autoResolution.UnresolvedCount > 0)
+                CompatibilityVerdict = "REVIEW REQUIRED";
+            else if (_autoResolution.ManualCount > 0)
+                CompatibilityVerdict = "MANUAL STEP REQUIRED";
+        }
+
+        ActivityLog.Progress(
+            "Auto configuration",
+            _autoResolution.Summary);
+    }
+
+    private static string FormatAutoResolution(
+        MacOSAutoResolutionResult result)
+    {
+        if (result.Items.Count == 0)
+            return result.Summary + Environment.NewLine +
+                   "No hardware-specific software changes were required.";
+
+        var lines = result.Items.Select(x =>
+        {
+            var version = string.IsNullOrWhiteSpace(x.SourceVersion)
+                ? ""
+                : $" · {x.SourceVersion}";
+
+            return $"{x.StateText} · {x.Category} · {x.Requirement}{version} — {x.Resolution}";
+        });
+
+        return result.Summary +
+               Environment.NewLine +
+               string.Join(Environment.NewLine, lines);
     }
 
     private void UpdateCompatibilityDecision(
