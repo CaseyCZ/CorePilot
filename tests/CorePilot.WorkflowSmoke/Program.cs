@@ -899,6 +899,22 @@ Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Critical,
     "execution-critical OpCore Simplify trust policy must stay pinned to the expected upstream");
 
+var openCoreSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "macos.opencore");
+Assert(openCoreSource.Repository == "acidanthera/OpenCorePkg" &&
+       openCoreSource.Strategy == "githubRelease" &&
+       openCoreSource.Critical,
+    "critical OpenCorePkg trust policy must stay pinned to the expected upstream");
+
+var pinnedFidoSource = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.fido");
+Assert(pinnedFidoSource.Repository == "pbatard/Fido" &&
+       pinnedFidoSource.Branch == "master" &&
+       pinnedFidoSource.Strategy == "githubBranchHead" &&
+       pinnedFidoSource.RequireVerifiedCommit &&
+       pinnedFidoSource.Critical,
+    "execution-critical Fido trust policy must stay pinned to the expected upstream");
+
 Console.WriteLine("CorePilot execution-critical source trust smoke test OK");
 
 
