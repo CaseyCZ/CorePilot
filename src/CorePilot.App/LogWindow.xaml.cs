@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 
 namespace CorePilot.App;
