@@ -621,26 +621,63 @@ public sealed class OnlineSourceCatalogService
     private static void ValidateExecutionCriticalDefinitions(
         OnlineSourceCatalogDocument catalog)
     {
-        var source = catalog.Sources.SingleOrDefault(x =>
+        var opCoreSimplify = catalog.Sources.SingleOrDefault(x =>
             x.Id.Equals(
                 "macos.opcore-simplify",
                 StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidDataException(
                 "Execution-critical OpCore Simplify source is missing.");
 
-        if (source.Repository is null ||
-            !source.Repository.Equals(
+        if (opCoreSimplify.Repository is null ||
+            !opCoreSimplify.Repository.Equals(
                 "lzhoang2801/OpCore-Simplify",
                 StringComparison.OrdinalIgnoreCase) ||
-            source.Branch is null ||
-            !source.Branch.Equals(
+            opCoreSimplify.Branch is null ||
+            !opCoreSimplify.Branch.Equals(
                 "main",
                 StringComparison.OrdinalIgnoreCase) ||
-            source.Strategy != "githubBranchHead" ||
-            !source.RequireVerifiedCommit ||
-            !source.Critical)
+            opCoreSimplify.Strategy != "githubBranchHead" ||
+            !opCoreSimplify.RequireVerifiedCommit ||
+            !opCoreSimplify.Critical)
             throw new InvalidDataException(
                 "Execution-critical OpCore Simplify source definition was modified outside the trusted policy.");
+
+        var openCore = catalog.Sources.SingleOrDefault(x =>
+            x.Id.Equals(
+                "macos.opencore",
+                StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException(
+                "Critical OpenCorePkg source is missing.");
+
+        if (openCore.Repository is null ||
+            !openCore.Repository.Equals(
+                "acidanthera/OpenCorePkg",
+                StringComparison.OrdinalIgnoreCase) ||
+            openCore.Strategy != "githubRelease" ||
+            !openCore.Critical)
+            throw new InvalidDataException(
+                "Critical OpenCorePkg source definition was modified outside the trusted policy.");
+
+        var fido = catalog.Sources.SingleOrDefault(x =>
+            x.Id.Equals(
+                "windows.fido",
+                StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException(
+                "Execution-critical Fido source is missing.");
+
+        if (fido.Repository is null ||
+            !fido.Repository.Equals(
+                "pbatard/Fido",
+                StringComparison.OrdinalIgnoreCase) ||
+            fido.Branch is null ||
+            !fido.Branch.Equals(
+                "master",
+                StringComparison.OrdinalIgnoreCase) ||
+            fido.Strategy != "githubBranchHead" ||
+            !fido.RequireVerifiedCommit ||
+            !fido.Critical)
+            throw new InvalidDataException(
+                "Execution-critical Fido source definition was modified outside the trusted policy.");
     }
 
     private static OnlineSourceCatalogDocument ParseCatalog(string json)

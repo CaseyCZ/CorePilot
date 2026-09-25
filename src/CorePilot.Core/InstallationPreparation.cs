@@ -1,5 +1,73 @@
 namespace CorePilot.Core;
 
+public enum InstallationTargetMode
+{
+    ThisComputer,
+    OtherComputer
+}
+
+
+public static class InstallationTargetCompatibilityBuilder
+{
+    public static CompatibilityReport ForOtherComputer(
+        string systemId,
+        string systemDisplayName,
+        SystemVariant target)
+    {
+        if (systemId.Equals("macos", StringComparison.OrdinalIgnoreCase))
+        {
+            return new(
+                target.Id,
+                new[]
+                {
+                    new CompatibilityFinding(
+                        CompatibilityState.Blocked,
+                        "Target hardware",
+                        "macOS preparation requires the target computer's hardware",
+                        "CorePilot cannot safely generate EFI, ACPI, SMBIOS, GPU, Wi-Fi or other hardware-specific macOS settings from the computer that is only creating the USB.",
+                        "Use This computer on the target Mac/PC, or add a target hardware report when that import path is available.")
+                },
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        var findings = new List<CompatibilityFinding>
+        {
+            new(
+                CompatibilityState.Supported,
+                "Target mode",
+                "Universal installer media for another computer",
+                "The hardware of this PC is intentionally not used as a compatibility gate.")
+        };
+
+        if (systemId.Equals("windows", StringComparison.OrdinalIgnoreCase) &&
+            target.Id == "windows-11")
+        {
+            findings.Add(new(
+                CompatibilityState.Supported,
+                "Windows media mode",
+                "Standard Windows 11 media for another computer",
+                "CorePilot prepares the installation media without asserting the unknown target PC's TPM, CPU, Secure Boot or firmware compatibility."));
+        }
+        else
+        {
+            findings.Add(new(
+                CompatibilityState.Supported,
+                "Installer media",
+                $"{systemDisplayName} media can be prepared independently of this PC",
+                "Verify validates the installer image and writer path without claiming compatibility for unknown target hardware."));
+        }
+
+        return new(
+            target.Id,
+            findings,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>());
+    }
+}
+
 public enum PreparationItemState
 {
     Detected,

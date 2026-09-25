@@ -61,10 +61,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private MacOSAutoResolutionResult? _autoResolution;
     private InstallationPreparationResult? _preparationResult;
     private PreparedIsoImage? _preparedIso;
+    private WindowsMediaOptions? _preparedWindowsMediaOptions;
     private GenericUsbWriteResult? _lastGenericUsbWrite;
     private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
+    private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
+    private bool _windowsCompatibilityMedia;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -76,6 +79,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _compatibilityRequirements = "Required fixes, patches, drivers and boot arguments will appear here.";
     private string _compatibilityAutoConfiguration = "Automatic configuration has not run yet.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
+    private string _targetModeStatus = "This computer · Verify uses the hardware detected on this PC.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
     public ObservableCollection<SystemVariant> Variants { get; } = [];
@@ -96,7 +100,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _preparationResult is null
             ? "Run Verify first. CorePilot must scan the hardware, search for solutions, configure the target and validate the result."
             : _preparationResult.ReadyToWrite
-                ? "The installation is prepared and validated for this computer. Write the prepared system to the selected USB."
+                ? "The selected installation target is prepared and validated. Write the prepared system to the selected USB."
                 : _preparationResult.SystemPrepared
                     ? "The system configuration is prepared, but a guarded physical writer for this installation path is not available yet."
                     : _preparationResult.ManualCount > 0
@@ -163,6 +167,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set { _workflowStatus = value; OnPropertyChanged(); }
     }
 
+    public string TargetModeStatus
+    {
+        get => _targetModeStatus;
+        private set { _targetModeStatus = value; OnPropertyChanged(); }
+    }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -187,10 +197,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Systems.Add(new LinuxModule());
 
         SystemCombo.SelectedIndex = 0;
+        UpdateTargetModeUi();
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
-            PlanStatus = "Choose a system and version, then press Verify. CorePilot will scan, search for solutions, configure and validate automatically.";
+            PlanStatus = "Choose a system, version and target computer, then press Verify. CorePilot will prepare and validate the selected installation path automatically.";
             UsbSafetyStatus = "USB is optional while preparing the system. Connect it when CorePilot reports READY TO WRITE.";
         };
     }
@@ -207,10 +218,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _verificationCompleted = false;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
+
+        if (_targetMode == InstallationTargetMode.OtherComputer &&
+            module.Id == "macos")
+        {
+            PrepareCompatibilityForOtherComputer(module, target);
+            _preparationResult = BuildPreparationResult(module, target);
+            _verificationCompleted = true;
+            ApplyPreparationResultToUi(module, target);
+            RefreshActionAvailability();
+
+            PlanStatus =
+                "TARGET HARDWARE REQUIRED · macOS preparation is hardware-specific. " +
+                "Run CorePilot on the target Mac/PC in This computer mode, or use a future target-hardware import path.";
+            ActivityLog.Warning("Preparation", PlanStatus);
+            return;
+        }
 
         try
         {
@@ -267,10 +295,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Online source refresh could not complete: {ex.Message}");
         }
 
-        PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
-        await ScanHardwareAsync();
+        if (_targetMode == InstallationTargetMode.ThisComputer)
+        {
+            PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
+            await ScanHardwareAsync();
 
-        if (module.Id == "macos" && _hardwareReport is not null)
+            if (module.Id == "windows" && target.Id == "windows-11")
+                ApplyAutomaticWindows11CompatibilityRemediation();
+        }
+        else
+        {
+            PlanStatus = $"Preparing {target.DisplayName} for another computer without using this PC's hardware as a compatibility gate…";
+            PrepareCompatibilityForOtherComputer(module, target);
+        }
+
+        if (module.Id == "macos" &&
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _hardwareReport is not null)
         {
             try
             {
@@ -310,13 +351,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_compatibilityReport is null)
         {
             PlanStatus = "Verification could not be completed. Open the Activity Log for details.";
+            ActivityLog.Warning("Verification", PlanStatus);
             RefreshActionAvailability();
             return;
         }
 
+        var relevantCriticalFailures =
+            CountRelevantCriticalSourceFailures(module, target);
         var onlineReady =
             _lastOnlineSourceSnapshot is not null &&
-            _lastOnlineSourceSnapshot.CriticalFailures == 0;
+            relevantCriticalFailures == 0;
 
         _preparationResult = BuildPreparationResult(module, target);
         _verificationCompleted = true;
@@ -340,7 +384,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!onlineReady)
         {
-            var failures = _lastOnlineSourceSnapshot?.CriticalFailures ?? 1;
+            var failures = relevantCriticalFailures;
             PlanStatus =
                 $"NOT READY · {failures} critical online source(s) could not be refreshed live. " +
                 "CorePilot will not prepare writable media from stale critical data.";
@@ -348,15 +392,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (_preparationResult.ReadyToWrite)
         {
-            PlanStatus =
-                $"READY TO WRITE ✅ {target.DisplayName} is prepared for this computer. " +
-                $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
-            ActivityLog.Success("Preparation", PlanStatus);
+            var compatibilityWarnings =
+                _targetMode == InstallationTargetMode.ThisComputer &&
+                _compatibilityReport.Findings.Any(x =>
+                    x.State is CompatibilityState.Warning or CompatibilityState.Unknown);
+
+            PlanStatus = compatibilityWarnings
+                ? $"READY TO WRITE ⚠ {target.DisplayName} installer media is prepared for {TargetComputerLabel}, but compatibility warnings remain. " +
+                  $"{_preparationResult.Summary}. Review Preparation before writing."
+                : $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
+                  $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
+
+            if (compatibilityWarnings)
+                ActivityLog.Warning("Preparation", PlanStatus);
+            else
+                ActivityLog.Success("Preparation", PlanStatus);
         }
         else if (_preparationResult.SystemPrepared)
         {
             PlanStatus =
-                $"SYSTEM PREPARED ✅ {target.DisplayName} has a validated installation path for this computer, " +
+                $"SYSTEM PREPARED ✅ {target.DisplayName} has a validated installation path for {TargetComputerLabel}, " +
                 "but this path does not yet have a guarded physical writer. " +
                 $"{_preparationResult.Summary}.";
             ActivityLog.Warning("Preparation", PlanStatus);
@@ -368,6 +423,40 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"{_preparationResult.Summary}. Open Preparation to see what remains unresolved.";
             ActivityLog.Warning("Preparation", PlanStatus);
         }
+    }
+
+    private int CountRelevantCriticalSourceFailures(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        if (_lastOnlineSourceSnapshot is null)
+            return 1;
+
+        if (module.Id == "macos" &&
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _hardwareReport is not null &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
+        {
+            var requiredIds = new HashSet<string>(
+                new[]
+                {
+                    "macos.apple-download-install",
+                    "macos.apple-version-index"
+                },
+                StringComparer.OrdinalIgnoreCase);
+
+            return requiredIds.Count(id =>
+            {
+                var source = _lastOnlineSourceSnapshot.Sources.FirstOrDefault(x =>
+                    x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+                return source is null ||
+                       !source.Success ||
+                       !source.Live;
+            });
+        }
+
+        return _lastOnlineSourceSnapshot.CriticalFailures;
     }
 
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
@@ -726,6 +815,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _workflowStateMachine.Current,
                     selectedSystem,
                     selectedVariant,
+                    _targetMode.ToString(),
+                    selectedSystem == "Windows"
+                        ? _preparedWindowsMediaOptions?.ModeText
+                        : null,
                     _hardwareReport,
                     _compatibilityReport,
                     _automationProfile,
@@ -897,6 +990,264 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private string TargetComputerLabel =>
+        _targetMode == InstallationTargetMode.ThisComputer
+            ? "this computer"
+            : "another computer";
+
+    private WindowsMediaOptions CurrentWindowsMediaOptions =>
+        SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
+        VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" } &&
+        _windowsCompatibilityMedia
+            ? WindowsMediaOptions.Compatibility
+            : WindowsMediaOptions.Standard;
+
+    private void ThisComputer_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_targetMode == InstallationTargetMode.ThisComputer)
+            return;
+
+        _targetMode = InstallationTargetMode.ThisComputer;
+        _windowsCompatibilityMedia = false;
+        ResetPreparationForTargetModeChange(
+            "Target changed to this computer; verification is required.");
+        UpdateTargetModeUi();
+    }
+
+    private void OtherComputer_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_targetMode == InstallationTargetMode.OtherComputer)
+            return;
+
+        _targetMode = InstallationTargetMode.OtherComputer;
+        _windowsCompatibilityMedia = false;
+        ResetPreparationForTargetModeChange(
+            "Target changed to another computer; local hardware compatibility is no longer used.");
+        UpdateTargetModeUi();
+    }
+
+    private void ResetPreparationForTargetModeChange(string reason)
+    {
+        _verificationCompleted = false;
+        CompatibilityItems.Clear();
+        PreparationItems.Clear();
+        _compatibilityReport = null;
+        _automationProfile = null;
+        _autoResolution = null;
+        _preparationResult = null;
+        _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
+        _lastGenericUsbWrite = null;
+        _preparationFailure = null;
+        _lastOnlineSourceSnapshot = null;
+        _hardwareReport = null;
+        _deepScanExport = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        HardwareItems.Clear();
+
+        if (_targetMode == InstallationTargetMode.OtherComputer)
+        {
+            ScanStatus = "Other computer · target hardware not scanned";
+            DeepScanStatus =
+                "Universal Windows/Linux media preparation does not use this PC's hardware. macOS requires target hardware.";
+        }
+        else
+        {
+            ScanStatus = "Not scanned";
+            DeepScanStatus =
+                "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
+        }
+
+        _workflowStateMachine.Reset(reason);
+        UpdateWorkflowStatus();
+        ResetCompatibilityDecision("Press Verify to prepare the selected target mode.");
+        PlanStatus = reason;
+        RefreshActionAvailability();
+    }
+
+    private void UpdateTargetModeUi()
+    {
+        var thisComputerSelected =
+            _targetMode == InstallationTargetMode.ThisComputer;
+
+        SetSegmentButtonState(ThisComputerButton, thisComputerSelected);
+        SetSegmentButtonState(OtherComputerButton, !thisComputerSelected);
+
+        if (thisComputerSelected)
+        {
+            TargetModeStatus =
+                "This computer · Verify scans this PC and may automatically resolve supported compatibility issues for the selected system.";
+            return;
+        }
+
+        TargetModeStatus =
+            SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
+                ? "Other computer · macOS needs the target computer's hardware before CorePilot can safely build a hardware-specific installer."
+                : "Other computer · Windows/Linux media is prepared without using this PC's TPM, CPU, Secure Boot or firmware state as a compatibility gate.";
+    }
+
+    private void SetSegmentButtonState(Button button, bool selected)
+    {
+        button.SetResourceReference(
+            BackgroundProperty,
+            selected ? "AccentBrush" : "PanelBrush");
+        button.SetResourceReference(
+            BorderBrushProperty,
+            selected ? "AccentBrush" : "BorderBrush");
+        button.SetResourceReference(
+            ForegroundProperty,
+            selected ? "TextBrush" : "MutedBrush");
+    }
+
+    private void PrepareCompatibilityForOtherComputer(
+        ISystemModule module,
+        SystemVariant target)
+    {
+        CompatibilityItems.Clear();
+        PreparationItems.Clear();
+        _hardwareReport = null;
+        _deepScanExport = null;
+        _automationProfile = null;
+        _autoResolution = null;
+
+        _compatibilityReport =
+            InstallationTargetCompatibilityBuilder.ForOtherComputer(
+                module.Id,
+                module.DisplayName,
+                target);
+
+        foreach (var finding in _compatibilityReport.Findings)
+            CompatibilityItems.Add(finding);
+
+        CompatibilitySummary = _compatibilityReport.Summary;
+        ScanStatus = "Other computer · target hardware not scanned";
+        DeepScanStatus =
+            module.Id == "macos"
+                ? "macOS automatic preparation needs target hardware and is blocked in Other computer mode."
+                : "Target hardware scan is intentionally skipped for universal Windows/Linux media.";
+        UpdateCompatibilityDecisionWithoutHardware(module, target);
+    }
+
+    private void ApplyAutomaticWindows11CompatibilityRemediation()
+    {
+        if (_compatibilityReport is null)
+            return;
+
+        var blockers = _compatibilityReport.Findings
+            .Where(x => x.State == CompatibilityState.Blocked)
+            .ToArray();
+
+        if (blockers.Length == 0)
+        {
+            _windowsCompatibilityMedia = false;
+            UpdateTargetModeUi();
+            return;
+        }
+
+        var bypassable = blockers.All(x =>
+            x.Component == "TPM");
+
+        if (!bypassable)
+        {
+            _windowsCompatibilityMedia = false;
+            UpdateTargetModeUi();
+            return;
+        }
+
+        _windowsCompatibilityMedia = true;
+
+        var remediated = _compatibilityReport.Findings
+            .Select(finding =>
+            {
+                if (finding.State == CompatibilityState.Blocked &&
+                    finding.Component == "TPM")
+                {
+                    return finding with
+                    {
+                        State = CompatibilityState.Supported,
+                        Title = finding.Title + " · resolved by Windows 11 compatibility media",
+                        Details = finding.Details +
+                                  " CorePilot will apply the documented Windows Setup compatibility path while keeping the normal UEFI media layout."
+                    };
+                }
+
+                if (finding.Component == "Secure Boot" &&
+                    finding.State != CompatibilityState.Supported)
+                {
+                    return finding with
+                    {
+                        State = CompatibilityState.Supported,
+                        Title = "Secure Boot requirement handled by Windows 11 compatibility media",
+                        Details = finding.Details +
+                                  " CorePilot will apply the documented Secure Boot installation bypass."
+                    };
+                }
+
+                return finding;
+            })
+            .ToList();
+
+        remediated.Add(new(
+            CompatibilityState.Supported,
+            "Installer media",
+            "Windows 11 compatibility media enabled automatically",
+            "CorePilot will keep the normal UEFI/FAT32 media layout and apply the implemented TPM/Secure Boot Windows Setup compatibility settings. Legacy BIOS is not treated as resolved. CPU-specific requirements are not falsely claimed as bypassed."));
+
+        remediated.Add(new(
+            CompatibilityState.Warning,
+            "Microsoft support",
+            "This Windows 11 path does not meet the standard minimum-requirements policy",
+            "Microsoft does not recommend Windows 11 on ineligible hardware and does not guarantee support or updates for devices that do not meet the minimum requirements.",
+            "Use this compatibility path only if you accept the unsupported-hardware risk.",
+            "https://support.microsoft.com/windows/experience/compatibility/windows-11-on-devices-that-don-t-meet-minimum-system-requirements"));
+
+        _compatibilityReport = _compatibilityReport with
+        {
+            Findings = remediated
+        };
+
+        CompatibilityItems.Clear();
+        foreach (var finding in _compatibilityReport.Findings)
+            CompatibilityItems.Add(finding);
+
+        CompatibilitySummary = _compatibilityReport.Summary;
+        UpdateCompatibilityDecision(
+            (ISystemModule)SystemCombo.SelectedItem,
+            (SystemVariant)VariantCombo.SelectedItem);
+        UpdateTargetModeUi();
+    }
+
+    private void UpdateCompatibilityDecisionWithoutHardware(
+        ISystemModule system,
+        SystemVariant target)
+    {
+        if (_compatibilityReport is null)
+            return;
+
+        CompatibilityVerdict = _compatibilityReport.CanProceed
+            ? "MEDIA PREPARATION AVAILABLE"
+            : "TARGET HARDWARE REQUIRED";
+
+        CompatibilityInstallPath = system.Id == "macos"
+            ? "Installation path: macOS needs the actual target hardware before CorePilot can build a safe hardware-specific configuration."
+            : $"Installation path: prepare the official {system.DisplayName} image for another computer without using this PC's hardware as a blocker.";
+
+        CompatibilityRequirements = _compatibilityReport.CanProceed
+            ? "Target hardware compatibility is not asserted in Other computer mode. CorePilot validates the installer media and writer path instead."
+            : string.Join(
+                Environment.NewLine,
+                _compatibilityReport.Findings
+                    .Where(x => x.State == CompatibilityState.Blocked)
+                    .Select(x => "• " + (x.SuggestedAction ?? x.Details)));
+    }
+
     private void SystemCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         Variants.Clear();
@@ -910,6 +1261,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (Variants.Count > 0)
             VariantCombo.SelectedIndex = 0;
 
+        _windowsCompatibilityMedia = false;
+        UpdateTargetModeUi();
+
         _verificationCompleted = false;
         CompatibilityItems.Clear();
         PreparationItems.Clear();
@@ -918,11 +1272,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
-        CompatibilitySummary = "Press Verify to prepare this system for the detected hardware.";
+        _lastOnlineSourceSnapshot = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify to prepare this system for the detected hardware."
+            : "Press Verify to prepare universal Windows/Linux media for another computer; macOS requires target hardware.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
-        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
+        PlanStatus = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify. CorePilot will scan this PC, search, configure and validate before USB writing."
+            : "Press Verify. CorePilot will prepare the selected system without using this PC's hardware as the target.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "System selection changed; verification required.");
@@ -931,6 +1299,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        _windowsCompatibilityMedia = false;
+        UpdateTargetModeUi();
         _verificationCompleted = false;
         CompatibilityItems.Clear();
         PreparationItems.Clear();
@@ -939,11 +1309,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
-        CompatibilitySummary = "Press Verify to prepare this version for the detected hardware.";
+        _lastOnlineSourceSnapshot = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify to prepare this version for the detected hardware."
+            : "Press Verify to prepare this version for another computer without using this PC as the compatibility target.";
         ResetCompatibilityDecision("Press Verify to search for and prepare an installation path.");
-        PlanStatus = "Press Verify. CorePilot will scan, search, configure and validate before USB writing.";
+        PlanStatus = _targetMode == InstallationTargetMode.ThisComputer
+            ? "Press Verify. CorePilot will scan this PC, search, configure and validate before USB writing."
+            : "Press Verify. CorePilot will prepare the selected version for another computer.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
             "Version selection changed; verification required.");
@@ -961,6 +1345,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _opCoreStage = null;
@@ -1255,6 +1640,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             throw new InvalidOperationException(
                 $"No ISO preparation service exists for {module.DisplayName}.");
 
+        _preparedWindowsMediaOptions =
+            module.Id == "windows"
+                ? CurrentWindowsMediaOptions
+                : null;
+
         ActivityLog.Info(
             "Installer image",
             $"Prepared {_preparedIso.FileName} · {_preparedIso.SizeBytes / 1024d / 1024d / 1024d:0.00} GB · SHA-256 {_preparedIso.Sha256[..16]}… · {_preparedIso.Provenance}");
@@ -1276,6 +1666,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Prepared installer image is missing or no longer matches the selection. Run Verify again.";
             return;
         }
+
+        if (module.Id == "windows" &&
+            _preparedWindowsMediaOptions is null)
+        {
+            PlanStatus =
+                "Prepared Windows media mode is missing. Run Verify again so Write to disk consumes the exact verified configuration.";
+            return;
+        }
+
+        var preparedWindowsOptions =
+            _preparedWindowsMediaOptions ?? WindowsMediaOptions.Standard;
 
         if (UsbCombo.SelectedItem is not UsbDriveInfo)
             await RefreshDrivesAsync(silentNoUsb: true);
@@ -1308,7 +1709,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var phrase = module.Id == "windows"
                 ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
                     inspected,
-                    _preparedIso)
+                    _preparedIso,
+                    preparedWindowsOptions)
                 : LinuxRawUsbWriter.RequiredConfirmationPhrase(
                     inspected,
                     _preparedIso);
@@ -1348,7 +1750,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _preparedIso,
                     finalTarget,
                     typed,
-                    progress)
+                    progress,
+                    options: preparedWindowsOptions)
                 : await _linuxUsbWriter.WriteAsync(
                     _preparedIso,
                     finalTarget,
@@ -1414,6 +1817,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
                         : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
                     _preparedIso.SourceUrl));
+
+                if (system.Id == "windows" &&
+                    _preparedWindowsMediaOptions is not null)
+                {
+                    genericItems.Add(new(
+                        PreparationItemState.ResolvedAutomatically,
+                        "Windows media mode",
+                        _preparedWindowsMediaOptions.ModeText,
+                        _preparedWindowsMediaOptions.ExtendedHardwareCompatibility
+                            ? "Verify locked the UEFI/FAT32 Windows 11 compatibility path with the implemented Windows Setup TPM/Secure Boot remediation."
+                            : "Verify locked the standard Windows media path for Write to disk."));
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(_preparationFailure))
@@ -1443,6 +1858,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var items = new List<PreparationItem>();
+
+        foreach (var finding in _compatibilityReport.Findings.Where(x =>
+                     x.State is CompatibilityState.Blocked or CompatibilityState.Unknown))
+        {
+            items.Add(new(
+                PreparationItemState.Unresolved,
+                finding.Component,
+                finding.Title,
+                finding.SuggestedAction ?? finding.Details,
+                finding.Reference));
+        }
+
         if (_autoResolution is not null)
         {
             foreach (var item in _autoResolution.Items)
@@ -1473,6 +1900,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Automatic preparation failed",
                 _preparationFailure));
         }
+
+        items = items
+            .GroupBy(
+                x => $"{x.State}|{x.Category}|{x.Problem}|{x.Resolution}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
 
         var genuineApple =
             _hardwareReport is not null &&
@@ -1524,10 +1958,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         foreach (var item in _preparationResult.Items)
             PreparationItems.Add(item);
 
-        CompatibilityVerdict = _preparationResult.Verdict;
+        var compatibilityWarnings =
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _compatibilityReport?.Findings.Any(x =>
+                x.State is CompatibilityState.Warning or CompatibilityState.Unknown) == true;
+
+        CompatibilityVerdict =
+            _preparationResult.ReadyToWrite && compatibilityWarnings
+                ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
+                : _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
-            ? $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for this computer."
+            ? compatibilityWarnings
+                ? $"CorePilot prepared and validated writable {target.DisplayName} installer media for {TargetComputerLabel}, but the remaining compatibility warnings are not claimed as solved."
+                : $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
@@ -1622,7 +2066,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             CompatibilityInstallPath =
-                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image and validate it for this computer before Write to disk is enabled.";
+                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image for {TargetComputerLabel} before Write to disk is enabled.";
         }
 
         var requirements = new List<string>();
