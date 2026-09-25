@@ -373,10 +373,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (_preparationResult.ReadyToWrite)
         {
-            PlanStatus =
-                $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
-                $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
-            ActivityLog.Success("Preparation", PlanStatus);
+            var compatibilityWarnings =
+                _targetMode == InstallationTargetMode.ThisComputer &&
+                _compatibilityReport.Findings.Any(x =>
+                    x.State is CompatibilityState.Warning or CompatibilityState.Unknown);
+
+            PlanStatus = compatibilityWarnings
+                ? $"READY TO WRITE ⚠ {target.DisplayName} installer media is prepared for {TargetComputerLabel}, but compatibility warnings remain. " +
+                  $"{_preparationResult.Summary}. Review Preparation before writing."
+                : $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
+                  $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
+
+            if (compatibilityWarnings)
+                ActivityLog.Warning("Preparation", PlanStatus);
+            else
+                ActivityLog.Success("Preparation", PlanStatus);
         }
         else if (_preparationResult.SystemPrepared)
         {
@@ -1925,10 +1936,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         foreach (var item in _preparationResult.Items)
             PreparationItems.Add(item);
 
-        CompatibilityVerdict = _preparationResult.Verdict;
+        var compatibilityWarnings =
+            _targetMode == InstallationTargetMode.ThisComputer &&
+            _compatibilityReport?.Findings.Any(x =>
+                x.State is CompatibilityState.Warning or CompatibilityState.Unknown) == true;
+
+        CompatibilityVerdict =
+            _preparationResult.ReadyToWrite && compatibilityWarnings
+                ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
+                : _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
-            ? $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
+            ? compatibilityWarnings
+                ? $"CorePilot prepared and validated writable {target.DisplayName} installer media for {TargetComputerLabel}, but the remaining compatibility warnings are not claimed as solved."
+                : $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
