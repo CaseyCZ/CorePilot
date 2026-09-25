@@ -618,6 +618,65 @@ Assert(ubuntuOk.CanProceed,
 
 Console.WriteLine("CorePilot Windows/Linux compatibility smoke test OK");
 
+var windowsPreparationSources = new OnlineSourceSnapshot(
+    "windows",
+    DateTimeOffset.UtcNow,
+    "test",
+    true,
+    new[]
+    {
+        LiveSource(
+            "windows.microsoft-windows11",
+            "Microsoft Windows 11 download",
+            "microsoft/windows",
+            "current")
+    });
+
+var windowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility(
+    "windows",
+    new SystemVariant("windows-11", "Windows 11"),
+    windows11Ok,
+    windowsPreparationSources,
+    mediaWriterAvailable: false);
+
+Assert(windowsPreparation.SystemPrepared,
+    "a compatible Windows target with live sources must become a prepared system configuration");
+Assert(!windowsPreparation.ReadyToWrite,
+    "Windows must not claim READY TO WRITE until its guarded physical writer is implemented");
+
+var blockedWindowsPreparation = InstallationPreparationBuilder.FromGenericCompatibility(
+    "windows",
+    new SystemVariant("windows-11", "Windows 11"),
+    windows11Legacy,
+    windowsPreparationSources,
+    mediaWriterAvailable: false);
+
+Assert(!blockedWindowsPreparation.SystemPrepared &&
+       blockedWindowsPreparation.UnresolvedCount > 0,
+    "an unresolved Windows blocker must remain visible after preparation");
+
+var windowsKnowledge = sourceCatalog.Sources
+    .Where(x => x.Systems.Contains("windows") &&
+                x.UseFor is { Count: > 0 })
+    .ToArray();
+
+Assert(windowsKnowledge.Any(x =>
+        x.Id == "windows.rufus" &&
+        x.UseFor!.Contains("media-writer")),
+    "Rufus must be classified as a Windows media-writer preparation source");
+
+var linuxKnowledge = sourceCatalog.Sources
+    .Where(x => x.Systems.Contains("linux") &&
+                x.UseFor is { Count: > 0 })
+    .ToArray();
+
+Assert(linuxKnowledge.Any(x =>
+        x.Id == "linux.ubuntu" &&
+        x.UseFor!.Contains("installation")),
+    "Linux official images must be classified as installation preparation sources");
+
+Console.WriteLine("CorePilot installation-preparation smoke test OK");
+
 Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&
        opCoreSimplifySource.Critical,
