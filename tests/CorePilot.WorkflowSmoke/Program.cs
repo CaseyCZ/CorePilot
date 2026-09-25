@@ -493,7 +493,7 @@ try
           {
             "product_name": "OpenCorePkg",
             "id": 123,
-            "url": "https://example.com/OpenCorePkg.zip",
+            "url": "https://github.com/acidanthera/OpenCorePkg/releases/download/1.0.7/OpenCore-1.0.7-RELEASE.zip",
             "sha256": "{{trustedHash}}"
           }
         ]
@@ -513,11 +513,68 @@ try
         "3.x");
 
     var componentAuditService = new OpCoreDownloadedComponentAuditService();
-    var componentAudit = await componentAuditService.AuditAsync(auditStage);
+    var liveCatalogSnapshot = new OnlineSourceSnapshot(
+        "macos",
+        DateTimeOffset.UtcNow,
+        "test",
+        true,
+        new OnlineSourceResolution[]
+        {
+            new(
+                "macos.opencore",
+                "OpenCorePkg",
+                "bootloader",
+                "upstream",
+                "githubRelease",
+                "acidanthera/OpenCorePkg",
+                "https://github.com/acidanthera/OpenCorePkg/releases/latest",
+                true,
+                true,
+                true,
+                false,
+                "1.0.7",
+                "1.0.7",
+                DateTimeOffset.UtcNow,
+                null,
+                DateTimeOffset.UtcNow,
+                null)
+        });
+
+    var componentAudit = await componentAuditService.AuditAsync(
+        auditStage,
+        liveCatalogSnapshot);
 
     Assert(componentAudit.ComponentCount == 1 &&
-           componentAudit.Components[0].ProductName == "OpenCorePkg",
-        "downloaded component audit must accept hashed HTTPS OpenCorePkg history");
+           componentAudit.Components[0].ProductName == "OpenCorePkg" &&
+           componentAudit.Components[0].CatalogAligned is true,
+        "downloaded component audit must bind hashed OpenCorePkg to the live catalog release");
+
+    var staleCatalogSnapshot = liveCatalogSnapshot with
+    {
+        Sources = new OnlineSourceResolution[]
+        {
+            liveCatalogSnapshot.Sources[0] with
+            {
+                Version = "1.0.8",
+                ResolvedRef = "1.0.8"
+            }
+        }
+    };
+
+    var staleReleaseRejected = false;
+    try
+    {
+        _ = await componentAuditService.AuditAsync(
+            auditStage,
+            staleCatalogSnapshot);
+    }
+    catch (InvalidDataException)
+    {
+        staleReleaseRejected = true;
+    }
+
+    Assert(staleReleaseRejected,
+        "downloaded component audit must reject an OpenCore release older than the live catalog");
 
     await File.WriteAllTextAsync(
         Path.Combine(ock, "history.json"),
