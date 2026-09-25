@@ -45,6 +45,7 @@ public sealed class MacOSAutomationPlanner
 
         var graphicsMode = ResolveGraphics(
             hardware,
+            darwin,
             enabledDevices,
             disabledDevices,
             decisions);
@@ -100,12 +101,17 @@ public sealed class MacOSAutomationPlanner
 
     private static string ResolveGraphics(
         HardwareReport hardware,
+        string darwin,
         ICollection<string> enabled,
         ICollection<string> disabled,
         ICollection<MacOSAutomationDecision> decisions)
     {
-        var candidates = hardware.DevicesByCategory("GPU");
+        var candidates = hardware.DevicesByCategory("GPU")
+            .Where(x => !IsVirtualDisplayAdapter(x))
+            .ToArray();
         var supported = new List<HardwareDeviceInfo>();
+        var legacyReview = new List<HardwareDeviceInfo>();
+        var darwinMajor = int.TryParse(darwin.Split('.')[0], out var major) ? major : 0;
 
         foreach (var gpu in candidates)
         {
@@ -128,6 +134,27 @@ public sealed class MacOSAutomationPlanner
                 continue;
             }
 
+            if (IsIntelKabyLakeGraphics(gpu))
+            {
+                if (darwinMajor <= 22)
+                {
+                    supported.Add(gpu);
+                }
+                else
+                {
+                    legacyReview.Add(gpu);
+                    enabled.Add(gpu.Name);
+                    decisions.Add(new(
+                        "GPU",
+                        gpu.Name,
+                        "Kaby Lake legacy graphics review",
+                        "The Intel Kaby Lake iGPU was identified exactly, but this macOS target is newer than CorePilot's native automatic graphics path.",
+                        RequiresReview: true));
+                }
+
+                continue;
+            }
+
             if (vendor == "AMD" &&
                 Regex.IsMatch(gpu.Name, @"Radeon\s+(RX|Pro)", RegexOptions.IgnoreCase))
             {
@@ -145,6 +172,9 @@ public sealed class MacOSAutomationPlanner
 
         if (supported.Count == 0)
         {
+            if (legacyReview.Count > 0)
+                return string.Join(" + ", legacyReview.Select(x => $"{x.Name} · legacy review"));
+
             decisions.Add(new(
                 "GPU",
                 "Accelerated graphics",
@@ -175,7 +205,9 @@ public sealed class MacOSAutomationPlanner
             "GPU",
             "Primary macOS graphics",
             selectedGpu.Name,
-            "Supported AMD graphics candidate selected automatically."));
+            Vendor(selectedGpu) == "Intel"
+                ? "Kaby Lake Intel graphics selected for the Ventura-era native graphics path."
+                : "Supported AMD graphics candidate selected automatically."));
 
         return selectedGpu.Name;
     }
@@ -279,6 +311,25 @@ public sealed class MacOSAutomationPlanner
             return "Intel";
 
         return "Unknown";
+    }
+
+
+    private static bool IsVirtualDisplayAdapter(HardwareDeviceInfo gpu) =>
+        gpu.PnpDeviceId.StartsWith(@"ROOT\DISPLAY", StringComparison.OrdinalIgnoreCase)
+        || gpu.Name.Contains("Virtual Display", StringComparison.OrdinalIgnoreCase)
+        || gpu.Name.Contains("Indirect Display", StringComparison.OrdinalIgnoreCase)
+        || gpu.Name.Contains("Remote Display", StringComparison.OrdinalIgnoreCase)
+        || gpu.Name.Contains("SudoMaker", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsIntelKabyLakeGraphics(HardwareDeviceInfo gpu)
+    {
+        var identity = $"{gpu.DeviceId} {gpu.PnpDeviceId} {gpu.Name}";
+
+        return Regex.IsMatch(
+                   identity,
+                   @"(?:DEV[_-]?|8086[-:])59(12|16|17|1B|1D|23|26|27)\b",
+                   RegexOptions.IgnoreCase)
+               || gpu.Name.Contains("Iris Plus Graphics 650", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsModernRyzenApu(HardwareReport hardware, HardwareDeviceInfo gpu) =>
