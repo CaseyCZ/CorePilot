@@ -333,7 +333,26 @@ var appleSonoma = compatibilityAnalyzer.Analyze(
 Assert(!appleSonoma.CanProceed,
     "2017 MacBook Pro Sonoma path must not be treated as natively supported until OCLP integration exists");
 
-Console.WriteLine("CorePilot genuine-Apple Ventura compatibility smoke test OK");
+var appleTahoe = compatibilityAnalyzer.Analyze(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("tahoe-26", "macOS Tahoe 26"));
+
+Assert(!appleTahoe.CanProceed,
+    "2017 MacBook Pro Tahoe path must remain blocked until the OCLP legacy-Mac path is verified");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "Patcher" &&
+        x.State == CorePilot.Core.CompatibilityState.ActionRequired),
+    "legacy Apple Tahoe result must explicitly show that OCLP is required");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "GPU" &&
+        x.State == CorePilot.Core.CompatibilityState.Supported),
+    "MacBookPro14,2 result must report its known OCLP graphics path");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "T1 / Wi-Fi / USB" &&
+        x.State == CorePilot.Core.CompatibilityState.ActionRequired),
+    "MacBookPro14,2 Tahoe result must expose hardware patch-readiness checks");
+
+Console.WriteLine("CorePilot genuine-Apple compatibility smoke test OK");
 
 
 var sourceCatalog = OnlineSourceCatalogService.LoadBundledCatalog();
