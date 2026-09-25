@@ -134,12 +134,21 @@ public sealed class MacOSUsbPhysicalWriteService
         progress?.Report(
             $"Windows will request administrator approval to erase physical disk {freshTarget.DiskIndex}.");
 
-        await RunDiskPartElevatedAsync(scriptPath, cancellationToken);
+        await RunGuardedDiskPartElevatedAsync(
+            stage.WorkspaceDirectory,
+            scriptPath,
+            freshTarget,
+            cancellationToken);
 
         var root = $"{driveLetter}:\\";
         if (!Directory.Exists(root))
             throw new InvalidOperationException(
                 $"The formatted target volume {root} was not mounted.");
+
+        await VerifyMountedVolumeBelongsToTargetAsync(
+            driveLetter,
+            freshTarget.DiskIndex,
+            cancellationToken);
 
         progress?.Report("Copying verified EFI files…");
         var verifiedFiles = 0;
@@ -228,27 +237,155 @@ public sealed class MacOSUsbPhysicalWriteService
             bytesWritten);
     }
 
-    private static async Task RunDiskPartElevatedAsync(
-        string scriptPath,
+    private static async Task RunGuardedDiskPartElevatedAsync(
+        string workspaceDirectory,
+        string diskPartScriptPath,
+        UsbTargetSafetyReport target,
         CancellationToken cancellationToken)
     {
+        var guardScriptPath = Path.Combine(
+            workspaceDirectory,
+            "CorePilot-guarded-diskpart.ps1");
+
+        var guardScript = """
+param(
+    [Parameter(Mandatory=$true)][int]$DiskIndex,
+    [Parameter(Mandatory=$true)][string]$ExpectedDeviceIdB64,
+    [Parameter(Mandatory=$true)][string]$ExpectedPnpB64,
+    [Parameter(Mandatory=$true)][Int64]$ExpectedSize,
+    [Parameter(Mandatory=$true)][string]$ExpectedSerialB64,
+    [Parameter(Mandatory=$true)][string]$DiskPartScript
+)
+
+$ErrorActionPreference = 'Stop'
+function Decode([string]$value) {
+    if ([string]::IsNullOrWhiteSpace($value)) { return '' }
+    return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value))
+}
+
+$expectedDeviceId = Decode $ExpectedDeviceIdB64
+$expectedPnp = Decode $ExpectedPnpB64
+$expectedSerial = Decode $ExpectedSerialB64
+
+$disk = Get-CimInstance Win32_DiskDrive -Filter "Index = $DiskIndex"
+if ($null -eq $disk) { throw "Target disk disappeared before erase." }
+
+if (-not [string]::Equals([string]$disk.DeviceID, $expectedDeviceId, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Target DeviceID changed before erase."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($expectedPnp) -and
+    -not [string]::Equals([string]$disk.PNPDeviceID, $expectedPnp, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Target PNP identity changed before erase."
+}
+
+if ([Int64]$disk.Size -ne $ExpectedSize) {
+    throw "Target size changed before erase."
+}
+
+$actualSerial = ([string]$disk.SerialNumber).Trim()
+if (-not [string]::IsNullOrWhiteSpace($expectedSerial) -and
+    -not [string]::IsNullOrWhiteSpace($actualSerial) -and
+    -not [string]::Equals($actualSerial, $expectedSerial.Trim(), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Target serial changed before erase."
+}
+
+& diskpart.exe /s $DiskPartScript
+if ($LASTEXITCODE -ne 0) {
+    throw "diskpart failed with exit code $LASTEXITCODE."
+}
+""";
+
+        await File.WriteAllTextAsync(
+            guardScriptPath,
+            guardScript,
+            new UTF8Encoding(false),
+            cancellationToken);
+
+        static string B64(string value) =>
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? ""));
+
         var start = new ProcessStartInfo
         {
-            FileName = "diskpart.exe",
+            FileName = "powershell.exe",
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Normal
         };
-        start.ArgumentList.Add("/s");
-        start.ArgumentList.Add(scriptPath);
+
+        foreach (var argument in new[]
+        {
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            guardScriptPath,
+            "-DiskIndex",
+            target.DiskIndex.ToString(),
+            "-ExpectedDeviceIdB64",
+            B64(target.DeviceId),
+            "-ExpectedPnpB64",
+            B64(target.PnpDeviceId),
+            "-ExpectedSize",
+            target.SizeBytes.ToString(),
+            "-ExpectedSerialB64",
+            B64(target.SerialNumber),
+            "-DiskPartScript",
+            diskPartScriptPath
+        })
+        {
+            start.ArgumentList.Add(argument);
+        }
 
         using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("Unable to start diskpart.");
+            ?? throw new InvalidOperationException(
+                "Unable to start the elevated guarded disk writer.");
 
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
             throw new InvalidOperationException(
-                $"diskpart failed with exit code {process.ExitCode}.");
+                $"Guarded disk writer stopped with exit code {process.ExitCode}.");
+    }
+
+    private static async Task VerifyMountedVolumeBelongsToTargetAsync(
+        char driveLetter,
+        int targetDiskIndex,
+        CancellationToken cancellationToken)
+    {
+        var command =
+            $"(Get-Partition -DriveLetter '{driveLetter}' -ErrorAction Stop | Get-Disk -ErrorAction Stop).Number";
+
+        var start = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add(command);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException(
+                "Unable to verify the mounted USB volume.");
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+
+        if (process.ExitCode != 0 ||
+            !int.TryParse(stdout, out var mountedDisk) ||
+            mountedDisk != targetDiskIndex)
+            throw new InvalidOperationException(
+                $"Mounted volume identity verification failed. Expected disk {targetDiskIndex}; " +
+                $"PowerShell returned '{stdout}'. {stderr}".Trim());
     }
 
     private static char ChooseFreeDriveLetter()
