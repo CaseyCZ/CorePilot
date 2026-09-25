@@ -89,12 +89,26 @@ public sealed class GenericCompatibilityAnalyzer
                     ? null
                     : "Enable Secure Boot when supported by the target hardware."));
 
-            findings.Add(new(
-                CompatibilityState.Warning,
-                "TPM",
-                "TPM 2.0 is not yet collected by the lightweight hardware scan",
-                "CorePilot does not guess TPM state. The installer can perform the final TPM requirement check.",
-                "Confirm TPM 2.0 in Windows Security or firmware settings before installation."));
+            findings.Add(hardware.Tpm20 switch
+            {
+                true => new(
+                    CompatibilityState.Supported,
+                    "TPM",
+                    "TPM 2.0 detected and enabled",
+                    "The Windows hardware scan confirmed an enabled TPM 2.0 device."),
+                false => new(
+                    CompatibilityState.Blocked,
+                    "TPM",
+                    "TPM 2.0 is not available in the current hardware state",
+                    "Windows 11 requires TPM 2.0. CorePilot did not detect an enabled TPM 2.0 device.",
+                    "Enable Intel PTT / AMD fTPM / TPM 2.0 in firmware if this computer supports it, then run Verify again."),
+                null => new(
+                    CompatibilityState.Blocked,
+                    "TPM",
+                    "TPM 2.0 could not be confirmed",
+                    "CorePilot could not read the TPM 2.0 state reliably, so it will not claim that Windows 11 is ready for this computer.",
+                    "Check that TPM 2.0 is enabled in firmware and run Verify again.")
+            });
         }
         else
         {
