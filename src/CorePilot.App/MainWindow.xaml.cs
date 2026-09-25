@@ -716,7 +716,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _automationProfile,
                     _usbSafetyReport,
                     _opCoreStage,
-                    _lastOnlineSourceSnapshot));
+                    _lastOnlineSourceSnapshot,
+                    _preparedIso,
+                    _lastGenericUsbWrite));
 
             PlanStatus =
                 $"Support bundle ready ✅ {result.FileCount} files · " +
