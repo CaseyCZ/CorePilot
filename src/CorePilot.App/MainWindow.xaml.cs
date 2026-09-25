@@ -32,7 +32,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbTypedConfirmationService _usbTypedConfirmationService = new();
     private readonly MacOSUsbPhysicalWriteService _usbPhysicalWriteService = new();
     private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
-    private readonly MacOSWorkflowActionPolicy _actionPolicy = new();
     private readonly SupportBundleService _supportBundleService = new();
     private readonly DispatcherTimer _authorizationTimer = new()
     {
@@ -431,31 +430,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void UsbCombo_OnDropDownOpened(object sender, EventArgs e) =>
         await RefreshDrivesAsync(silentNoUsb: true);
-
-    private WorkflowActionDecision Decision(CorePilotWorkflowAction action) =>
-        _actionPolicy.Evaluate(
-            action,
-            _workflowStateMachine.Current,
-            BuildActionContext());
-
-    private MacOSWorkflowActionContext BuildActionContext() =>
-        new(
-            IsMacOSSelected: SystemCombo.SelectedItem is ISystemModule { Id: "macos" },
-            IsBusy: ActivityLog.IsBusy,
-            HasHardware: _hardwareReport is not null,
-            HasDeepScan: _deepScanExport is not null,
-            HasUsbSelection: UsbCombo.SelectedItem is UsbDriveInfo,
-            CompatibilityCanProceed: _compatibilityReport?.CanProceed == true,
-            AutomationCanBuild: _automationProfile?.CanBuildEfi == true,
-            AutomationRequiresReview: _automationProfile?.RequiresReview == true,
-            HasWorkspace: _opCoreStage is not null,
-            HasEfi: _lastEfiBuild?.Success == true,
-            HasManifest: _lastInstallerManifest is not null && _lastRecovery is not null,
-            HasUsbSafetyReport: _usbSafetyReport is not null,
-            UsbIsBlocked: _usbSafetyReport?.IsBlocked != false,
-            HasDryRun: _lastUsbWritePlan is not null,
-            HasPreflight: _lastUsbExecutionPreflight is not null,
-            HasConfirmation: _lastUsbTypedConfirmation is not null);
 
     private void ActivityLog_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
