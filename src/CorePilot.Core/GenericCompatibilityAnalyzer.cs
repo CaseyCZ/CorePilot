@@ -142,6 +142,33 @@ public sealed class GenericCompatibilityAnalyzer
                 ? null
                 : "Windows Setup remains the final authority for the exact processor model requirement."));
 
+        if (target.Id == "windows-11")
+        {
+            findings.Add(new(
+                CompatibilityState.Warning,
+                "Graphics",
+                "DirectX 12 / WDDM 2.0 compatibility is not fully verified",
+                hardware.DevicesByCategory("GPU").Count == 0
+                    ? "CorePilot did not detect a physical display adapter in the lightweight hardware report."
+                    : "Detected GPU: " + string.Join(", ", hardware.DevicesByCategory("GPU").Select(x => x.Name).Take(3)) + ". CorePilot does not yet read the installed WDDM driver-model level.",
+                "Confirm DirectX 12 compatibility and a WDDM 2.0-or-later driver on the target PC."));
+
+            findings.Add(new(
+                CompatibilityState.Warning,
+                "Storage",
+                "Windows 11 target storage capacity is not asserted by media preparation",
+                "Microsoft requires a 64 GB or larger storage device. CorePilot prepares the USB installer but does not assume which internal disk/partition will receive Windows.",
+                "Confirm that the actual destination drive has at least 64 GB available capacity before installation."));
+
+            findings.Add(new(
+                CompatibilityState.Warning,
+                "Display / setup",
+                "Display and initial-setup requirements are not fully verified",
+                "CorePilot does not currently measure target display size/resolution. Windows 11 Home and Windows 11 Pro for personal use also require internet connectivity and a Microsoft account during initial setup.",
+                "Confirm a 720p-or-better display larger than 9 inches and the applicable setup connectivity/account requirements."));
+        }
+
+
         return new(
             target.Id,
             findings,
