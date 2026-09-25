@@ -87,7 +87,9 @@ The ZIP can include:
 - compatibility findings
 - automation profile
 - sanitized USB safety result
-- CorePilot-generated workspace/build/recovery/manifest/dry-run/preflight/confirmation/simulation metadata
+- prepared Windows/Linux ISO provenance + SHA-256 metadata when applicable
+- verified Windows/Linux USB write transcript when applicable
+- CorePilot-generated macOS workspace/build/recovery/manifest/dry-run/preflight/confirmation/write metadata
 
 CorePilot does not copy arbitrary user files or documents into the bundle.
 

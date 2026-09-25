@@ -68,6 +68,7 @@ jobs:
             "Get-CimInstance Win32_DiskDrive",
             "VerifyMountedVolumeBelongsToTargetAsync",
             "diskpart.exe",
+            "Target PNP identity changed after formatting.",
             "CopyAndVerifyFileAsync"
           )) {
             if (-not $writer.Contains($needle)) {
@@ -85,6 +86,7 @@ jobs:
             "Mount-DiskImage",
             "dism.exe",
             "VerifyMountedVolumeBelongsToTargetAsync",
+            "Target PNP identity changed after formatting.",
             "Get-FileHash"
           )) {
             if (-not $windowsWriter.Contains($needle)) {
@@ -101,7 +103,8 @@ jobs:
             "Clear-Disk",
             "IncrementalHash",
             "readBackSha256",
-            "ExpectedIsoSha256"
+            "ExpectedIsoSha256",
+            "Target PNP identity changed after erase preparation."
           )) {
             if (-not $linuxWriter.Contains($needle)) {
               throw "Guarded Linux writer is missing required safety marker '$needle'."

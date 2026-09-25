@@ -68,8 +68,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
-    private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
-    private string _usbSafetyStatus = "USB target not inspected. No physical-disk writes are enabled.";
+    private string _planStatus = "Choose a system and version, then press Verify. USB is only needed after CorePilot reports READY TO WRITE.";
+    private string _usbSafetyStatus = "USB is optional during Verify. Connect/select it only when the prepared system is ready to write.";
     private string _compatibilitySummary = "Select a system and press Verify. CorePilot will scan hardware, search for solutions, configure and validate an installation path.";
     private string _compatibilityVerdict = "NOT PREPARED";
     private string _compatibilityInstallPath = "No installation path has been prepared yet.";

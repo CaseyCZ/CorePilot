@@ -316,6 +316,25 @@ try {
         throw "diskpart failed with exit code $LASTEXITCODE."
     }
 
+    $diskAfterFormat = Get-CimInstance Win32_DiskDrive -Filter "Index = $DiskIndex"
+    if ($null -eq $diskAfterFormat) { throw "Target disk disappeared after formatting." }
+    if (-not [string]::Equals([string]$diskAfterFormat.DeviceID, $expectedDeviceId, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Target DeviceID changed after formatting."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($expectedPnp) -and
+        -not [string]::Equals([string]$diskAfterFormat.PNPDeviceID, $expectedPnp, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Target PNP identity changed after formatting."
+    }
+    if ([Int64]$diskAfterFormat.Size -ne $ExpectedSize) {
+        throw "Target size changed after formatting."
+    }
+    $actualSerialAfterFormat = ([string]$diskAfterFormat.SerialNumber).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($expectedSerial) -and
+        -not [string]::IsNullOrWhiteSpace($actualSerialAfterFormat) -and
+        -not [string]::Equals($actualSerialAfterFormat, $expectedSerial.Trim(), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Target serial changed after formatting."
+    }
+
     $destinationDisk = (Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop | Get-Disk -ErrorAction Stop).Number
     if ([int]$destinationDisk -ne $DiskIndex) {
         throw "Formatted Windows installer volume does not belong to the expected physical disk."

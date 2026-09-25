@@ -1116,6 +1116,83 @@ finally
 
 Console.WriteLine("CorePilot online-source fallback and trust regression smoke test OK");
 
+var repoRoot = FindRepoRoot();
+var appXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "App.xaml");
+var mainXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "MainWindow.xaml");
+var logXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "LogWindow.xaml");
+
+var appXaml = await File.ReadAllTextAsync(appXamlPath);
+var mainXaml = await File.ReadAllTextAsync(mainXamlPath);
+var logXaml = await File.ReadAllTextAsync(logXamlPath);
+
+_ = System.Xml.Linq.XDocument.Parse(appXaml);
+_ = System.Xml.Linq.XDocument.Parse(mainXaml);
+_ = System.Xml.Linq.XDocument.Parse(logXaml);
+
+Assert(!appXaml.Contains("<Style TargetType=\"TextBlock\">", StringComparison.Ordinal),
+    "global TextBlock foreground styling must not be used because it can make system-templated controls unreadable");
+foreach (var requiredStyle in new[]
+{
+    "<Style TargetType=\"Button\">",
+    "<Style TargetType=\"ComboBox\">",
+    "<Style TargetType=\"ComboBoxItem\">",
+    "<Style TargetType=\"TabItem\">",
+    "<Style TargetType=\"TextBox\">",
+    "<Style TargetType=\"GridViewColumnHeader\">"
+})
+{
+    Assert(appXaml.Contains(requiredStyle, StringComparison.Ordinal),
+        $"CorePilot dark theme is missing required explicit control style: {requiredStyle}");
+}
+
+foreach (var windowXaml in new[] { mainXaml, logXaml })
+{
+    Assert(windowXaml.Contains(
+               "Background=\"{StaticResource PageBrush}\"",
+               StringComparison.Ordinal) &&
+           windowXaml.Contains(
+               "Foreground=\"{StaticResource TextBrush}\"",
+               StringComparison.Ordinal),
+        "every CorePilot window must explicitly bind the page background and foreground");
+
+    Assert(!windowXaml.Contains("Background=\"White\"", StringComparison.OrdinalIgnoreCase) &&
+           !windowXaml.Contains("Foreground=\"White\"", StringComparison.OrdinalIgnoreCase),
+        "CorePilot windows must not mix hard-coded white system colors with the dark theme");
+}
+
+foreach (var requiredMainControl in new[]
+{
+    "x:Name=\"SystemCombo\"",
+    "x:Name=\"VariantCombo\"",
+    "Content=\"Verify\"",
+    "x:Name=\"UsbCombo\"",
+    "Content=\"Write to disk\"",
+    "Header=\"Hardware\"",
+    "Header=\"Preparation\""
+})
+{
+    Assert(mainXaml.Contains(requiredMainControl, StringComparison.Ordinal),
+        $"Main window is missing workflow control: {requiredMainControl}");
+}
+
+Console.WriteLine("CorePilot explicit dark-theme and main-workflow XAML smoke test OK");
+
+static string FindRepoRoot()
+{
+    var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+
+    while (current is not null)
+    {
+        if (File.Exists(Path.Combine(current.FullName, "CorePilot.sln")))
+            return current.FullName;
+
+        current = current.Parent;
+    }
+
+    throw new InvalidOperationException(
+        "Could not locate CorePilot repository root for XAML smoke tests.");
+}
+
 sealed class DelegateHttpHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
