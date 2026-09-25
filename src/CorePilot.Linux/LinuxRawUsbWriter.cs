@@ -285,8 +285,18 @@ if ($null -eq $diskAfterClear) { throw "Target disk disappeared after erase prep
 if (-not [string]::Equals([string]$diskAfterClear.DeviceID, $expectedDeviceId, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Target DeviceID changed after erase preparation."
 }
+if (-not [string]::IsNullOrWhiteSpace($expectedPnp) -and
+    -not [string]::Equals([string]$diskAfterClear.PNPDeviceID, $expectedPnp, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Target PNP identity changed after erase preparation."
+}
 if ([Int64]$diskAfterClear.Size -ne $ExpectedSize) {
     throw "Target size changed after erase preparation."
+}
+$actualSerialAfterClear = ([string]$diskAfterClear.SerialNumber).Trim()
+if (-not [string]::IsNullOrWhiteSpace($expectedSerial) -and
+    -not [string]::IsNullOrWhiteSpace($actualSerialAfterClear) -and
+    -not [string]::Equals($actualSerialAfterClear, $expectedSerial.Trim(), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Target serial changed after erase preparation."
 }
 
 $buffer = New-Object byte[] (4MB)
