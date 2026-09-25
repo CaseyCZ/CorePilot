@@ -7,7 +7,7 @@ public sealed record WindowsMediaOptions(
         new(
             ExtendedHardwareCompatibility: false);
 
-    public static WindowsMediaOptions OlderPc { get; } =
+    public static WindowsMediaOptions Compatibility { get; } =
         new(
             ExtendedHardwareCompatibility: true);
 
