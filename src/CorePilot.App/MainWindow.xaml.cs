@@ -17,8 +17,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly HardwareSnifferBridge _hardwareSniffer = new();
     private readonly HardwareSnifferReportParser _hardwareSnifferParser = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
+    private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
+    private readonly MacOSAutomationProfileStore _macProfileStore = new();
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
+    private MacOSAutomationProfile? _automationProfile;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -190,6 +193,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         CompatibilityItems.Clear();
         _compatibilityReport = null;
+        _automationProfile = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -207,15 +211,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _compatibilityReport = _macAnalyzer.Analyze(_hardwareReport, target);
+        _automationProfile = _macAutomationPlanner.Build(_hardwareReport, target, _compatibilityReport);
+
         foreach (var finding in _compatibilityReport.Findings)
             CompatibilityItems.Add(finding);
 
         CompatibilitySummary = _compatibilityReport.Summary;
-        MacPlanDetails = BuildPlanText(_compatibilityReport);
+        MacPlanDetails = BuildPlanText(_compatibilityReport, _automationProfile);
         OnPropertyChanged(nameof(MacPlanVisibility));
     }
 
-    private static string BuildPlanText(CompatibilityReport report)
+    private static string BuildPlanText(
+        CompatibilityReport report,
+        MacOSAutomationProfile? automationProfile)
     {
         var parts = new List<string>();
 
@@ -228,10 +236,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (report.BootArguments.Count > 0)
             parts.Add("Boot args: " + string.Join(" ", report.BootArguments));
 
+        if (automationProfile is not null)
+        {
+            parts.Add($"Automation: SMBIOS {automationProfile.SmbiosModel} · " +
+                      $"GPU {automationProfile.GraphicsMode} · Wi-Fi {automationProfile.WifiMode} · " +
+                      $"Audio {automationProfile.AudioMode}");
+
+            if (automationProfile.RequiresReview)
+                parts.Add("Advanced review: " + string.Join("; ",
+                    automationProfile.Decisions
+                        .Where(x => x.RequiresReview)
+                        .Select(x => $"{x.Subject}: {x.Choice}")));
+        }
+
         return string.Join(Environment.NewLine + Environment.NewLine, parts);
     }
 
-    private void PreparePlan_OnClick(object sender, RoutedEventArgs e)
+    private async void PreparePlan_OnClick(object sender, RoutedEventArgs e)
     {
         if (SystemCombo.SelectedItem is not ISystemModule system ||
             VariantCombo.SelectedItem is not SystemVariant variant)
@@ -249,6 +270,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
         {
             PlanStatus = "Connect and select a USB flash drive.";
+            return;
+        }
+
+        if (system.Id == "macos" && _automationProfile is not null)
+        {
+            var profilePath = await _macProfileStore.SaveAsync(_automationProfile);
+            PlanStatus = $"Plan ready: {variant.DisplayName} → {usb.DisplayName}. " +
+                         $"Automation profile saved to {profilePath}.";
             return;
         }
 
