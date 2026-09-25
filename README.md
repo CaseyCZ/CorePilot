@@ -10,15 +10,19 @@ The main UI intentionally exposes only the two workflow actions **Verify** and *
 
 ## Download released Windows build
 
-GitHub Releases contain only versions that were explicitly promoted after testing.
-
-Latest published release:
+Latest continuously tested build:
 
 https://github.com/CaseyCZ/CorePilot/releases/latest
 
-Normal pushes to `main` do **not** update Releases. They only run CI and publish the temporary `CorePilot-win-x64` Actions artifact.
+A push/merge to `main` first runs the full **Build** workflow. Only after that workflow succeeds, the **Latest Release** workflow may promote its exact `CorePilot-win-x64` artifact. Promotion is fail-closed:
 
-When a version is agreed as ready, the manual **Release** workflow is run with an explicit version such as `v0.18`. It reruns the full safety/build pipeline and publishes:
+- the Build run must be a successful `push` on `main`
+- the built commit must still be the current `main`
+- the commit must be GitHub-verified
+- an older completed run cannot overwrite a newer Latest build
+- the ZIP is accompanied by a SHA-256 file
+
+Versioned releases remain manual. When a version is agreed as ready, the **Release** workflow is run with an explicit version such as `v0.18`; it reruns the full safety/build pipeline and publishes:
 
 - `CorePilot-v0.18-win-x64.zip`
 - `CorePilot-v0.18-win-x64.sha256`
