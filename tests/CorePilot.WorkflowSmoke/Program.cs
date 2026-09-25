@@ -523,6 +523,31 @@ Assert(sourceCatalog.Sources
                   !string.IsNullOrWhiteSpace(x.Repository)),
     "kext sources must resolve from upstream GitHub releases");
 
+var knowledgeIds = sourceCatalog.Sources
+    .Where(x => x.UseFor is { Count: > 0 })
+    .Select(x => x.Id)
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+Assert(knowledgeIds.Contains("macos.dortania-guide") &&
+       knowledgeIds.Contains("macos.opcore-simplify") &&
+       knowledgeIds.Contains("macos.usbtoolbox") &&
+       knowledgeIds.Contains("macos.propertree") &&
+       knowledgeIds.Contains("macos.hackintool") &&
+       knowledgeIds.Contains("macos.gensmbios") &&
+       knowledgeIds.Contains("macos.oclp"),
+    "macOS preparation knowledge must include the supplied configuration and remediation toolchain");
+
+Assert(knowledgeIds.Contains("macos.guide.vyoralek-opencore") &&
+       knowledgeIds.Contains("macos.video.opencore-install-2giy") &&
+       knowledgeIds.Contains("macos.video.virtualbox-ya3x"),
+    "supplied practical article/video references must remain in the preparation knowledge catalog");
+
+var virtualBoxReference = sourceCatalog.Sources.Single(x =>
+    x.Id == "macos.video.virtualbox-ya3x");
+Assert(!virtualBoxReference.ResolveOnVerify &&
+       virtualBoxReference.UseFor?.Contains("installation-reference") == true,
+    "VirtualBox-only video must stay reference-only and must never drive physical OpenCore configuration automatically");
+
 Console.WriteLine("CorePilot online source catalog smoke test OK");
 
 
