@@ -247,24 +247,24 @@
                                 </StackPanel>
                             </Border>
 
-                            <ListView Grid.Row="4" ItemsSource="{Binding CompatibilityItems}" Background="Transparent"
+                            <ListView Grid.Row="4" ItemsSource="{Binding PreparationItems}" Background="Transparent"
                                       BorderThickness="0" Foreground="{StaticResource TextBrush}">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
                                         <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,11">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="82"/>
-                                                    <ColumnDefinition Width="105"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="120"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="{Binding StateText}" FontWeight="Bold"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding Component}" Foreground="{StaticResource MutedBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Category}" Foreground="{StaticResource MutedBrush}"/>
                                                 <StackPanel Grid.Column="2">
-                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource MutedBrush}"
+                                                    <TextBlock Text="{Binding Problem}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Resolution}" Foreground="{StaticResource MutedBrush}"
                                                                TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                                    <TextBlock Text="{Binding SuggestedAction}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding Source}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>

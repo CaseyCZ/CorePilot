@@ -476,13 +476,14 @@
       "strategy": "githubRelease",
       "repository": "pbatard/rufus",
       "critical": false,
-      "resolveOnVerify": true,
+      "resolveOnVerify": false,
       "requireVerifiedCommit": false,
       "useFor": [
         "installation",
         "media-writer",
         "remediation"
-      ]
+      ],
+      "notes": "Reference/fallback knowledge only. CorePilot now uses its own guarded Windows/Linux writers, so Rufus is not refreshed during normal Verify."
     },
     {
       "id": "linux.ubuntu",

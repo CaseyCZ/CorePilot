@@ -729,6 +729,11 @@ Assert(windowsKnowledge.Any(x =>
         x.UseFor!.Contains("media-writer")),
     "Rufus must be classified as a Windows media-writer preparation source");
 
+var rufusReference = sourceCatalog.Sources.Single(x =>
+    x.Id == "windows.rufus");
+Assert(!rufusReference.ResolveOnVerify,
+    "Rufus is reference/fallback knowledge only and must not slow normal Windows/Linux Verify");
+
 var linuxKnowledge = sourceCatalog.Sources
     .Where(x => x.Systems.Contains("linux") &&
                 x.UseFor is { Count: > 0 })
@@ -802,6 +807,18 @@ Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
     "Linux writer confirmation must bind the exact disk identity and prepared target");
 
 Console.WriteLine("CorePilot generic guarded-writer contract smoke test OK");
+
+var currentFedoraChecksumLine =
+    "SHA256 (Fedora-Workstation-Live-44-1.7.x86_64.iso) = " +
+    "1620295f6a00c27c3208f0c00b8ece4eab1ec69b9002152d97488bf26a426ddf";
+Assert(
+    System.Text.RegularExpressions.Regex.IsMatch(
+        currentFedoraChecksumLine,
+        @"SHA256\s*\((?<file>Fedora-Workstation-Live-[^)]+(?:\.|-)x86_64\.iso)\)\s*=\s*(?<hash>[0-9A-Fa-f]{64})",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+    "Fedora resolver pattern must accept the current dotted x86_64 ISO filename");
+
+Console.WriteLine("CorePilot current Fedora filename regression smoke test OK");
 
 Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
        opCoreSimplifySource.Branch == "main" &&
