@@ -2,9 +2,41 @@ namespace CorePilot.Core;
 
 public sealed record HardwareDisplayItem(string Category, string Name, string Details);
 
-public sealed record HardwareDeviceInfo(string Category, string Name, string PnpDeviceId)
+public sealed record HardwareDeviceInfo(
+    string Category,
+    string Name,
+    string PnpDeviceId = "",
+    string DeviceId = "",
+    string SubsystemId = "",
+    string BusType = "",
+    string PciPath = "",
+    string AcpiPath = "")
 {
-    public string Details => string.IsNullOrWhiteSpace(PnpDeviceId) ? "" : PnpDeviceId;
+    public string Details
+    {
+        get
+        {
+            var details = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(DeviceId))
+                details.Add($"ID {DeviceId}");
+
+            if (!string.IsNullOrWhiteSpace(SubsystemId))
+                details.Add($"SUBSYS {SubsystemId}");
+
+            if (!string.IsNullOrWhiteSpace(BusType))
+                details.Add(BusType);
+
+            if (!string.IsNullOrWhiteSpace(PciPath))
+                details.Add(PciPath);
+            else if (!string.IsNullOrWhiteSpace(AcpiPath))
+                details.Add(AcpiPath);
+            else if (!string.IsNullOrWhiteSpace(PnpDeviceId))
+                details.Add(PnpDeviceId);
+
+            return string.Join(" · ", details);
+        }
+    }
 }
 
 public sealed record UsbDriveInfo(string DeviceId, string Model, long SizeBytes, bool IsUsb)

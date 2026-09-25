@@ -24,14 +24,16 @@ The target workflow is intentionally simple:
 - firmware, CPU, GPU and initial Wi-Fi checks
 - generated kext / kernel patch / boot-argument plan
 
-### v0.3 — Integration preview 🚧
+### v0.3 — Hardware Sniffer integration 🚧
 
 - self-contained `win-x64` CI artifacts
-- Hardware Sniffer bridge
+- explicit Hardware Sniffer Deep Scan
 - latest official `Hardware-Sniffer-CLI.exe` release discovery
-- per-version local tool cache
-- SHA-256 audit fingerprint
-- automatic `Report.json + ACPI` export using the same `-e -o` flow used by OpCore Simplify
+- per-version tool cache and SHA-256 fingerprint
+- automatic `Report.json + ACPI` export
+- direct parsing of the upstream report schema
+- deep hardware IDs for GPU, network, audio, USB, storage, Bluetooth and input devices
+- compatibility is recalculated immediately after Deep Scan
 
 Deep Scan is explicit: CorePilot does not silently download or execute third-party tools at startup.
 
@@ -41,14 +43,14 @@ Deep Scan is explicit: CorePilot does not silently download or execute third-par
 
 - **CorePilot.App** — Windows UI
 - **CorePilot.Core** — shared models and module contracts
-- **CorePilot.Hardware** — local scanner, disks and Hardware Sniffer integration
+- **CorePilot.Hardware** — local scanner, disks, Hardware Sniffer integration and report parser
 - **CorePilot.MacOS** — OpenCore compatibility, ACPI/kext and Apple recovery workflow
 - **CorePilot.Windows** — Windows media workflow
 - **CorePilot.Linux** — Linux media workflow
 
 ## Next
 
-1. Parse Hardware Sniffer `Report.json` into CorePilot's compatibility model.
+1. Feed exact Hardware Sniffer device IDs into the macOS rules database.
 2. Add an OpCore Simplify bridge for non-interactive EFI generation.
 3. Download Apple recovery for the chosen macOS release.
 4. Validate generated EFI before allowing guarded USB writes.
