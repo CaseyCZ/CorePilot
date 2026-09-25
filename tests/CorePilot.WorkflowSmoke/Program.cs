@@ -791,6 +791,11 @@ var windowsPhrase =
     WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
         windowsTestImage);
+var windowsOlderPcPhrase =
+    WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        windowsTestImage,
+        WindowsMediaOptions.OlderPc);
 var linuxPhrase =
     LinuxRawUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
@@ -798,8 +803,21 @@ var linuxPhrase =
 
 Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        windowsPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
-       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal),
-    "Windows writer confirmation must bind the exact disk identity and prepared target");
+       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       !windowsPhrase.Contains("OLDER-PC", StringComparison.Ordinal),
+    "standard Windows writer confirmation must bind the exact disk identity and prepared target");
+
+Assert(windowsOlderPcPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("OLDER-PC", StringComparison.Ordinal),
+    "older-PC Windows writer confirmation must explicitly bind the compatibility mode");
+
+Assert(WindowsMediaOptions.OlderPc.ExtendedHardwareCompatibility &&
+       WindowsMediaOptions.OlderPc.LegacyBiosCompatible &&
+       !WindowsMediaOptions.Standard.ExtendedHardwareCompatibility &&
+       !WindowsMediaOptions.Standard.LegacyBiosCompatible,
+    "Windows media options must keep standard and older-PC paths distinct");
 
 Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        linuxPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
@@ -1119,11 +1137,15 @@ Console.WriteLine("CorePilot online-source fallback and trust regression smoke t
 var repoRoot = FindRepoRoot();
 var appXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "App.xaml");
 var mainXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "MainWindow.xaml");
+var mainCodePath = Path.Combine(repoRoot, "src", "CorePilot.App", "MainWindow.xaml.cs");
 var logXamlPath = Path.Combine(repoRoot, "src", "CorePilot.App", "LogWindow.xaml");
+var windowsWriterPath = Path.Combine(repoRoot, "src", "CorePilot.Windows", "WindowsInstallerUsbWriter.cs");
 
 var appXaml = await File.ReadAllTextAsync(appXamlPath);
 var mainXaml = await File.ReadAllTextAsync(mainXamlPath);
+var mainCode = await File.ReadAllTextAsync(mainCodePath);
 var logXaml = await File.ReadAllTextAsync(logXamlPath);
+var windowsWriterCode = await File.ReadAllTextAsync(windowsWriterPath);
 
 _ = System.Xml.Linq.XDocument.Parse(appXaml);
 _ = System.Xml.Linq.XDocument.Parse(mainXaml);
@@ -1164,6 +1186,9 @@ foreach (var requiredMainControl in new[]
 {
     "x:Name=\"SystemCombo\"",
     "x:Name=\"VariantCombo\"",
+    "x:Name=\"ThisComputerButton\"",
+    "x:Name=\"OtherComputerButton\"",
+    "x:Name=\"WindowsOlderPcButton\"",
     "Content=\"Verify\"",
     "x:Name=\"UsbCombo\"",
     "Content=\"Write to disk\"",
@@ -1175,7 +1200,30 @@ foreach (var requiredMainControl in new[]
         $"Main window is missing workflow control: {requiredMainControl}");
 }
 
-Console.WriteLine("CorePilot explicit dark-theme and main-workflow XAML smoke test OK");
+Assert(appXaml.Contains("x:Name=\"PART_Popup\"", StringComparison.Ordinal),
+    "ComboBox template must expose the required PART_Popup template part");
+
+Assert(mainCode.Contains("ApplyAutomaticWindows11CompatibilityRemediation", StringComparison.Ordinal) &&
+       mainCode.Contains("PrepareCompatibilityForOtherComputer", StringComparison.Ordinal) &&
+       mainCode.Contains("CurrentWindowsMediaOptions", StringComparison.Ordinal),
+    "main workflow must keep this/other-computer routing and Windows older-PC remediation wired");
+
+foreach (var requiredWindowsWriterMarker in new[]
+{
+    "BypassTPMCheck",
+    "BypassSecureBootCheck",
+    "BypassRAMCheck",
+    "\"convert mbr\"",
+    "\"active\"",
+    "bootsect.exe",
+    "Target PNP identity changed after formatting."
+})
+{
+    Assert(windowsWriterCode.Contains(requiredWindowsWriterMarker, StringComparison.Ordinal),
+        $"Windows older-PC writer is missing audited marker: {requiredWindowsWriterMarker}");
+}
+
+Console.WriteLine("CorePilot explicit dark-theme, target-mode and Windows older-PC audit smoke test OK");
 
 static string FindRepoRoot()
 {
