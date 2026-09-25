@@ -40,17 +40,7 @@ public sealed class MacOSCompatibilityAnalyzer
 
     private static void AnalyzeFirmware(HardwareReport hardware, ICollection<CompatibilityFinding> findings)
     {
-        if (!hardware.FirmwareMode.Equals("UEFI", StringComparison.OrdinalIgnoreCase))
-        {
-            findings.Add(new(
-                CompatibilityState.Blocked,
-                "Firmware",
-                "CorePilot macOS workflow requires UEFI",
-                $"Detected firmware mode: {hardware.FirmwareMode}.",
-                "Enable UEFI boot mode and disable CSM/Legacy mode before creating the installer.",
-                BiosGuide));
-        }
-        else
+        if (hardware.FirmwareMode.Equals("UEFI", StringComparison.OrdinalIgnoreCase))
         {
             findings.Add(new(
                 CompatibilityState.Supported,
@@ -58,6 +48,26 @@ public sealed class MacOSCompatibilityAnalyzer
                 "UEFI detected",
                 "Firmware mode is suitable for the standard OpenCore workflow.",
                 Reference: BiosGuide));
+        }
+        else if (hardware.FirmwareMode.Equals("Legacy BIOS", StringComparison.OrdinalIgnoreCase))
+        {
+            findings.Add(new(
+                CompatibilityState.Blocked,
+                "Firmware",
+                "CorePilot macOS workflow requires UEFI",
+                "Windows is currently booted in Legacy BIOS mode.",
+                "Enable UEFI boot mode and disable CSM/Legacy mode before creating the installer.",
+                BiosGuide));
+        }
+        else
+        {
+            findings.Add(new(
+                CompatibilityState.Unknown,
+                "Firmware",
+                "Firmware mode could not be confirmed",
+                "Windows did not provide a reliable UEFI/Legacy result. CorePilot will not treat an unknown result as Legacy BIOS.",
+                "Run Deep Scan and verify that Windows is booted in UEFI mode before building EFI.",
+                BiosGuide));
         }
 
         if (hardware.SecureBoot is true)
@@ -107,12 +117,29 @@ public sealed class MacOSCompatibilityAnalyzer
 
         if (cpu.Contains("Intel", StringComparison.OrdinalIgnoreCase))
         {
+            var generation = ResolveIntelCoreGeneration(cpu);
+
+            if (generation == 7)
+            {
+                findings.Add(new(
+                    CompatibilityState.Warning,
+                    "CPU",
+                    "Intel 7th-generation CPU detected (Kaby Lake)",
+                    cpu,
+                    "CorePilot resolved the CPU generation; final platform settings still come from the Deep Scan report."));
+                return;
+            }
+
             findings.Add(new(
                 CompatibilityState.Warning,
                 "CPU",
-                "Intel CPU detected",
-                "Intel support is generation-specific and will be resolved from CPUID/model rules in the next compatibility database pass.",
-                "Keep this as a verification item until CorePilot resolves the exact generation."));
+                generation is null
+                    ? "Intel CPU detected"
+                    : $"Intel {generation}th-generation CPU detected",
+                generation is null
+                    ? "The exact Intel generation could not be resolved from the processor model string."
+                    : cpu,
+                "Deep Scan will provide the exact platform data used by the OpenCore builder."));
             return;
         }
 
@@ -131,8 +158,19 @@ public sealed class MacOSCompatibilityAnalyzer
         ISet<string> kexts,
         ISet<string> bootArgs)
     {
-        var gpus = hardware.DevicesByCategory("GPU");
-        if (gpus.Count == 0)
+        var allGpus = hardware.DevicesByCategory("GPU");
+        var gpus = allGpus.Where(x => !IsVirtualDisplayAdapter(x)).ToArray();
+
+        foreach (var ignored in allGpus.Where(IsVirtualDisplayAdapter))
+        {
+            findings.Add(new(
+                CompatibilityState.Supported,
+                "GPU",
+                $"{ignored.Name} ignored",
+                "This is a Windows virtual/indirect display adapter, not a physical GPU used for macOS acceleration."));
+        }
+
+        if (gpus.Length == 0)
         {
             findings.Add(new(
                 CompatibilityState.Blocked,
@@ -170,6 +208,26 @@ public sealed class MacOSCompatibilityAnalyzer
                     $"{name} is not supported",
                     "Xe-based Intel graphics do not have macOS support.",
                     "Use a supported graphics path.",
+                    IntelGuide));
+                continue;
+            }
+
+            if (IsIntelKabyLakeGraphics(gpu))
+            {
+                hasUsableCandidate = true;
+                kexts.Add("WhateverGreen.kext");
+
+                var isVenturaOrOlder = target.Id == "ventura-13";
+                findings.Add(new(
+                    isVenturaOrOlder
+                        ? CompatibilityState.Supported
+                        : CompatibilityState.ActionRequired,
+                    "GPU",
+                    $"{name} resolved as Kaby Lake Intel graphics",
+                    $"{FormatPciIdentity(gpu)} · Intel Kaby Lake graphics family.",
+                    isVenturaOrOlder
+                        ? "Use the normal Kaby Lake OpenCore/WhateverGreen path; framebuffer details are resolved from Deep Scan."
+                        : "This target is newer than CorePilot's native Kaby Lake graphics path. Keep automatic EFI generation in review mode until the legacy graphics patch path is explicitly approved.",
                     IntelGuide));
                 continue;
             }
@@ -264,6 +322,70 @@ public sealed class MacOSCompatibilityAnalyzer
                     "Resolve the exact chipset and target-specific itlwm/AirportItlwm build."));
             }
         }
+    }
+
+
+    private static int? ResolveIntelCoreGeneration(string cpu)
+    {
+        var match = Regex.Match(
+            cpu,
+            @"\bi[3579][\s-]?(?<model>\d{4,5})",
+            RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+            return null;
+
+        var model = match.Groups["model"].Value;
+
+        if (model.Length == 4 && int.TryParse(model[..1], out var legacyGeneration))
+            return legacyGeneration;
+
+        if (model.Length == 5 && int.TryParse(model[..2], out var modernGeneration))
+            return modernGeneration;
+
+        return null;
+    }
+
+    private static bool IsVirtualDisplayAdapter(HardwareDeviceInfo gpu)
+    {
+        if (gpu.PnpDeviceId.StartsWith(@"ROOT\DISPLAY", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return gpu.Name.Contains("Virtual Display", StringComparison.OrdinalIgnoreCase)
+               || gpu.Name.Contains("Indirect Display", StringComparison.OrdinalIgnoreCase)
+               || gpu.Name.Contains("Remote Display", StringComparison.OrdinalIgnoreCase)
+               || gpu.Name.Contains("SudoMaker", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsIntelKabyLakeGraphics(HardwareDeviceInfo gpu)
+    {
+        var identity = $"{gpu.DeviceId} {gpu.PnpDeviceId} {gpu.Name}";
+
+        if (!identity.Contains("8086", StringComparison.OrdinalIgnoreCase) &&
+            !gpu.Name.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (Regex.IsMatch(identity, @"(?:DEV[_-]?|8086[-:])59(12|16|17|1B|1D|23|26|27)\b", RegexOptions.IgnoreCase))
+            return true;
+
+        return gpu.Name.Contains("Iris Plus Graphics 650", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatPciIdentity(HardwareDeviceInfo gpu)
+    {
+        var match = Regex.Match(
+            $"{gpu.DeviceId} {gpu.PnpDeviceId}",
+            @"VEN[_-]?(?<ven>[0-9A-F]{4}).*DEV[_-]?(?<dev>[0-9A-F]{4})|(?<ven2>[0-9A-F]{4})[-:](?<dev2>[0-9A-F]{4})",
+            RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+            return string.IsNullOrWhiteSpace(gpu.PnpDeviceId)
+                ? "PCI identity unavailable"
+                : gpu.PnpDeviceId;
+
+        var ven = match.Groups["ven"].Success ? match.Groups["ven"].Value : match.Groups["ven2"].Value;
+        var dev = match.Groups["dev"].Success ? match.Groups["dev"].Value : match.Groups["dev2"].Value;
+        return $"PCI {ven.ToUpperInvariant()}:{dev.ToUpperInvariant()}";
     }
 
     private static bool LooksLikeZen4Desktop(string cpu) =>

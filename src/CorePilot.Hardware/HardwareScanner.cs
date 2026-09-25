@@ -1,4 +1,5 @@
 using System.Management;
+using System.Runtime.InteropServices;
 using CorePilot.Core;
 using Microsoft.Win32;
 
@@ -122,14 +123,72 @@ public sealed class HardwareScanner
 
     private static string ReadFirmwareMode()
     {
-        using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control");
-        return Convert.ToInt32(key?.GetValue("PEFirmwareType") ?? 0) switch
+        try
         {
-            2 => "UEFI",
-            1 => "Legacy BIOS",
-            _ => "Unknown"
-        };
+            if (GetFirmwareType(out var nativeType))
+            {
+                var native = nativeType switch
+                {
+                    FirmwareType.Uefi => "UEFI",
+                    FirmwareType.Bios => "Legacy BIOS",
+                    _ => "Unknown"
+                };
+
+                if (!native.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+                    return native;
+            }
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Older Windows fallback below.
+        }
+        catch
+        {
+            // Firmware detection must remain read-only and fail into the fallback chain.
+        }
+
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control");
+            var value = Convert.ToInt32(key?.GetValue("PEFirmwareType") ?? 0);
+
+            if (value == 2)
+                return "UEFI";
+
+            if (value == 1)
+                return "Legacy BIOS";
+        }
+        catch
+        {
+        }
+
+        // If Windows exposes a SecureBoot state value, the current OS session is UEFI.
+        try
+        {
+            using var secureBoot = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+
+            if (secureBoot?.GetValue("UEFISecureBootEnabled") is not null)
+                return "UEFI";
+        }
+        catch
+        {
+        }
+
+        return "Unknown";
     }
+
+    private enum FirmwareType : uint
+    {
+        Unknown = 0,
+        Bios = 1,
+        Uefi = 2,
+        Max = 3
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFirmwareType(out FirmwareType firmwareType);
 
     private static bool? ReadSecureBoot()
     {

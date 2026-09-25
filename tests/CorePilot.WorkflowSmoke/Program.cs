@@ -222,3 +222,69 @@ Assert(!policy.Evaluate(
     "Simulation must be one-shot in the action policy");
 
 Console.WriteLine("CorePilot workflow action-policy smoke test OK");
+
+
+var compatibilityAnalyzer = new MacOSCompatibilityAnalyzer();
+var testHardware = new CorePilot.Core.HardwareReport(
+    "TEST-PC",
+    "Test",
+    "Laptop",
+    "Laptop",
+    "Intel(R) Core(TM) i5-7360U CPU @ 2.30GHz",
+    2,
+    4,
+    "Test Board",
+    "Unknown",
+    false,
+    8L * 1024 * 1024 * 1024,
+    new CorePilot.Core.HardwareDeviceInfo[]
+    {
+        new("GPU", "SudoMaker Virtual Display Adapter", @"ROOT\DISPLAY\0000"),
+        new("GPU", "Intel(R) Iris(R) Plus Graphics 650", @"PCI\VEN_8086&DEV_5927&SUBSYS_0175106B&REV_06")
+    },
+    Array.Empty<CorePilot.Core.UsbDriveInfo>());
+
+var tahoeCompatibility = compatibilityAnalyzer.Analyze(
+    testHardware,
+    new CorePilot.Core.SystemVariant("tahoe-26", "macOS Tahoe 26"));
+
+Assert(!tahoeCompatibility.Findings.Any(x =>
+        x.Component == "Firmware" &&
+        x.State == CorePilot.Core.CompatibilityState.Blocked),
+    "Unknown firmware must not be falsely classified as Legacy BIOS blocker");
+
+Assert(tahoeCompatibility.Findings.Any(x =>
+        x.Component == "Firmware" &&
+        x.State == CorePilot.Core.CompatibilityState.Unknown),
+    "Unknown firmware must remain an explicit verification item");
+
+Assert(tahoeCompatibility.Findings.Any(x =>
+        x.Title.Contains("SudoMaker", StringComparison.OrdinalIgnoreCase) &&
+        x.Title.Contains("ignored", StringComparison.OrdinalIgnoreCase)),
+    "Virtual display adapter must be explicitly ignored");
+
+Assert(!tahoeCompatibility.Findings.Any(x =>
+        x.Title.Contains("SudoMaker", StringComparison.OrdinalIgnoreCase) &&
+        x.State == CorePilot.Core.CompatibilityState.Unknown),
+    "Virtual display adapter must never become an unknown physical GPU");
+
+Assert(tahoeCompatibility.Findings.Any(x =>
+        x.Title.Contains("Kaby Lake", StringComparison.OrdinalIgnoreCase) &&
+        x.Details.Contains("8086:5927", StringComparison.OrdinalIgnoreCase)),
+    "Intel Iris Plus 650 PCI 8086:5927 must resolve as Kaby Lake graphics");
+
+Assert(tahoeCompatibility.Findings.Any(x =>
+        x.Component == "CPU" &&
+        x.Title.Contains("7th-generation", StringComparison.OrdinalIgnoreCase)),
+    "Intel i5-7360U must resolve as 7th-generation CPU");
+
+var venturaCompatibility = compatibilityAnalyzer.Analyze(
+    testHardware with { FirmwareMode = "UEFI" },
+    new CorePilot.Core.SystemVariant("ventura-13", "macOS Ventura 13"));
+
+Assert(venturaCompatibility.Findings.Any(x =>
+        x.Title.Contains("Kaby Lake", StringComparison.OrdinalIgnoreCase) &&
+        x.State == CorePilot.Core.CompatibilityState.Supported),
+    "Kaby Lake graphics must use the native Ventura compatibility path");
+
+Console.WriteLine("CorePilot hardware compatibility regression smoke test OK");
