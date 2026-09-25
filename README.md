@@ -24,7 +24,7 @@ The target workflow is intentionally simple:
 - firmware, CPU, GPU and initial Wi-Fi checks
 - generated kext / kernel patch / boot-argument plan
 
-### v0.3 — Hardware Sniffer integration 🚧
+### v0.3 — Hardware Sniffer integration ✅
 
 - self-contained `win-x64` CI artifacts
 - explicit Hardware Sniffer Deep Scan
@@ -33,9 +33,22 @@ The target workflow is intentionally simple:
 - automatic `Report.json + ACPI` export
 - direct parsing of the upstream report schema
 - deep hardware IDs for GPU, network, audio, USB, storage, Bluetooth and input devices
-- compatibility is recalculated immediately after Deep Scan
+- compatibility recalculated immediately after Deep Scan
 
-Deep Scan is explicit: CorePilot does not silently download or execute third-party tools at startup.
+### v0.4 — macOS automation policy 🚧
+
+CorePilot is replacing OpCore Simplify's interactive questions with deterministic build decisions:
+
+- automatic SMBIOS default
+- automatic enable/disable policy for graphics devices
+- Intel Wi-Fi default: AirportItlwm on older releases, itlwm + HeliPort on Sonoma and newer
+- Tahoe audio is deferred instead of silently enabling OCLP/root patches
+- AMD Ryzen profiles include physical core-count planning
+- USB uses the upstream UTBDefault bootstrap strategy until a final USB map is created
+- unresolved/ambiguous hardware is marked for Advanced review
+- the resolved plan is saved as a JSON automation profile for the future EFI bridge
+
+Deep Scan and third-party execution remain explicit; CorePilot does not silently download or execute third-party tools at startup.
 
 > **Safety:** disk formatting and installer writing are still disabled. Native macOS media will not be prepared while a blocking compatibility finding exists.
 
@@ -44,17 +57,18 @@ Deep Scan is explicit: CorePilot does not silently download or execute third-par
 - **CorePilot.App** — Windows UI
 - **CorePilot.Core** — shared models and module contracts
 - **CorePilot.Hardware** — local scanner, disks, Hardware Sniffer integration and report parser
-- **CorePilot.MacOS** — OpenCore compatibility, ACPI/kext and Apple recovery workflow
+- **CorePilot.MacOS** — compatibility, automation policy, OpenCore/ACPI/kext and Apple recovery workflow
 - **CorePilot.Windows** — Windows media workflow
 - **CorePilot.Linux** — Linux media workflow
 
 ## Next
 
-1. Feed exact Hardware Sniffer device IDs into the macOS rules database.
-2. Add an OpCore Simplify bridge for non-interactive EFI generation.
-3. Download Apple recovery for the chosen macOS release.
-4. Validate generated EFI before allowing guarded USB writes.
-5. Add Windows/Linux media engines and multiboot later.
+1. Add the OpCore Simplify bridge that consumes the CorePilot automation profile.
+2. Resolve upstream component downloads and produce a staged EFI folder.
+3. Validate the generated EFI/config before it is considered usable.
+4. Download Apple recovery for the chosen macOS release.
+5. Only then add guarded USB writes.
+6. Add Windows/Linux media engines and multiboot later.
 
 ## Build
 
@@ -66,4 +80,4 @@ dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
-GitHub Actions also publishes a self-contained `CorePilot-win-x64` test artifact.
+GitHub Actions publishes a self-contained `CorePilot-win-x64` test artifact.
