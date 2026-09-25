@@ -15,6 +15,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly HardwareScanner _scanner = new();
     private readonly HardwareSnifferBridge _hardwareSniffer = new();
+    private readonly HardwareSnifferReportParser _hardwareSnifferParser = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
@@ -91,9 +92,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var progress = new Progress<string>(message => DeepScanStatus = message);
             var result = await _hardwareSniffer.ExportAsync(progress);
 
+            _hardwareReport ??= await _scanner.ScanAsync();
+            _hardwareReport = await _hardwareSnifferParser.MergeAsync(result.ReportPath, _hardwareReport);
+
+            RefreshHardwareView();
+            RunCompatibilityAnalysis();
+
             DeepScanStatus =
-                $"Hardware Sniffer {result.Version} complete. " +
-                $"Report: {result.ReportPath} · SHA256: {result.ToolSha256[..16]}…";
+                $"Hardware Sniffer {result.Version} imported successfully · " +
+                $"{_hardwareReport.Devices.Count} devices · " +
+                $"SHA256 {result.ToolSha256[..16]}… · {result.ReportPath}";
         }
         catch (Exception ex)
         {
@@ -107,11 +115,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             ScanStatus = "Scanning…";
             _hardwareReport = await _scanner.ScanAsync();
-
-            HardwareItems.Clear();
-            foreach (var item in _hardwareReport.ToDisplayItems())
-                HardwareItems.Add(item);
-
+            RefreshHardwareView();
             ScanStatus = $"Detected {HardwareItems.Count} hardware items";
             RunCompatibilityAnalysis();
         }
@@ -120,6 +124,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ScanStatus = "Scan failed";
             PlanStatus = $"Hardware scan failed: {ex.Message}";
         }
+    }
+
+    private void RefreshHardwareView()
+    {
+        HardwareItems.Clear();
+
+        if (_hardwareReport is null)
+            return;
+
+        foreach (var item in _hardwareReport.ToDisplayItems())
+            HardwareItems.Add(item);
+
+        ScanStatus = $"Detected {HardwareItems.Count} hardware items";
     }
 
     private async void RefreshDrives_OnClick(object sender, RoutedEventArgs e) => await RefreshDrivesAsync();
