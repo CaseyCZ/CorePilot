@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, "foundation/**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore CorePilot.sln
+      - name: Build
+        run: dotnet build CorePilot.sln --configuration Release --no-restore
