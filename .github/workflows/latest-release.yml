@@ -1,0 +1,162 @@
+name: Latest Release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: corepilot-latest-release
+  cancel-in-progress: true
+
+jobs:
+  publish-latest:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-latest
+
+    steps:
+      - name: Validate verified current main
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $currentMain = gh api "repos/$env:GITHUB_REPOSITORY/branches/main" --jq ".commit.sha"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to resolve the current main commit."
+          }
+
+          if ($currentMain -ne $env:BUILD_SHA) {
+            Write-Host "A newer main commit exists. This completed build will not replace Latest."
+            "SKIP_LATEST=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            exit 0
+          }
+
+          $verified = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:BUILD_SHA" --jq ".commit.verification.verified"
+          if ($LASTEXITCODE -ne 0 -or $verified -ne "true") {
+            throw "Latest Release requires a GitHub-verified main commit."
+          }
+
+          "SKIP_LATEST=false" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Download green Build artifact
+        if: env.SKIP_LATEST != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/CorePilot-win-x64 | Out-Null
+          gh run download "$env:BUILD_RUN_ID" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --name "CorePilot-win-x64" `
+            --dir "artifacts/CorePilot-win-x64"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to download the green Build artifact."
+          }
+
+          $exe = Get-ChildItem "artifacts/CorePilot-win-x64" -Recurse -Filter "*.exe" | Select-Object -First 1
+          if ($null -eq $exe) {
+            throw "The Build artifact does not contain a Windows executable."
+          }
+
+      - name: Package Latest
+        if: env.SKIP_LATEST != 'true'
+        shell: pwsh
+        env:
+          BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release | Out-Null
+
+          $zipName = "CorePilot-latest-win-x64.zip"
+          $zipPath = Join-Path "artifacts/release" $zipName
+          $shaName = "CorePilot-latest-win-x64.sha256"
+          $shaPath = Join-Path "artifacts/release" $shaName
+
+          Compress-Archive `
+            -Path "artifacts/CorePilot-win-x64/*" `
+            -DestinationPath $zipPath `
+            -CompressionLevel Optimal `
+            -Force
+
+          $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
+          "$hash  $zipName" | Set-Content $shaPath -Encoding ascii
+
+          @(
+            "CorePilot Latest"
+            ""
+            "Automatically promoted from successful Build #$env:BUILD_RUN_NUMBER on main."
+            "Commit: $env:BUILD_SHA"
+            ""
+            "The source commit is GitHub-verified and passed the complete CorePilot CI pipeline."
+          ) | Set-Content "artifacts/release/latest-notes.md" -Encoding utf8
+
+          Write-Host "Latest package SHA256: $hash"
+
+      - name: Publish or update Latest
+        if: env.SKIP_LATEST != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $zip = "artifacts/release/CorePilot-latest-win-x64.zip"
+          $sha = "artifacts/release/CorePilot-latest-win-x64.sha256"
+          $notes = "artifacts/release/latest-notes.md"
+
+          gh release view latest --repo "$env:GITHUB_REPOSITORY" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh api `
+              --method PATCH `
+              "repos/$env:GITHUB_REPOSITORY/git/refs/tags/latest" `
+              -f "sha=$env:BUILD_SHA" `
+              -F "force=true"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to move the latest tag to the verified green main commit."
+            }
+
+            gh release upload latest `
+              "$zip" `
+              "$sha" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --clobber
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to replace Latest release assets."
+            }
+
+            gh release edit latest `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --title "CorePilot Latest" `
+              --notes-file "$notes" `
+              --latest
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to update the Latest release metadata."
+            }
+          }
+          else {
+            gh release create latest `
+              "$zip" `
+              "$sha" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --target "$env:BUILD_SHA" `
+              --title "CorePilot Latest" `
+              --notes-file "$notes" `
+              --latest
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to create the Latest release."
+            }
+          }
