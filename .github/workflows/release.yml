@@ -138,6 +138,37 @@ jobs:
             }
           }
 
+      - name: Enforce readable desktop UI theme
+        shell: pwsh
+        run: |
+          $appXaml = Get-Content "src/CorePilot.App/App.xaml" -Raw
+          $mainXaml = Get-Content "src/CorePilot.App/MainWindow.xaml" -Raw
+          $logXaml = Get-Content "src/CorePilot.App/LogWindow.xaml" -Raw
+
+          if ($appXaml.Contains('<Style TargetType="TextBlock">')) {
+            throw "A global TextBlock style can make system-templated controls unreadable. Use explicit text colors or control-specific styles."
+          }
+
+          foreach ($needle in @(
+            '<Style TargetType="ComboBox">',
+            '<Style TargetType="ComboBoxItem">',
+            'x:Name="PART_Popup"',
+            '<Style TargetType="TabItem">',
+            '<Style TargetType="TextBox">',
+            '<Style TargetType="GridViewColumnHeader">'
+          )) {
+            if (-not $appXaml.Contains($needle)) {
+              throw "Desktop theme is missing required control styling marker '$needle'."
+            }
+          }
+
+          foreach ($window in @($mainXaml, $logXaml)) {
+            if (-not $window.Contains('Background="{StaticResource PageBrush}"') -or
+                -not $window.Contains('Foreground="{StaticResource TextBrush}"')) {
+              throw "CorePilot windows must explicitly bind dark background and readable foreground."
+            }
+          }
+
       - name: State-machine smoke test
         run: dotnet run --project tests/CorePilot.WorkflowSmoke/CorePilot.WorkflowSmoke.csproj --configuration Release -p:Version=$env:COREPILOT_VERSION
 
