@@ -61,6 +61,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private MacOSAutoResolutionResult? _autoResolution;
     private InstallationPreparationResult? _preparationResult;
     private PreparedIsoImage? _preparedIso;
+    private WindowsMediaOptions? _preparedWindowsMediaOptions;
     private GenericUsbWriteResult? _lastGenericUsbWrite;
     private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
@@ -217,6 +218,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _verificationCompleted = false;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _lastOnlineSourceSnapshot = null;
@@ -433,6 +435,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Automatic physical writing is blocked because the macOS automation profile requires review.";
             return;
         }
+
+        if (module.Id == "windows" &&
+            _preparedWindowsMediaOptions is null)
+        {
+            PlanStatus =
+                "Prepared Windows media mode is missing. Run Verify again so Write to disk consumes the exact verified configuration.";
+            return;
+        }
+
+        var preparedWindowsOptions =
+            _preparedWindowsMediaOptions ?? WindowsMediaOptions.Standard;
 
         if (UsbCombo.SelectedItem is not UsbDriveInfo)
             await RefreshDrivesAsync(silentNoUsb: true);
@@ -751,7 +764,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     selectedVariant,
                     _targetMode.ToString(),
                     selectedSystem == "Windows"
-                        ? CurrentWindowsMediaOptions.ModeText
+                        ? _preparedWindowsMediaOptions?.ModeText
                         : null,
                     _hardwareReport,
                     _compatibilityReport,
@@ -970,6 +983,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _hardwareReport = null;
@@ -1235,6 +1249,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
@@ -1262,6 +1277,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         CompatibilitySummary = _targetMode == InstallationTargetMode.ThisComputer
@@ -1288,6 +1304,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _autoResolution = null;
         _preparationResult = null;
         _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
         _lastGenericUsbWrite = null;
         _preparationFailure = null;
         _opCoreStage = null;
@@ -1582,6 +1599,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             throw new InvalidOperationException(
                 $"No ISO preparation service exists for {module.DisplayName}.");
 
+        _preparedWindowsMediaOptions =
+            module.Id == "windows"
+                ? CurrentWindowsMediaOptions
+                : null;
+
         ActivityLog.Info(
             "Installer image",
             $"Prepared {_preparedIso.FileName} · {_preparedIso.SizeBytes / 1024d / 1024d / 1024d:0.00} GB · SHA-256 {_preparedIso.Sha256[..16]}… · {_preparedIso.Provenance}");
@@ -1636,7 +1658,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
                     inspected,
                     _preparedIso,
-                    CurrentWindowsMediaOptions)
+                    preparedWindowsOptions)
                 : LinuxRawUsbWriter.RequiredConfirmationPhrase(
                     inspected,
                     _preparedIso);
@@ -1677,7 +1699,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     finalTarget,
                     typed,
                     progress,
-                    options: CurrentWindowsMediaOptions)
+                    options: preparedWindowsOptions)
                 : await _linuxUsbWriter.WriteAsync(
                     _preparedIso,
                     finalTarget,
@@ -1744,16 +1766,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
                     _preparedIso.SourceUrl));
 
-                if (system.Id == "windows" && target.Id == "windows-11")
+                if (system.Id == "windows" &&
+                    _preparedWindowsMediaOptions is not null)
                 {
-                    var mediaOptions = CurrentWindowsMediaOptions;
                     genericItems.Add(new(
                         PreparationItemState.ResolvedAutomatically,
                         "Windows media mode",
-                        mediaOptions.ModeText,
-                        mediaOptions.ExtendedHardwareCompatibility
-                            ? "CorePilot will create wider MBR/FAT32 BIOS+UEFI media and apply the documented Windows Setup TPM, Secure Boot and RAM compatibility bypasses."
-                            : "CorePilot will create the standard Windows 11 media path without requirement bypasses."));
+                        _preparedWindowsMediaOptions.ModeText,
+                        _preparedWindowsMediaOptions.ExtendedHardwareCompatibility
+                            ? "Verify locked the wider MBR/FAT32 BIOS+UEFI compatibility path with the documented Windows Setup TPM, Secure Boot and RAM remediation."
+                            : "Verify locked the standard Windows media path for Write to disk."));
                 }
             }
 
