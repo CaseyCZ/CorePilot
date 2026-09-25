@@ -10,30 +10,30 @@ The target workflow is intentionally simple:
 
 ### v0.1 — Foundation ✅
 
-- Windows 11 desktop GUI built with .NET 8 / WPF
-- hardware inventory
+- .NET 8 / WPF Windows desktop app
+- local hardware inventory
 - USB disk discovery
 - modular macOS, Windows and Linux architecture
-- GitHub Actions build validation
+- GitHub Actions validation
 
-### v0.2 — macOS compatibility engine 🚧
+### v0.2 — macOS compatibility engine ✅
 
-The current v0.2 branch adds:
-
-- PCI/PNP identifiers to hardware inventory
+- PCI/PNP identifiers
 - laptop/desktop detection
-- macOS compatibility findings: **OK / ACTION / WARNING / BLOCKED / UNKNOWN**
-- firmware UEFI + Secure Boot checks
-- AMD Ryzen / AMD Vanilla planning with physical core count
-- Zen 4 IOPCIFamily planning
-- NVIDIA RTX/GTX 16 blocker detection
-- Intel Xe/Arc detection
-- AMD Navi/Zen 4 APU graphics classification
-- initial supported/spoofed AMD dGPU candidates
-- Intel Wi-Fi action detection
-- generated plan for kexts, kernel patches and boot arguments
+- **OK / ACTION / WARNING / BLOCKED / UNKNOWN** findings
+- firmware, CPU, GPU and initial Wi-Fi checks
+- generated kext / kernel patch / boot-argument plan
 
-CorePilot intentionally treats uncertain hardware as **UNKNOWN** instead of pretending it is compatible.
+### v0.3 — Integration preview 🚧
+
+- self-contained `win-x64` CI artifacts
+- Hardware Sniffer bridge
+- latest official `Hardware-Sniffer-CLI.exe` release discovery
+- per-version local tool cache
+- SHA-256 audit fingerprint
+- automatic `Report.json + ACPI` export using the same `-e -o` flow used by OpCore Simplify
+
+Deep Scan is explicit: CorePilot does not silently download or execute third-party tools at startup.
 
 > **Safety:** disk formatting and installer writing are still disabled. Native macOS media will not be prepared while a blocking compatibility finding exists.
 
@@ -41,16 +41,18 @@ CorePilot intentionally treats uncertain hardware as **UNKNOWN** instead of pret
 
 - **CorePilot.App** — Windows UI
 - **CorePilot.Core** — shared models and module contracts
-- **CorePilot.Hardware** — hardware and disk discovery
-- **CorePilot.MacOS** — OpenCore, compatibility, ACPI/kext and Apple recovery workflow
+- **CorePilot.Hardware** — local scanner, disks and Hardware Sniffer integration
+- **CorePilot.MacOS** — OpenCore compatibility, ACPI/kext and Apple recovery workflow
 - **CorePilot.Windows** — Windows media workflow
 - **CorePilot.Linux** — Linux media workflow
 
 ## Next
 
-**v0.3 — macOS media builder:** integrate OpenCore/OpCore-Simplify data, download Apple recovery, resolve kext versions, generate/validate EFI and add guarded USB creation.
-
-Later: Windows/Linux media creation, multiboot, recovery tools, update engine and optional offline packs.
+1. Parse Hardware Sniffer `Report.json` into CorePilot's compatibility model.
+2. Add an OpCore Simplify bridge for non-interactive EFI generation.
+3. Download Apple recovery for the chosen macOS release.
+4. Validate generated EFI before allowing guarded USB writes.
+5. Add Windows/Linux media engines and multiboot later.
 
 ## Build
 
@@ -61,3 +63,5 @@ dotnet restore CorePilot.sln
 dotnet build CorePilot.sln -c Release
 dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
+
+GitHub Actions also publishes a self-contained `CorePilot-win-x64` test artifact.
