@@ -88,7 +88,9 @@ public sealed class OnlineSourceCatalogService
     private readonly HttpClient _http;
     private readonly string _cacheDirectory;
 
-    public OnlineSourceCatalogService(HttpClient? httpClient = null)
+    public OnlineSourceCatalogService(
+        HttpClient? httpClient = null,
+        string? cacheDirectory = null)
     {
         _http = httpClient ?? new HttpClient
         {
@@ -98,14 +100,21 @@ public sealed class OnlineSourceCatalogService
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("CorePilot/online-sources");
 
-        var localAppData = Environment.GetFolderPath(
-            Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(cacheDirectory))
+        {
+            var localAppData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
 
-        _cacheDirectory = Path.Combine(
-            localAppData,
-            "CorePilot",
-            "cache",
-            "sources");
+            _cacheDirectory = Path.Combine(
+                localAppData,
+                "CorePilot",
+                "cache",
+                "sources");
+        }
+        else
+        {
+            _cacheDirectory = Path.GetFullPath(cacheDirectory);
+        }
 
         Directory.CreateDirectory(_cacheDirectory);
     }
