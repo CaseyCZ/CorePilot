@@ -230,6 +230,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ActivityLog.Progress(
                 "Verification",
                 $"Online sources refreshed: {_lastOnlineSourceSnapshot.LiveCount}/{_lastOnlineSourceSnapshot.Sources.Count} live.");
+
+            var preparationKnowledge = (
+                await Task.WhenAll(
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "installation"),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "configuration"),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "remediation"),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "media-writer")))
+                .SelectMany(x => x)
+                .DistinctBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (preparationKnowledge.Length > 0)
+            {
+                ActivityLog.Info(
+                    "Preparation knowledge",
+                    $"Loaded {preparationKnowledge.Length} applicable guide/tool source(s): " +
+                    string.Join(", ", preparationKnowledge.Select(x => x.Name).Take(12)));
+            }
         }
         catch (Exception ex)
         {
