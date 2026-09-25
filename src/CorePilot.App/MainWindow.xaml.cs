@@ -19,6 +19,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private readonly MacOSAutomationPlanner _macAutomationPlanner = new();
     private readonly MacOSAutomationProfileStore _macProfileStore = new();
+    private readonly OpCoreSimplifyStager _opCoreStager = new();
+    private HardwareSnifferExportResult? _deepScanExport;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -94,6 +96,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             DeepScanStatus = "Starting Hardware Sniffer…";
             var progress = new Progress<string>(message => DeepScanStatus = message);
             var result = await _hardwareSniffer.ExportAsync(progress);
+            _deepScanExport = result;
 
             _hardwareReport ??= await _scanner.ScanAsync();
             _hardwareReport = await _hardwareSnifferParser.MergeAsync(result.ReportPath, _hardwareReport);
@@ -276,8 +279,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (system.Id == "macos" && _automationProfile is not null)
         {
             var profilePath = await _macProfileStore.SaveAsync(_automationProfile);
-            PlanStatus = $"Plan ready: {variant.DisplayName} → {usb.DisplayName}. " +
-                         $"Automation profile saved to {profilePath}.";
+
+            if (_deepScanExport is null)
+            {
+                PlanStatus = $"Plan ready: {variant.DisplayName} → {usb.DisplayName}. " +
+                             $"Automation profile saved to {profilePath}. Run Deep scan to prepare the EFI workspace.";
+                return;
+            }
+
+            PlanStatus = "Preparing reproducible OpenCore workspace…";
+            var stage = await _opCoreStager.StageAsync(
+                _deepScanExport.ReportPath,
+                _deepScanExport.AcpiDirectory,
+                _automationProfile);
+
+            var review = _automationProfile.RequiresReview
+                ? " Advanced review is required before EFI generation."
+                : "";
+
+            PlanStatus = $"Workspace ready: {stage.WorkspaceDirectory}. " +
+                         $"OpCore Simplify {stage.UpstreamCommit[..8]} · " +
+                         $"Python: {(stage.PythonAvailable ? stage.PythonVersion : "not found")}." +
+                         review;
             return;
         }
 
