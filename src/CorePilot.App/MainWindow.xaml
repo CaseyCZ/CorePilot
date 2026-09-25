@@ -58,21 +58,21 @@
                     BorderThickness="1" CornerRadius="12" Padding="20">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Create boot media" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock Text="Create boot media" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                         <TextBlock Text="CorePilot checks the selected target against detected hardware before media creation."
                                    TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,20"/>
 
-                        <TextBlock Text="System" FontWeight="SemiBold"/>
+                        <TextBlock Text="System" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                         <ComboBox x:Name="SystemCombo" ItemsSource="{Binding Systems}" DisplayMemberPath="DisplayName"
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="SystemCombo_OnSelectionChanged"/>
 
-                        <TextBlock Text="Version / distribution" FontWeight="SemiBold"/>
+                        <TextBlock Text="Version / distribution" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                         <ComboBox x:Name="VariantCombo" ItemsSource="{Binding Variants}" DisplayMemberPath="DisplayName"
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="VariantCombo_OnSelectionChanged"/>
 
-                        <TextBlock Text="USB drive" FontWeight="SemiBold"/>
+                        <TextBlock Text="USB drive" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                         <ComboBox x:Name="UsbCombo" ItemsSource="{Binding UsbDrives}" DisplayMemberPath="DisplayName"
                                   IsEnabled="{Binding CanChangeInputs}"
                                   SelectionChanged="UsbCombo_OnSelectionChanged"/>
@@ -91,7 +91,8 @@
                                 Margin="0,6,0,10">
                             <TextBlock Text="{Binding NextActionText}"
                                        TextWrapping="Wrap"
-                                       FontWeight="SemiBold"/>
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrush}"/>
                         </Border>
 
                         <WrapPanel Margin="0,6,0,0">
@@ -132,7 +133,7 @@
                                     ToolTipService.ShowOnDisabled="True"/>
                         </WrapPanel>
 
-                        <TextBlock Text="Typed confirmation" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                        <TextBlock Text="Typed confirmation" FontWeight="SemiBold" Margin="0,12,0,0" Foreground="{StaticResource TextBrush}"/>
                         <TextBox x:Name="ConfirmationTextBox"
                                  MinWidth="300"
                                  IsEnabled="{Binding CanConfirmTarget}"
@@ -157,7 +158,7 @@
                         </Border>
 
                         <StackPanel Margin="0,14,0,0" Visibility="{Binding MacPlanVisibility}">
-                            <TextBlock Text="macOS plan" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="macOS plan" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="{StaticResource TextBrush}"/>
                             <TextBlock Text="{Binding MacPlanDetails}" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>
                     </StackPanel>
