@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using CorePilot.Core;
 using CorePilot.Hardware;
 using CorePilot.Linux;
@@ -30,6 +31,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbWriteSimulationService _usbWriteSimulationService = new();
     private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
     private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
+    private readonly MacOSWorkflowActionPolicy _actionPolicy = new();
+    private readonly DispatcherTimer _authorizationTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(1)
+    };
     private LogWindow? _logWindow;
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
@@ -58,6 +64,63 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<HardwareDisplayItem> HardwareItems { get; } = [];
     public ObservableCollection<CompatibilityFinding> CompatibilityItems { get; } = [];
     public ActivityLogService ActivityLog => App.Log;
+
+    public bool CanChangeInputs => !ActivityLog.IsBusy;
+    public bool CanScanHardware => Decision(CorePilotWorkflowAction.ScanHardware).Enabled;
+    public bool CanDeepScan => Decision(CorePilotWorkflowAction.DeepScan).Enabled;
+    public bool CanRefreshDrives => Decision(CorePilotWorkflowAction.RefreshDrives).Enabled;
+    public bool CanInspectUsb => Decision(CorePilotWorkflowAction.InspectUsb).Enabled;
+    public bool CanPreparePlan => Decision(CorePilotWorkflowAction.PreparePlan).Enabled;
+    public bool CanBuildEfi => Decision(CorePilotWorkflowAction.BuildEfi).Enabled;
+    public bool CanDownloadRecovery => Decision(CorePilotWorkflowAction.DownloadRecovery).Enabled;
+    public bool CanCreateUsbDryRun => Decision(CorePilotWorkflowAction.CreateUsbDryRun).Enabled;
+    public bool CanRunPreflight => Decision(CorePilotWorkflowAction.RunPreflight).Enabled;
+    public bool CanConfirmTarget => Decision(CorePilotWorkflowAction.ConfirmTarget).Enabled;
+    public bool CanSimulateWrite => Decision(CorePilotWorkflowAction.SimulateWrite).Enabled;
+
+    public string ScanHardwareToolTip => Decision(CorePilotWorkflowAction.ScanHardware).Reason;
+    public string DeepScanToolTip => Decision(CorePilotWorkflowAction.DeepScan).Reason;
+    public string RefreshDrivesToolTip => Decision(CorePilotWorkflowAction.RefreshDrives).Reason;
+    public string InspectUsbToolTip => Decision(CorePilotWorkflowAction.InspectUsb).Reason;
+    public string PreparePlanToolTip => Decision(CorePilotWorkflowAction.PreparePlan).Reason;
+    public string BuildEfiToolTip => Decision(CorePilotWorkflowAction.BuildEfi).Reason;
+    public string DownloadRecoveryToolTip => Decision(CorePilotWorkflowAction.DownloadRecovery).Reason;
+    public string CreateUsbDryRunToolTip => Decision(CorePilotWorkflowAction.CreateUsbDryRun).Reason;
+    public string RunPreflightToolTip => Decision(CorePilotWorkflowAction.RunPreflight).Reason;
+    public string ConfirmTargetToolTip => Decision(CorePilotWorkflowAction.ConfirmTarget).Reason;
+    public string SimulateWriteToolTip => Decision(CorePilotWorkflowAction.SimulateWrite).Reason;
+
+    public string NextActionText
+    {
+        get
+        {
+            if (ActivityLog.IsBusy)
+                return $"Running · {ActivityLog.CurrentArea} · {ActivityLog.CurrentStatus}";
+
+            var phase = _workflowStateMachine.Current.Phase;
+
+            if (phase == MacOSWorkflowPhase.CompatibilityReady && _deepScanExport is null)
+                return "Next · Deep scan — exact hardware report is required before workspace staging.";
+
+            return phase switch
+            {
+                MacOSWorkflowPhase.Idle => "Next · Scan hardware",
+                MacOSWorkflowPhase.HardwareScanned => "Next · Deep scan",
+                MacOSWorkflowPhase.DeepScanned => "Next · Select macOS/version and evaluate compatibility",
+                MacOSWorkflowPhase.CompatibilityReady => "Next · Prepare plan",
+                MacOSWorkflowPhase.WorkspaceStaged => "Next · Build EFI",
+                MacOSWorkflowPhase.EfiValidated => "Next · Download Recovery",
+                MacOSWorkflowPhase.RecoveryVerified => "Next · Finalize installer manifest",
+                MacOSWorkflowPhase.ManifestVerified => "Next · Check USB safety",
+                MacOSWorkflowPhase.UsbInspected => "Next · Dry-run USB plan",
+                MacOSWorkflowPhase.DryRunPlanned => "Next · Execution preflight",
+                MacOSWorkflowPhase.PreflightReady => "Next · Type exact confirmation phrase",
+                MacOSWorkflowPhase.Confirmed => "Next · Simulate write",
+                MacOSWorkflowPhase.Simulated => "Simulation complete · review Activity Log and transcript",
+                _ => "Follow the enabled action."
+            };
+        }
+    }
 
     public string ScanStatus
     {
@@ -109,6 +172,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
         ActivityLog.Info("UI", "Main window initialized.");
+        ActivityLog.PropertyChanged += ActivityLog_OnPropertyChanged;
+        _authorizationTimer.Tick += AuthorizationTimer_OnTick;
+        _authorizationTimer.Start();
+        Closed += (_, _) =>
+        {
+            _authorizationTimer.Stop();
+            _authorizationTimer.Tick -= AuthorizationTimer_OnTick;
+            ActivityLog.PropertyChanged -= ActivityLog_OnPropertyChanged;
+        };
 
         Systems.Add(new MacOSModule());
         Systems.Add(new WindowsModule());
@@ -123,6 +195,90 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private async void ScanHardware_OnClick(object sender, RoutedEventArgs e) => await ScanHardwareAsync();
+
+    private WorkflowActionDecision Decision(CorePilotWorkflowAction action) =>
+        _actionPolicy.Evaluate(
+            action,
+            _workflowStateMachine.Current,
+            BuildActionContext());
+
+    private MacOSWorkflowActionContext BuildActionContext() =>
+        new(
+            IsMacOSSelected: SystemCombo.SelectedItem is ISystemModule { Id: "macos" },
+            IsBusy: ActivityLog.IsBusy,
+            HasHardware: _hardwareReport is not null,
+            HasDeepScan: _deepScanExport is not null,
+            HasUsbSelection: UsbCombo.SelectedItem is UsbDriveInfo,
+            CompatibilityCanProceed: _compatibilityReport?.CanProceed == true,
+            AutomationCanBuild: _automationProfile?.CanBuildEfi == true,
+            AutomationRequiresReview: _automationProfile?.RequiresReview == true,
+            HasWorkspace: _opCoreStage is not null,
+            HasEfi: _lastEfiBuild?.Success == true,
+            HasManifest: _lastInstallerManifest is not null && _lastRecovery is not null,
+            HasUsbSafetyReport: _usbSafetyReport is not null,
+            UsbIsBlocked: _usbSafetyReport?.IsBlocked != false,
+            HasDryRun: _lastUsbWritePlan is not null,
+            HasPreflight: _lastUsbExecutionPreflight is not null,
+            HasConfirmation: _lastUsbTypedConfirmation is not null);
+
+    private void ActivityLog_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ActivityLogService.IsBusy) or
+            nameof(ActivityLogService.CurrentStatus) or
+            nameof(ActivityLogService.CurrentArea))
+        {
+            Dispatcher.BeginInvoke(RefreshActionAvailability);
+        }
+    }
+
+    private void AuthorizationTimer_OnTick(object? sender, EventArgs e)
+    {
+        if (!_workflowStateMachine.InvalidateIfAuthorizationExpired(
+                DateTimeOffset.UtcNow,
+                "Execution authorization expired automatically."))
+        {
+            if (_workflowStateMachine.Current.AuthorizationExpiresAt is not null)
+                RefreshActionAvailability();
+            return;
+        }
+
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        ConfirmationTextBox.Text = "";
+        ActivityLog.Warning(
+            "Workflow",
+            "Execution authorization expired automatically; preflight and typed confirmation were revoked.");
+        UpdateWorkflowStatus();
+    }
+
+    private void RefreshActionAvailability()
+    {
+        OnPropertyChanged(nameof(CanChangeInputs));
+        OnPropertyChanged(nameof(CanScanHardware));
+        OnPropertyChanged(nameof(CanDeepScan));
+        OnPropertyChanged(nameof(CanRefreshDrives));
+        OnPropertyChanged(nameof(CanInspectUsb));
+        OnPropertyChanged(nameof(CanPreparePlan));
+        OnPropertyChanged(nameof(CanBuildEfi));
+        OnPropertyChanged(nameof(CanDownloadRecovery));
+        OnPropertyChanged(nameof(CanCreateUsbDryRun));
+        OnPropertyChanged(nameof(CanRunPreflight));
+        OnPropertyChanged(nameof(CanConfirmTarget));
+        OnPropertyChanged(nameof(CanSimulateWrite));
+
+        OnPropertyChanged(nameof(ScanHardwareToolTip));
+        OnPropertyChanged(nameof(DeepScanToolTip));
+        OnPropertyChanged(nameof(RefreshDrivesToolTip));
+        OnPropertyChanged(nameof(InspectUsbToolTip));
+        OnPropertyChanged(nameof(PreparePlanToolTip));
+        OnPropertyChanged(nameof(BuildEfiToolTip));
+        OnPropertyChanged(nameof(DownloadRecoveryToolTip));
+        OnPropertyChanged(nameof(CreateUsbDryRunToolTip));
+        OnPropertyChanged(nameof(RunPreflightToolTip));
+        OnPropertyChanged(nameof(ConfirmTargetToolTip));
+        OnPropertyChanged(nameof(SimulateWriteToolTip));
+        OnPropertyChanged(nameof(NextActionText));
+    }
 
     private void OpenLog_OnClick(object sender, RoutedEventArgs e)
     {
@@ -160,6 +316,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         WorkflowStatus =
             $"Workflow · {state.PhaseText} · gen {state.Generation}{expiry} · {state.Reason}";
+        RefreshActionAvailability();
     }
 
     private void InvalidateWorkflowAfter(
@@ -270,6 +427,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
             ? "USB target changed — safety inspection required."
             : "USB target not selected.";
+        RefreshActionAvailability();
     }
 
     private async void InspectUsb_OnClick(object sender, RoutedEventArgs e)
@@ -368,10 +526,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         PlanStatus = module.Description;
         RunCompatibilityAnalysis();
+        RefreshActionAvailability();
     }
 
-    private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
+    private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
         RunCompatibilityAnalysis();
+        RefreshActionAvailability();
+    }
 
     private void RunCompatibilityAnalysis()
     {
@@ -585,6 +747,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"SMBIOS {result.SmbiosModel} · {result.Kexts.Count} kexts · " +
                 $"{result.AcpiPatches.Count} ACPI selections · " +
                 $"ocvalidate: {result.OcValidateStatus} · structure: {result.StructuralValidationStatus}.";
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.EfiValidated,
+                "EFI generated and passed ocvalidate + structural validation.");
             ActivityLog.Success("EFI Build", PlanStatus);
         }
         catch (Exception ex)
@@ -656,8 +821,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _lastInstallerManifest = manifest;
             _lastUsbWritePlan = null;
-        _lastUsbExecutionPreflight = null;
-        _lastUsbTypedConfirmation = null;
+            _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.RecoveryVerified,
+                "Apple Recovery downloaded and verified.");
+            AdvanceWorkflow(
+                MacOSWorkflowPhase.ManifestVerified,
+                "Final installer manifest created and re-verified.");
 
             PlanStatus =
                 $"Apple Recovery + installer manifest ready ✅ " +
@@ -721,6 +892,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _lastUsbWritePlan = null;
                 UsbSafetyStatus = freshReport.Summary;
                 PlanStatus = "USB identity changed since the previous inspection. Dry-run plan was rejected; inspect the target again.";
+                ActivityLog.Warning("USB Dry-run", PlanStatus);
                 return;
             }
 
@@ -800,6 +972,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _usbSafetyReport = freshTarget;
                 UsbSafetyStatus = freshTarget.Summary;
                 PlanStatus = $"Execution preflight BLOCKED: {freshTarget.Summary}";
+                ActivityLog.Warning("Preflight", PlanStatus);
                 return;
             }
 
@@ -879,6 +1052,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _usbSafetyReport = freshTarget;
                 UsbSafetyStatus = freshTarget.Summary;
                 PlanStatus = $"Confirmation BLOCKED: {freshTarget.Summary}";
+                ActivityLog.Warning("Confirmation", PlanStatus);
                 return;
             }
 
@@ -953,6 +1127,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (freshTarget.IsBlocked)
             {
                 PlanStatus = $"Simulation BLOCKED: {freshTarget.Summary}";
+                ActivityLog.Warning("Write Simulation", PlanStatus);
                 return;
             }
 
