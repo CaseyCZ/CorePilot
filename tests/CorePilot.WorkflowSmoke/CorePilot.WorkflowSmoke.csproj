@@ -7,5 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\CorePilot.MacOS\CorePilot.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\CorePilot.Windows\CorePilot.Windows.csproj" />
+    <ProjectReference Include="..\..\src\CorePilot.Linux\CorePilot.Linux.csproj" />
   </ItemGroup>
 </Project>
