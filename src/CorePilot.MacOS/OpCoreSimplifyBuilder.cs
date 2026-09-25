@@ -15,13 +15,17 @@ public sealed record OpCoreBuildResult(
     bool NeedsOclp,
     string OcValidateStatus,
     string OcValidateOutput,
-    string Error);
+    string Error,
+    string StructuralValidationStatus = "not-run");
 
 public sealed class OpCoreSimplifyBuilder
 {
+    private readonly EfiStructureValidator _structureValidator = new();
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
     };
 
     public async Task<OpCoreBuildResult> BuildAsync(
@@ -110,7 +114,28 @@ public sealed class OpCoreSimplifyBuilder
             throw new InvalidOperationException(
                 "EFI was generated but did not pass ocvalidate.");
 
-        progress?.Report("EFI generated and validated successfully.");
+        progress?.Report("Auditing EFI structure against config.plist…");
+        var audit = _structureValidator.Validate(result.EfiDirectory, result.ConfigPath);
+
+        if (!audit.Success)
+        {
+            var summary = string.Join("; ", audit.Errors.Take(4));
+            throw new InvalidOperationException(
+                $"EFI structure audit failed: {summary}");
+        }
+
+        result = result with
+        {
+            StructuralValidationStatus =
+                $"success ({audit.CheckedEntries} enabled references checked)"
+        };
+
+        await File.WriteAllTextAsync(
+            resultPath,
+            JsonSerializer.Serialize(result, JsonOptions),
+            cancellationToken);
+
+        progress?.Report("EFI generated, ocvalidated and structurally audited successfully.");
         return result;
     }
 

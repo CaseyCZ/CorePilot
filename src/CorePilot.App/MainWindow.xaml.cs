@@ -354,7 +354,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
                 $"SMBIOS {result.SmbiosModel} · {result.Kexts.Count} kexts · " +
-                $"{result.AcpiPatches.Count} ACPI selections · ocvalidate: {result.OcValidateStatus}.";
+                $"{result.AcpiPatches.Count} ACPI selections · " +
+                $"ocvalidate: {result.OcValidateStatus} · structure: {result.StructuralValidationStatus}.";
         }
         catch (Exception ex)
         {
