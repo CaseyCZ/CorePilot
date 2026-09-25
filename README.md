@@ -176,6 +176,6 @@ The catalog currently covers:
 
 GitHub release sources resolve the current stable release. Branch-based tools resolve the current upstream branch head. The OpCore-Simplify execution path additionally requires the resolved GitHub commit to be **verified** before CorePilot will execute it.
 
-The OpCore-Simplify staging cache is keyed by the online-resolved verified commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest. Hardware-Sniffer-CLI is also checked against the SHA-256 digest published on its GitHub Release asset before CorePilot executes it.
+The OpCore-Simplify staging cache is keyed by the online-resolved verified commit and the downloaded archive is SHA-256 hashed before its metadata is written to the workspace manifest. Hardware-Sniffer-CLI is also checked against the SHA-256 digest published on its GitHub Release asset before CorePilot executes it. After EFI generation, CorePilot additionally audits OpCore-Simplify's `OCK_Files/history.json`: every recorded OpenCore/kext component must have an HTTPS source, stable id, SHA-256 metadata and integrity-manifested cache folder before Recovery or physical writing can continue.
 
 This lets source URLs and component metadata be updated from the online catalog without requiring a new CorePilot application release.
