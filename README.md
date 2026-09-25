@@ -8,7 +8,7 @@ Target workflow:
 
 ## macOS pipeline status
 
-### v0.1–v0.8 ✅
+### v0.1–v0.9 ✅
 
 CorePilot currently provides:
 
@@ -21,24 +21,41 @@ CorePilot currently provides:
 - verified Apple Recovery download
 - final installer manifest with SHA-256 for every EFI/recovery file
 - immediate manifest re-verification
+- fail-closed USB target safety inspection
+- boot/system/pagefile protection checks
+- stable SHA-256 USB target identity fingerprint
 
-### v0.9 — Read-only USB safety inspector 🚧
+### v0.10 — Manifest-bound USB dry-run plan 🚧
 
-Before CorePilot gains any destructive disk operation, the selected USB target is now inspected read-only:
+CorePilot can now create the exact future macOS USB operation plan **without executing any physical disk command**.
 
-- resolves the exact `Win32_DiskDrive`
-- reads physical disk index, model, serial number, size, interface/media type and PNP identity
-- enumerates partitions and mounted logical volumes
-- checks Windows `BootPartition`, `BootVolume`, `SystemVolume`
-- checks the current Windows system drive
-- checks pagefile placement
-- creates a stable SHA-256 target identity fingerprint
-- **BLOCKED** for any disk carrying system/boot/pagefile content
-- **BLOCKED** if disk topology cannot be resolved completely
-- **SAFE CANDIDATE** for a removable USB with stable serial identity
-- **STRONG CONFIRMATION** for USB fixed media (such as an external SSD/HDD) or removable media without a stable serial
+The dry-run plan is bound to:
 
-This feature performs **no disk writes, formatting, partitioning, dismounting or volume changes**.
+- exact physical disk number and Windows device path
+- target model, serial, size and SHA-256 identity fingerprint
+- current USB safety classification
+- exact `CorePilotInstallerManifest.json` SHA-256
+- the already-verified EFI + Apple Recovery payload
+
+The planned recovery USB layout follows the current OpenCore/Dortania Windows workflow:
+
+- GPT partition table
+- one primary FAT32 installer partition
+- volume label `EFI`
+- `EFI/` at the partition root
+- `com.apple.recovery.boot/` at the partition root
+- verified recovery `.dmg` and `.chunklist` inside `com.apple.recovery.boot/`
+
+For USB media larger than the practical Windows built-in FAT32 formatting limit, CorePilot plans a smaller FAT32 installer partition instead of pretending Windows can format the entire large device as FAT32.
+
+The generated workspace files are:
+
+- `CorePilotUsbWritePlan.json`
+- `CorePilotUsbWritePlan.sha256`
+
+The plan includes future destructive actions as **descriptions/command previews only**. It is marked `DryRunOnly=true`; CorePilot does not execute diskpart, clean, format, dismount or raw-disk writes.
+
+Before creating the plan, CorePilot re-inspects the selected USB and rejects the operation if its identity fingerprint changed.
 
 ## Safety model
 
@@ -51,14 +68,16 @@ This feature performs **no disk writes, formatting, partitioning, dismounting or
 7. Download + verify Apple Recovery
 8. Create + verify installer manifest
 9. Inspect exact USB target read-only
-10. **Write USB — still disabled**
+10. Create + verify manifest-bound USB dry-run plan
+11. Re-inspect target immediately before any future execution
+12. **Destructive USB write — still disabled**
 
 ## Next
 
-1. Create a dry-run macOS USB layout plan tied to both the installer-manifest SHA and USB identity fingerprint.
-2. Re-inspect the target immediately before execution and reject any identity change.
-3. Add explicit destructive confirmation containing disk number, model, serial/fingerprint and size.
-4. Only then implement the actual GPT/EFI/recovery write engine.
+1. Add an execution preflight object that revalidates target fingerprint + manifest + dry-run plan hash in one atomic gate.
+2. Add explicit typed destructive confirmation containing disk number and fingerprint.
+3. Implement a disk-operation abstraction with a permanent dry-run backend first.
+4. Only after those tests pass, add the real GPT/FAT32 writer.
 5. Continue Windows/Linux media engines after the common disk-safety layer is stable.
 
 ## Build

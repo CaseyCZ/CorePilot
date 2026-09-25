@@ -24,12 +24,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly AppleRecoveryDownloader _appleRecoveryDownloader = new();
     private readonly InstallerManifestService _installerManifestService = new();
     private readonly UsbTargetSafetyInspector _usbSafetyInspector = new();
+    private readonly MacOSUsbWritePlanService _usbWritePlanService = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
     private AppleRecoveryResult? _lastRecovery;
     private InstallerManifestResult? _lastInstallerManifest;
     private UsbTargetSafetyReport? _usbSafetyReport;
+    private MacOSUsbWritePlanResult? _lastUsbWritePlan;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -166,6 +168,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void UsbCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _usbSafetyReport = null;
+        _lastUsbWritePlan = null;
         UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
             ? "USB target changed — safety inspection required."
             : "USB target not selected.";
@@ -184,6 +187,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UsbSafetyStatus = "Inspecting physical disk, partitions and mounted volumes…";
             var report = await _usbSafetyInspector.InspectAsync(usb);
             _usbSafetyReport = report;
+            _lastUsbWritePlan = null;
             UsbSafetyStatus = report.Summary;
         }
         catch (Exception ex)
@@ -201,6 +205,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var disks = await _scanner.ScanDisksAsync();
 
             _usbSafetyReport = null;
+            _lastUsbWritePlan = null;
             UsbSafetyStatus = "USB list refreshed — safety inspection required.";
 
             UsbDrives.Clear();
@@ -250,6 +255,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _lastEfiBuild = null;
         _lastRecovery = null;
         _lastInstallerManifest = null;
+        _lastUsbWritePlan = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -404,6 +410,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastEfiBuild = result;
             _lastRecovery = null;
             _lastInstallerManifest = null;
+            _lastUsbWritePlan = null;
 
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
@@ -464,6 +471,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     string.Join("; ", verification.Errors.Take(4)));
 
             _lastInstallerManifest = manifest;
+            _lastUsbWritePlan = null;
 
             PlanStatus =
                 $"Apple Recovery + installer manifest ready ✅ " +
@@ -474,6 +482,84 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             PlanStatus = $"Apple Recovery failed: {ex.Message}";
+        }
+    }
+
+    private async void CreateUsbDryRun_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" })
+        {
+            PlanStatus = "USB dry-run planning is currently available only for the macOS module.";
+            return;
+        }
+
+        if (_opCoreStage is null ||
+            _lastInstallerManifest is null ||
+            _lastRecovery is null)
+        {
+            PlanStatus = "Build EFI, download Recovery and create the verified installer manifest first.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Select a USB target first.";
+            return;
+        }
+
+        if (_usbSafetyReport is null)
+        {
+            PlanStatus = "Run Check USB safety before creating the dry-run plan.";
+            return;
+        }
+
+        if (_usbSafetyReport.IsBlocked)
+        {
+            PlanStatus = $"USB dry-run blocked: {_usbSafetyReport.Summary}";
+            return;
+        }
+
+        try
+        {
+            PlanStatus = "Re-inspecting USB identity before dry-run planning…";
+            var freshReport = await _usbSafetyInspector.InspectAsync(usb);
+
+            if (!freshReport.IdentityFingerprint.Equals(
+                    _usbSafetyReport.IdentityFingerprint,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _usbSafetyReport = freshReport;
+                _lastUsbWritePlan = null;
+                UsbSafetyStatus = freshReport.Summary;
+                PlanStatus = "USB identity changed since the previous inspection. Dry-run plan was rejected; inspect the target again.";
+                return;
+            }
+
+            _usbSafetyReport = freshReport;
+            UsbSafetyStatus = freshReport.Summary;
+
+            PlanStatus = "Creating manifest-bound USB dry-run plan…";
+            var plan = await _usbWritePlanService.CreateDryRunAsync(
+                _opCoreStage,
+                _lastInstallerManifest,
+                freshReport);
+
+            _lastUsbWritePlan = plan;
+
+            var confirmation = plan.RequiresStrongConfirmation
+                ? " · future strong confirmation required"
+                : "";
+
+            PlanStatus =
+                $"USB dry-run ready ✅ {plan.ActionCount} planned steps · " +
+                $"FAT32 {plan.PlannedFat32PartitionBytes / 1024d / 1024d / 1024d:0.##} GiB · " +
+                $"plan SHA256 {plan.PlanSha256[..16]}…{confirmation}. " +
+                "No physical disk operation was executed.";
+        }
+        catch (Exception ex)
+        {
+            _lastUsbWritePlan = null;
+            PlanStatus = $"USB dry-run failed: {ex.Message}";
         }
     }
 
