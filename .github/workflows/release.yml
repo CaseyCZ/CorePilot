@@ -90,9 +90,10 @@ jobs:
             "Get-FileHash",
             "BypassTPMCheck",
             "BypassSecureBootCheck",
-            "BypassRAMCheck",
             "convert mbr",
-            "bootsect.exe"
+            "bootsect.exe",
+            "customizationSha256",
+            "result does not match the media mode prepared by Verify"
           )) {
             if (-not $windowsWriter.Contains($needle)) {
               throw "Guarded Windows writer is missing required safety marker '$needle'."
