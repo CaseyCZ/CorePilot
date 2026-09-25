@@ -417,6 +417,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Final installer manifest created and re-verified.");
 
             ActivityLog.Progress(
+                "Supply chain",
+                "Re-validating all live sources immediately before destructive USB authorization…");
+
+            var finalSourceSnapshot =
+                await _onlineSources.ResolveForSystemAsync("macos");
+
+            if (finalSourceSnapshot.CriticalFailures != 0)
+                throw new InvalidOperationException(
+                    $"{finalSourceSnapshot.CriticalFailures} critical online source(s) are no longer live. Physical writing was blocked.");
+
+            var currentOpCoreSimplify = finalSourceSnapshot.Sources.SingleOrDefault(x =>
+                x.Id.Equals(
+                    "macos.opcore-simplify",
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (currentOpCoreSimplify?.ResolvedRef is null ||
+                !currentOpCoreSimplify.ResolvedRef.Equals(
+                    _opCoreStage.UpstreamCommit,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "OpCore-Simplify changed upstream while the installer was being prepared. Run Write to disk again so CorePilot rebuilds from the new verified commit.");
+
+            _ = await _componentAuditService.AuditAsync(
+                _opCoreStage,
+                finalSourceSnapshot);
+
+            _lastOnlineSourceSnapshot = finalSourceSnapshot;
+
+            ActivityLog.Progress(
                 "Write workflow",
                 "Inspecting the exact physical USB target…");
 
