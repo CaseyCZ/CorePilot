@@ -46,6 +46,9 @@ jobs:
             }
           }
 
+      - name: State-machine smoke test
+        run: dotnet run --project tests/CorePilot.WorkflowSmoke/CorePilot.WorkflowSmoke.csproj --configuration Release
+
       - name: Build
         run: dotnet build CorePilot.sln --configuration Release --no-restore
 
