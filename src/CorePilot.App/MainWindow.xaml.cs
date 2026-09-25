@@ -22,10 +22,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly OpCoreSimplifyStager _opCoreStager = new();
     private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
     private readonly AppleRecoveryDownloader _appleRecoveryDownloader = new();
+    private readonly InstallerManifestService _installerManifestService = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
     private AppleRecoveryResult? _lastRecovery;
+    private InstallerManifestResult? _lastInstallerManifest;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -205,6 +207,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _opCoreStage = null;
         _lastEfiBuild = null;
         _lastRecovery = null;
+        _lastInstallerManifest = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -358,6 +361,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 progress);
             _lastEfiBuild = result;
             _lastRecovery = null;
+            _lastInstallerManifest = null;
 
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
@@ -401,11 +405,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 progress);
             _lastRecovery = result;
 
+            PlanStatus = "Creating final installer manifest…";
+            var manifest = await _installerManifestService.CreateAsync(
+                _opCoreStage,
+                _automationProfile,
+                _lastEfiBuild,
+                result);
+
+            var verification = await _installerManifestService.VerifyAsync(
+                manifest.ManifestPath,
+                _opCoreStage.WorkspaceDirectory);
+
+            if (!verification.Success)
+                throw new InvalidOperationException(
+                    "Installer manifest verification failed: " +
+                    string.Join("; ", verification.Errors.Take(4)));
+
+            _lastInstallerManifest = manifest;
+
             PlanStatus =
-                $"Apple Recovery ready ✅ {result.OutputDirectory}. " +
-                $"BaseSystem {result.DmgSizeBytes / 1024d / 1024d:0.#} MB · " +
-                $"DMG SHA256 {result.DmgSha256[..16]}… · " +
-                $"chunklist SHA256 {result.ChunklistSha256[..16]}….";
+                $"Apple Recovery + installer manifest ready ✅ " +
+                $"{manifest.FileCount} files · " +
+                $"manifest SHA256 {manifest.ManifestSha256[..16]}… · " +
+                $"{result.OutputDirectory}.";
         }
         catch (Exception ex)
         {

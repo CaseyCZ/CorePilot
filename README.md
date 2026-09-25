@@ -6,67 +6,71 @@ Target workflow:
 
 **Choose an operating system → choose a USB drive → CorePilot handles the rest.**
 
-## Current development
+## macOS pipeline status
 
 ### v0.1 — Foundation ✅
-Windows .NET 8/WPF app, local hardware inventory, USB discovery and modular OS architecture.
+Windows app, hardware inventory, USB discovery and modular OS architecture.
 
-### v0.2 — macOS compatibility engine ✅
-Hardware findings plus kext, kernel patch and boot-argument planning.
+### v0.2 — Compatibility engine ✅
+Hardware findings plus kext, patch and boot-argument planning.
 
-### v0.3 — Hardware Sniffer integration ✅
-Explicit Deep Scan, exact PCI/USB identities, Report.json + ACPI export and import.
+### v0.3 — Hardware Sniffer ✅
+Deep Scan with exact Report.json + ACPI import.
 
-### v0.4 — macOS policy + staging ✅
-Deterministic automation profile, pinned OpCore Simplify source, SHA-256 workspace manifest and Python detection.
+### v0.4 — Policy + staging ✅
+Deterministic automation profile, pinned OpCore Simplify source and workspace manifest.
 
-### v0.5 — Non-interactive EFI builder ✅
-Pinned upstream internals, fail-closed automation bridge and mandatory `ocvalidate`.
+### v0.5 — EFI builder ✅
+Non-interactive upstream integration and mandatory `ocvalidate`.
 
 ### v0.6 — EFI structure audit ✅
-CorePilot independently checks enabled ACPI, kext, driver and tool references from `config.plist`.
+Independent verification that enabled ACPI, kext, driver and tool references physically exist.
 
-### v0.7 — Apple Recovery 🚧
+### v0.7 — Apple Recovery ✅
+Official OpenCorePkg `macrecovery.py`, signed chunk verification and local SHA-256 hashes.
 
-CorePilot now uses the **macrecovery.py shipped with the same OpenCorePkg gathered for the EFI build**.
+### v0.8 — Final installer manifest 🚧
 
-Supported target profiles currently use the official examples from OpenCorePkg `Utilities/macrecovery/recovery_urls.txt`:
+After Recovery succeeds, CorePilot now automatically creates:
 
-- Ventura 13
-- Sonoma 14
-- Sequoia 15
-- Tahoe 26
+- `CorePilotInstallerManifest.json`
+- `CorePilotInstallerManifest.sha256`
 
-Recovery flow:
+The manifest contains:
 
-1. EFI must pass both `ocvalidate` and the CorePilot structure audit.
-2. CorePilot launches the local OpenCorePkg `macrecovery.py` with the official board-ID/MLB profile for the selected target.
-3. The payload is written only to the isolated workspace as `com.apple.recovery.boot/BaseSystem.dmg` and `BaseSystem.chunklist`.
-4. `macrecovery.py` verifies the signed chunklist and every image chunk.
-5. CorePilot computes its own SHA-256 for both files.
-6. The result is saved as `CorePilotRecovery.json`.
+- selected macOS target and Darwin version
+- actual SMBIOS used by the EFI builder
+- pinned OpCore Simplify commit + source archive SHA-256
+- `ocvalidate` and CorePilot structural-audit status
+- every file below the generated EFI tree
+- path, role, size and SHA-256 for every EFI file
+- verified `BaseSystem.dmg` and `BaseSystem.chunklist` hashes
 
-The UI exposes this as **Download Recovery** after **Build EFI**.
+CorePilot immediately re-reads the manifest and re-hashes all referenced files. Workspace path traversal and reparse-point files are rejected.
+
+This gives the future USB writer a deterministic pre-write contract: **the bytes written to USB must match the already-validated installer manifest.**
 
 ## Safety model
 
-1. **Scan** — read-only local hardware inventory.
-2. **Deep Scan** — explicit Hardware Sniffer download/run.
-3. **Plan** — compatibility + automatic choices.
-4. **Stage** — pinned upstream source + isolated workspace.
-5. **Build EFI** — workspace only.
-6. **Validate EFI** — `ocvalidate` + CorePilot structure audit.
-7. **Download Recovery** — Apple payload into the workspace + signed chunk verification + SHA-256.
-8. **Write USB** — **still disabled**.
+1. Scan
+2. Deep Scan
+3. Plan
+4. Stage
+5. Build EFI
+6. Validate EFI
+7. Download + verify Apple Recovery
+8. Create + verify final installer manifest
+9. **Write USB — still disabled**
 
-No current CorePilot step writes to a physical disk.
+No current step writes to a physical disk.
 
 ## Next
 
-1. Create a final installer manifest containing EFI tree hashes + Recovery hashes.
-2. Re-verify that manifest immediately before any removable-disk action.
-3. Add guarded GPT/EFI/recovery USB creation with strong target-disk confirmation.
-4. Then add Windows/Linux media engines and multiboot.
+1. Build a read-only USB target safety inspector: removable status, system-disk detection, model/serial/size and mounted volumes.
+2. Design the exact GPT/EFI/recovery layout.
+3. Add a dry-run USB write plan that must match the installer manifest.
+4. Only after those safeguards pass, enable the destructive write behind explicit confirmation.
+5. Then continue Windows/Linux media engines and multiboot.
 
 ## Build
 
