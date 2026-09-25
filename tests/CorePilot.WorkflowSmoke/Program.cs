@@ -791,6 +791,11 @@ var windowsPhrase =
     WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
         windowsTestImage);
+var windowsOlderPcPhrase =
+    WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
+        writerTestTarget,
+        windowsTestImage,
+        WindowsMediaOptions.OlderPc);
 var linuxPhrase =
     LinuxRawUsbWriter.RequiredConfirmationPhrase(
         writerTestTarget,
@@ -798,8 +803,21 @@ var linuxPhrase =
 
 Assert(windowsPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        windowsPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
-       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal),
-    "Windows writer confirmation must bind the exact disk identity and prepared target");
+       windowsPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       !windowsPhrase.Contains("OLDER-PC", StringComparison.Ordinal),
+    "standard Windows writer confirmation must bind the exact disk identity and prepared target");
+
+Assert(windowsOlderPcPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("WINDOWS 11", StringComparison.Ordinal) &&
+       windowsOlderPcPhrase.Contains("OLDER-PC", StringComparison.Ordinal),
+    "older-PC Windows writer confirmation must explicitly bind the compatibility mode");
+
+Assert(WindowsMediaOptions.OlderPc.ExtendedHardwareCompatibility &&
+       WindowsMediaOptions.OlderPc.LegacyBiosCompatible &&
+       !WindowsMediaOptions.Standard.ExtendedHardwareCompatibility &&
+       !WindowsMediaOptions.Standard.LegacyBiosCompatible,
+    "Windows media options must keep standard and older-PC paths distinct");
 
 Assert(linuxPhrase.Contains("DISK 7", StringComparison.Ordinal) &&
        linuxPhrase.Contains("ABCDEF012345", StringComparison.Ordinal) &&
