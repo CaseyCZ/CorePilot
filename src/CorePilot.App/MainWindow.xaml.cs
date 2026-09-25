@@ -14,11 +14,13 @@ namespace CorePilot.App;
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly HardwareScanner _scanner = new();
+    private readonly HardwareSnifferBridge _hardwareSniffer = new();
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
 
     private string _scanStatus = "Not scanned";
+    private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
     private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
     private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
     private string _macPlanDetails = "";
@@ -33,6 +35,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _scanStatus;
         private set { _scanStatus = value; OnPropertyChanged(); }
+    }
+
+    public string DeepScanStatus
+    {
+        get => _deepScanStatus;
+        private set { _deepScanStatus = value; OnPropertyChanged(); }
     }
 
     public string PlanStatus
@@ -74,6 +82,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private async void ScanHardware_OnClick(object sender, RoutedEventArgs e) => await ScanHardwareAsync();
+
+    private async void DeepScan_OnClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            DeepScanStatus = "Starting Hardware Sniffer…";
+            var progress = new Progress<string>(message => DeepScanStatus = message);
+            var result = await _hardwareSniffer.ExportAsync(progress);
+
+            DeepScanStatus =
+                $"Hardware Sniffer {result.Version} complete. " +
+                $"Report: {result.ReportPath} · SHA256: {result.ToolSha256[..16]}…";
+        }
+        catch (Exception ex)
+        {
+            DeepScanStatus = $"Deep scan failed: {ex.Message}";
+        }
+    }
 
     private async Task ScanHardwareAsync()
     {
@@ -210,7 +236,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         PlanStatus = $"Plan ready: {variant.DisplayName} → {usb.DisplayName}. " +
-                     $"Next milestone: downloads, OpenCore/EFI generation and safe USB writing for {system.DisplayName}.";
+                     $"Next milestone: OpenCore/EFI generation, downloads and guarded USB writing for {system.DisplayName}.";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
