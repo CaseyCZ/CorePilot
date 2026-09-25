@@ -218,7 +218,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Refreshing current {module.DisplayName} sources…");
 
             _lastOnlineSourceSnapshot =
-                await _onlineSources.ResolveForSystemAsync(module.Id);
+                await _onlineSources.ResolveForTargetAsync(module.Id, target.Id);
 
             foreach (var source in _lastOnlineSourceSnapshot.Sources)
             {
@@ -413,7 +413,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Re-validating live sources for {variant.DisplayName}…");
 
             _lastOnlineSourceSnapshot =
-                await _onlineSources.ResolveForSystemAsync("macos");
+                await _onlineSources.ResolveForTargetAsync("macos", variant.Id);
 
             if (_lastOnlineSourceSnapshot.CriticalFailures != 0)
                 throw new InvalidOperationException(
@@ -453,7 +453,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Re-validating all live sources immediately before destructive USB authorization…");
 
             var finalSourceSnapshot =
-                await _onlineSources.ResolveForSystemAsync("macos");
+                await _onlineSources.ResolveForTargetAsync("macos", variant.Id);
 
             if (finalSourceSnapshot.CriticalFailures != 0)
                 throw new InvalidOperationException(
@@ -1273,7 +1273,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Write workflow",
                 $"Re-validating {target.DisplayName} preparation and USB target…");
 
-            var live = await _onlineSources.ResolveForSystemAsync(module.Id);
+            var live = await _onlineSources.ResolveForTargetAsync(module.Id, target.Id);
             if (live.CriticalFailures != 0)
                 throw new InvalidOperationException(
                     $"{live.CriticalFailures} critical online source(s) are not live. Writing was blocked.");
