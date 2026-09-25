@@ -1,3 +1,4 @@
+using CorePilot.Core;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
