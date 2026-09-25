@@ -4,7 +4,7 @@
 
 Target workflow:
 
-**Choose an operating system → Verify → optionally choose a USB drive → Write to disk.**
+**Choose an operating system → choose This computer or Other computer → Verify → optionally choose a USB drive → Write to disk.**
 
 CorePilot is not intended to stop at a compatibility verdict. **Verify is the preparation engine**: it scans the exact hardware, searches the trusted online knowledge/tool catalog for usable installation paths, resolves applicable drivers/kexts/patches, generates the hardware-specific configuration, downloads non-destructive installer payloads where supported, and validates the result. A detected incompatibility is treated as a remediation task first; it becomes a final blocker only when the currently implemented safe paths cannot resolve it.
 
@@ -65,7 +65,11 @@ If a critical source goes offline, a component version changes while the install
 
 ### Windows / Linux guarded media ✅
 
-**Windows 11** is not reported ready unless CorePilot confirms UEFI, sufficient memory and an enabled TPM 2.0 device. Verify resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, and re-hashes critical boot files.
+For **Windows 11**, This computer mode evaluates the detected PC first. If the only blocking requirements are the documented TPM 2.0 / Secure Boot / RAM / firmware path, CorePilot can automatically switch to **Older PC compatibility** instead of treating those items as a final blocker. That mode prepares MBR/FAT32 BIOS+UEFI-capable media and applies the documented Windows Setup `BypassTPMCheck`, `BypassSecureBootCheck` and `BypassRAMCheck` compatibility keys. CorePilot does not claim an unverified generic CPU/storage bypass.
+
+In **Other computer** mode, Windows/Linux media preparation intentionally ignores this PC's TPM, CPU, Secure Boot and firmware state. Windows 11 exposes an explicit **Older PC compatibility** toggle for wider hardware support; standard mode leaves the normal Windows 11 requirements unchanged.
+
+Verify resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 standard media or MBR/FAT32 older-PC media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, applies the selected setup compatibility profile and re-hashes critical boot files.
 
 **Linux** verification is scoped to the selected distribution only. Verify downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
 
@@ -131,7 +135,7 @@ The development UI now keeps the normal flow intentionally small:
 
 For supported Hackintosh/OpenCore targets the flow is now: **Verify** → Hardware Sniffer Deep Scan → current verified OpCore-Simplify staging → hardware-specific EFI/kext/patch configuration → `ocvalidate` + structural/integrity audit → Apple Recovery → final installer manifest. Then **Write to disk** → live-source revalidation → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
 
-For **Windows 10/11**, Verify checks hardware (including TPM 2.0 for Windows 11), resolves the current official Microsoft retail ISO through the GitHub-verified Fido source, downloads it, records its SHA-256 and prepares it for the guarded Windows USB writer. The writer creates a UEFI FAT32 installer and automatically splits an oversized `install.wim` with DISM when required.
+For **Windows 10/11**, This computer mode checks the detected hardware, while Other computer mode prepares universal media without using this PC as the compatibility gate. Windows 11 can use standard media or the documented Older PC compatibility profile. Verify resolves the current official Microsoft retail ISO through the GitHub-verified Fido source, downloads it, records its SHA-256 and prepares it for the guarded Windows USB writer. The writer creates GPT/FAT32 standard media or MBR/FAT32 BIOS+UEFI older-PC media and automatically splits an oversized `install.wim` with DISM when required.
 
 For **Ubuntu, Fedora, Debian and Linux Mint**, Verify resolves the current official x86_64 image, downloads the publisher checksum, verifies the ISO SHA-256, and prepares it for the guarded Linux raw-image writer. After writing, CorePilot reads back the full image-length region from the USB and requires the SHA-256 to match before reporting success.
 
