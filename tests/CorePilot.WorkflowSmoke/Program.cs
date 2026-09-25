@@ -466,3 +466,89 @@ Assert(opCoreSimplifySource.Repository == "lzhoang2801/OpCore-Simplify" &&
     "execution-critical OpCore Simplify trust policy must stay pinned to the expected upstream");
 
 Console.WriteLine("CorePilot execution-critical source trust smoke test OK");
+
+
+var componentAuditTemp = Path.Combine(
+    Path.GetTempPath(),
+    "CorePilot-component-audit-" + Guid.NewGuid().ToString("N"));
+
+try
+{
+    var upstream = Path.Combine(componentAuditTemp, "upstream");
+    var workspace = Path.Combine(componentAuditTemp, "workspace");
+    var ock = Path.Combine(upstream, "OCK_Files");
+    var openCore = Path.Combine(ock, "OpenCorePkg");
+
+    Directory.CreateDirectory(openCore);
+    Directory.CreateDirectory(workspace);
+    await File.WriteAllTextAsync(
+        Path.Combine(openCore, "manifest.json"),
+        "{}");
+
+    var trustedHash = new string('A', 64);
+    await File.WriteAllTextAsync(
+        Path.Combine(ock, "history.json"),
+        $$"""
+        [
+          {
+            "product_name": "OpenCorePkg",
+            "id": 123,
+            "url": "https://example.com/OpenCorePkg.zip",
+            "sha256": "{{trustedHash}}"
+          }
+        ]
+        """);
+
+    var auditStage = new OpCoreStagingResult(
+        workspace,
+        upstream,
+        new string('B', 40),
+        new string('C', 64),
+        Path.Combine(workspace, "Report.json"),
+        Path.Combine(workspace, "ACPI"),
+        Path.Combine(workspace, "CorePilotAutomationProfile.json"),
+        true,
+        "python",
+        "python.exe",
+        "3.x");
+
+    var componentAuditService = new OpCoreDownloadedComponentAuditService();
+    var componentAudit = await componentAuditService.AuditAsync(auditStage);
+
+    Assert(componentAudit.ComponentCount == 1 &&
+           componentAudit.Components[0].ProductName == "OpenCorePkg",
+        "downloaded component audit must accept hashed HTTPS OpenCorePkg history");
+
+    await File.WriteAllTextAsync(
+        Path.Combine(ock, "history.json"),
+        """
+        [
+          {
+            "product_name": "OpenCorePkg",
+            "id": 123,
+            "url": "https://example.com/OpenCorePkg.zip",
+            "sha256": ""
+          }
+        ]
+        """);
+
+    var missingHashRejected = false;
+    try
+    {
+        _ = await componentAuditService.AuditAsync(auditStage);
+    }
+    catch (InvalidDataException)
+    {
+        missingHashRejected = true;
+    }
+
+    Assert(missingHashRejected,
+        "downloaded component audit must reject components without SHA-256 metadata");
+}
+finally
+{
+    if (Directory.Exists(componentAuditTemp))
+        Directory.Delete(componentAuditTemp, recursive: true);
+}
+
+Console.WriteLine("CorePilot downloaded-component integrity smoke test OK");
