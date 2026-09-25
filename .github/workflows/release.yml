@@ -7,74 +7,12 @@ on:
         description: "Release version (for example v0.18)"
         required: true
         type: string
-  workflow_run:
-    workflows: ["Build"]
-    types: [completed]
 
 permissions:
-  actions: read
   contents: write
 
 jobs:
-  rolling-latest:
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
-    runs-on: windows-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-
-    steps:
-      - name: Download successful main artifact
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts/CorePilot-win-x64 | Out-Null
-          gh run download "$env:SOURCE_RUN_ID" `
-            --repo "$env:GITHUB_REPOSITORY" `
-            --name "CorePilot-win-x64" `
-            --dir "artifacts/CorePilot-win-x64"
-
-          if (-not (Test-Path "artifacts/CorePilot-win-x64/CorePilot.exe")) {
-            throw "CorePilot.exe is missing from the successful main-build artifact."
-          }
-
-      - name: Package rolling latest
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts/release | Out-Null
-          $zipName = "CorePilot-latest-win-x64.zip"
-          $shaName = "CorePilot-latest-win-x64.sha256"
-          $zipPath = Join-Path "artifacts/release" $zipName
-          $shaPath = Join-Path "artifacts/release" $shaName
-          Compress-Archive -Path "artifacts/CorePilot-win-x64/*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
-          $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
-          "$hash  $zipName" | Set-Content $shaPath -Encoding ascii
-          "ROLLING_ZIP=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "ROLLING_SHA=$shaPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "ROLLING_DIGEST=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Update rolling latest release
-        shell: pwsh
-        run: |
-          $notes = "Rolling development build from the latest successful main branch.`n`nCommit: $env:SOURCE_SHA`nBuild run: $env:SOURCE_RUN_ID`nPlatform: Windows x64`nPackage: CorePilot-latest-win-x64.zip`nSHA256: $env:ROLLING_DIGEST`n`nThis release is updated automatically only after the complete CorePilot CI pipeline succeeds."
-
-          gh release view "latest" --repo "$env:GITHUB_REPOSITORY" *> $null
-          $exists = $LASTEXITCODE -eq 0
-
-          if ($exists) {
-            gh release upload "latest" "$env:ROLLING_ZIP" "$env:ROLLING_SHA" --repo "$env:GITHUB_REPOSITORY" --clobber
-            if ($LASTEXITCODE -ne 0) { throw "Unable to replace rolling latest assets." }
-
-            gh release edit "latest" --repo "$env:GITHUB_REPOSITORY" --target "$env:SOURCE_SHA" --title "CorePilot Latest" --notes "$notes" --latest
-            if ($LASTEXITCODE -ne 0) { throw "Unable to update rolling latest release metadata." }
-          }
-          else {
-            gh release create "latest" "$env:ROLLING_ZIP" "$env:ROLLING_SHA" --repo "$env:GITHUB_REPOSITORY" --target "$env:SOURCE_SHA" --title "CorePilot Latest" --notes "$notes" --latest
-            if ($LASTEXITCODE -ne 0) { throw "Unable to create rolling latest release." }
-          }
-
   windows-release:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
 
     steps:
