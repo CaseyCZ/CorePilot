@@ -30,6 +30,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSUsbWriteSimulationService _usbWriteSimulationService = new();
     private readonly LoggingDiskOperationBackend _loggingDiskBackend = new();
     private readonly MacOSWorkflowStateMachine _workflowStateMachine = new();
+    private LogWindow? _logWindow;
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
@@ -56,6 +57,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<UsbDriveInfo> UsbDrives { get; } = [];
     public ObservableCollection<HardwareDisplayItem> HardwareItems { get; } = [];
     public ObservableCollection<CompatibilityFinding> CompatibilityItems { get; } = [];
+    public ActivityLogService ActivityLog => App.Log;
 
     public string ScanStatus
     {
@@ -106,6 +108,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
         DataContext = this;
+        ActivityLog.Info("UI", "Main window initialized.");
 
         Systems.Add(new MacOSModule());
         Systems.Add(new WindowsModule());
@@ -120,6 +123,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private async void ScanHardware_OnClick(object sender, RoutedEventArgs e) => await ScanHardwareAsync();
+
+    private void OpenLog_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_logWindow is null || !_logWindow.IsLoaded)
+        {
+            _logWindow = new LogWindow(ActivityLog)
+            {
+                Owner = this
+            };
+            _logWindow.Closed += (_, _) => _logWindow = null;
+            _logWindow.Show();
+            ActivityLog.Info("Log", "Activity Log window opened.");
+            return;
+        }
+
+        if (_logWindow.WindowState == WindowState.Minimized)
+            _logWindow.WindowState = WindowState.Normal;
+
+        _logWindow.Activate();
+    }
 
     private MacOSWorkflowPhase HardwareBaselinePhase =>
         _deepScanExport is not null
@@ -144,6 +167,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string reason)
     {
         _workflowStateMachine.InvalidateAfter(preserveThrough, reason);
+        ActivityLog.Info("Workflow", $"Invalidated after {preserveThrough}: {reason}");
         UpdateWorkflowStatus();
     }
 
@@ -153,6 +177,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DateTimeOffset? authorizationExpiresAt = null)
     {
         _workflowStateMachine.Advance(phase, reason, authorizationExpiresAt);
+        ActivityLog.Info("Workflow", $"{phase}: {reason}");
         UpdateWorkflowStatus();
     }
 
@@ -161,7 +186,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             DeepScanStatus = "Starting Hardware Sniffer…";
-            var progress = new Progress<string>(message => DeepScanStatus = message);
+            ActivityLog.Start("Deep Scan", DeepScanStatus);
+            var progress = new Progress<string>(message =>
+            {
+                DeepScanStatus = message;
+                ActivityLog.Progress("Deep Scan", message);
+            });
             var result = await _hardwareSniffer.ExportAsync(progress);
             _deepScanExport = result;
 
@@ -179,10 +209,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Hardware Sniffer {result.Version} imported successfully · " +
                 $"{_hardwareReport.Devices.Count} devices · " +
                 $"SHA256 {result.ToolSha256[..16]}… · {result.ReportPath}";
+            ActivityLog.Success("Deep Scan", DeepScanStatus);
         }
         catch (Exception ex)
         {
             DeepScanStatus = $"Deep scan failed: {ex.Message}";
+            ActivityLog.Error("Deep Scan", DeepScanStatus, ex);
         }
     }
 
@@ -191,6 +223,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             ScanStatus = "Scanning…";
+            ActivityLog.Start("Hardware", "Scanning local hardware…");
             _hardwareReport = await _scanner.ScanAsync();
             _deepScanExport = null;
             _workflowStateMachine.Reset("Local hardware scan refreshed; previous downstream state revoked.");
@@ -199,12 +232,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Local hardware scan complete.");
             RefreshHardwareView();
             ScanStatus = $"Detected {HardwareItems.Count} hardware items";
+            ActivityLog.Success("Hardware", ScanStatus);
             RunCompatibilityAnalysis();
         }
         catch (Exception ex)
         {
             ScanStatus = "Scan failed";
             PlanStatus = $"Hardware scan failed: {ex.Message}";
+            ActivityLog.Error("Hardware", PlanStatus, ex);
         }
     }
 
@@ -248,6 +283,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             UsbSafetyStatus = "Inspecting physical disk, partitions and mounted volumes…";
+            ActivityLog.Start("USB Safety", UsbSafetyStatus);
             var report = await _usbSafetyInspector.InspectAsync(usb);
             _usbSafetyReport = report;
             _lastUsbWritePlan = null;
@@ -257,6 +293,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 MacOSWorkflowPhase.ManifestVerified,
                 "USB safety inspection refreshed; previous target authorization revoked.");
             UsbSafetyStatus = report.Summary;
+            ActivityLog.Success("USB Safety", report.Summary);
 
             if (_workflowStateMachine.Current.Phase >= MacOSWorkflowPhase.ManifestVerified)
             {
@@ -269,6 +306,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _usbSafetyReport = null;
             UsbSafetyStatus = $"BLOCKED · USB inspection failed closed: {ex.Message}";
+            ActivityLog.Error("USB Safety", UsbSafetyStatus, ex);
         }
     }
 
@@ -276,6 +314,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
+            ActivityLog.Start("Drives", "Refreshing physical disk list…");
             var current = UsbCombo.SelectedItem as UsbDriveInfo;
             var disks = await _scanner.ScanDisksAsync();
 
@@ -298,11 +337,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     : UsbDrives.FirstOrDefault(x => x.DeviceId == current.DeviceId) ?? UsbDrives[0];
 
             if (UsbDrives.Count == 0)
+            {
                 PlanStatus = "No USB disk detected. Connect a USB flash drive and press Refresh drives.";
+                ActivityLog.Warning("Drives", PlanStatus);
+            }
+            else
+            {
+                ActivityLog.Success("Drives", $"Detected {UsbDrives.Count} USB drive(s).");
+            }
         }
         catch (Exception ex)
         {
             PlanStatus = $"Disk scan failed: {ex.Message}";
+            ActivityLog.Error("Drives", PlanStatus, ex);
         }
     }
 
@@ -446,6 +493,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             PlanStatus = "Preparing reproducible OpenCore workspace…";
+            ActivityLog.Start("Plan", PlanStatus);
             var stage = await _opCoreStager.StageAsync(
                 _deepScanExport.ReportPath,
                 _deepScanExport.AcpiDirectory,
@@ -463,6 +511,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                          $"OpCore Simplify {stage.UpstreamCommit[..8]} · " +
                          $"Python: {(stage.PythonAvailable ? stage.PythonVersion : "not found")}." +
                          review;
+            ActivityLog.Success("Plan", PlanStatus);
             return;
         }
 
@@ -514,7 +563,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
 
-            var progress = new Progress<string>(message => PlanStatus = message);
+            ActivityLog.Start("EFI Build", "Building and validating OpenCore EFI…");
+            var progress = new Progress<string>(message =>
+            {
+                PlanStatus = message;
+                ActivityLog.Progress("EFI Build", message);
+            });
             var result = await _opCoreBuilder.BuildAsync(
                 _opCoreStage,
                 _automationProfile,
@@ -531,10 +585,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"SMBIOS {result.SmbiosModel} · {result.Kexts.Count} kexts · " +
                 $"{result.AcpiPatches.Count} ACPI selections · " +
                 $"ocvalidate: {result.OcValidateStatus} · structure: {result.StructuralValidationStatus}.";
+            ActivityLog.Success("EFI Build", PlanStatus);
         }
         catch (Exception ex)
         {
             PlanStatus = $"EFI build failed: {ex.Message}";
+            ActivityLog.Error("EFI Build", PlanStatus, ex);
         }
     }
 
@@ -569,7 +625,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
 
-            var progress = new Progress<string>(message => PlanStatus = message);
+            ActivityLog.Start("Recovery", "Downloading and verifying Apple Recovery…");
+            var progress = new Progress<string>(message =>
+            {
+                PlanStatus = message;
+                ActivityLog.Progress("Recovery", message);
+            });
             var result = await _appleRecoveryDownloader.DownloadAsync(
                 _opCoreStage,
                 _automationProfile,
@@ -603,10 +664,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"{manifest.FileCount} files · " +
                 $"manifest SHA256 {manifest.ManifestSha256[..16]}… · " +
                 $"{result.OutputDirectory}.";
+            ActivityLog.Success("Recovery", PlanStatus);
         }
         catch (Exception ex)
         {
             PlanStatus = $"Apple Recovery failed: {ex.Message}";
+            ActivityLog.Error("Recovery", PlanStatus, ex);
         }
     }
 
@@ -647,6 +710,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             PlanStatus = "Re-inspecting USB identity before dry-run planning…";
+            ActivityLog.Start("USB Dry-run", PlanStatus);
             var freshReport = await _usbSafetyInspector.InspectAsync(usb);
 
             if (!freshReport.IdentityFingerprint.Equals(
@@ -691,11 +755,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"FAT32 {plan.PlannedFat32PartitionBytes / 1024d / 1024d / 1024d:0.##} GiB · " +
                 $"plan SHA256 {plan.PlanSha256[..16]}…{confirmation}. " +
                 "No physical disk operation was executed.";
+            ActivityLog.Success("USB Dry-run", PlanStatus);
         }
         catch (Exception ex)
         {
             _lastUsbWritePlan = null;
             PlanStatus = $"USB dry-run failed: {ex.Message}";
+            ActivityLog.Error("USB Dry-run", PlanStatus, ex);
         }
     }
 
@@ -724,6 +790,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastUsbTypedConfirmation = null;
 
             PlanStatus = "Running atomic execution preflight…";
+            ActivityLog.Start("Preflight", PlanStatus);
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
             if (freshTarget.IsBlocked)
@@ -758,12 +825,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"expires {result.ExpiresAt.ToLocalTime():HH:mm:ss} · " +
                 $"next confirmation phrase: {result.RequiredConfirmationPhrase}. " +
                 "Ready for confirmation only — physical disk writing is still disabled.";
+            ActivityLog.Success("Preflight", PlanStatus);
         }
         catch (Exception ex)
         {
             _lastUsbExecutionPreflight = null;
             _lastUsbTypedConfirmation = null;
             PlanStatus = $"Execution preflight failed: {ex.Message}";
+            ActivityLog.Error("Preflight", PlanStatus, ex);
         }
     }
 
@@ -800,6 +869,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _workflowStateMachine.EnsureExactly(MacOSWorkflowPhase.PreflightReady);
             PlanStatus = "Re-inspecting USB before accepting typed confirmation…";
+            ActivityLog.Start("Confirmation", PlanStatus);
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
             if (freshTarget.IsBlocked)
@@ -833,11 +903,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Typed confirmation accepted ✅ ID {result.ConfirmationId[..8]} · " +
                 $"valid only until {result.ExpiresAt.ToLocalTime():HH:mm:ss}. " +
                 "Physical disk writing is still disabled.";
+            ActivityLog.Success("Confirmation", PlanStatus);
         }
         catch (Exception ex)
         {
             _lastUsbTypedConfirmation = null;
             PlanStatus = $"Confirmation rejected: {ex.Message}";
+            ActivityLog.Error("Confirmation", PlanStatus, ex);
         }
     }
 
@@ -875,6 +947,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _workflowStateMachine.EnsureExactly(MacOSWorkflowPhase.Confirmed);
             PlanStatus = "Re-inspecting USB and simulating the confirmed write plan…";
+            ActivityLog.Start("Write Simulation", PlanStatus);
             var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
 
             if (freshTarget.IsBlocked)
@@ -904,10 +977,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"transcript SHA256 {result.TranscriptSha256[..16]}… · " +
                 $"backend can write physical disks: {result.CanWritePhysicalDisks}. " +
                 "No disk, partition, filesystem or volume was modified.";
+            ActivityLog.Success("Write Simulation", PlanStatus);
         }
         catch (Exception ex)
         {
             PlanStatus = $"Write simulation failed: {ex.Message}";
+            ActivityLog.Error("Write Simulation", PlanStatus, ex);
         }
     }
 

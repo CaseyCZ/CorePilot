@@ -15,18 +15,35 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="CorePilot" FontSize="30" FontWeight="SemiBold"/>
-                <TextBlock Text="Universal OS installer · v0.14 state machine preview"
+                <TextBlock Text="Universal OS installer · v0.15 live activity log"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="12,8" MaxWidth="460">
-                <StackPanel>
-                    <TextBlock Text="{Binding ScanStatus}" Foreground="{StaticResource MutedBrush}"/>
-                    <TextBlock Text="{Binding WorkflowStatus}"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource MutedBrush}"
-                               Margin="0,3,0,0"/>
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding ActivityLog.StateText}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding ActivityLog.CurrentArea}"
+                                   Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding ActivityLog.CurrentStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding WorkflowStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="Open log"
+                            Click="OpenLog_OnClick"
+                            VerticalAlignment="Top"
+                            Margin="12,0,0,0"/>
+                </Grid>
             </Border>
         </Grid>
 
@@ -180,7 +197,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="CorePilot v0.14 preview · Central execution state machine · Physical disk writing remains disabled."
+        <TextBlock Grid.Row="3" Text="CorePilot v0.15 preview · Live activity/error log · Physical disk writing remains disabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
