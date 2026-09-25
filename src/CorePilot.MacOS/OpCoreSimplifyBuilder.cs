@@ -16,7 +16,8 @@ public sealed record OpCoreBuildResult(
     string OcValidateStatus,
     string OcValidateOutput,
     string Error,
-    string StructuralValidationStatus = "not-run");
+    string StructuralValidationStatus = "not-run",
+    string MacRecoveryPath = "");
 
 public sealed class OpCoreSimplifyBuilder
 {

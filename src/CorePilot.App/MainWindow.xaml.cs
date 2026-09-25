@@ -21,8 +21,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSAutomationProfileStore _macProfileStore = new();
     private readonly OpCoreSimplifyStager _opCoreStager = new();
     private readonly OpCoreSimplifyBuilder _opCoreBuilder = new();
+    private readonly AppleRecoveryDownloader _appleRecoveryDownloader = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
+    private OpCoreBuildResult? _lastEfiBuild;
+    private AppleRecoveryResult? _lastRecovery;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -199,6 +202,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityItems.Clear();
         _compatibilityReport = null;
         _automationProfile = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -350,6 +356,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _opCoreStage,
                 _automationProfile,
                 progress);
+            _lastEfiBuild = result;
+            _lastRecovery = null;
 
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
@@ -360,6 +368,48 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             PlanStatus = $"EFI build failed: {ex.Message}";
+        }
+    }
+
+    private async void DownloadRecovery_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (SystemCombo.SelectedItem is not ISystemModule { Id: "macos" })
+        {
+            PlanStatus = "Apple Recovery is available only for the macOS module.";
+            return;
+        }
+
+        if (_automationProfile is null || _opCoreStage is null)
+        {
+            PlanStatus = "Prepare the macOS plan first.";
+            return;
+        }
+
+        if (_lastEfiBuild is null || !_lastEfiBuild.Success)
+        {
+            PlanStatus = "Build and validate EFI before downloading Apple Recovery.";
+            return;
+        }
+
+        try
+        {
+            var progress = new Progress<string>(message => PlanStatus = message);
+            var result = await _appleRecoveryDownloader.DownloadAsync(
+                _opCoreStage,
+                _automationProfile,
+                _lastEfiBuild,
+                progress);
+            _lastRecovery = result;
+
+            PlanStatus =
+                $"Apple Recovery ready ✅ {result.OutputDirectory}. " +
+                $"BaseSystem {result.DmgSizeBytes / 1024d / 1024d:0.#} MB · " +
+                $"DMG SHA256 {result.DmgSha256[..16]}… · " +
+                $"chunklist SHA256 {result.ChunklistSha256[..16]}….";
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"Apple Recovery failed: {ex.Message}";
         }
     }
 

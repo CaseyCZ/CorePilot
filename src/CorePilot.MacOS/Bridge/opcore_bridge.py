@@ -70,13 +70,18 @@ class StrictPolicyResponder:
         )
 
 
-def find_ocvalidate(root):
+def find_named_file(root, wanted_name):
     candidates = []
+    wanted = wanted_name.lower()
     for current, _dirs, files in os.walk(root):
         for name in files:
-            if name.lower() == "ocvalidate.exe":
+            if name.lower() == wanted:
                 candidates.append(os.path.join(current, name))
     return candidates[0] if candidates else None
+
+
+def find_ocvalidate(root):
+    return find_named_file(root, "ocvalidate.exe")
 
 
 def validate_target_with_upstream(utils, target, native_range, oclp_range):
@@ -143,6 +148,7 @@ def main():
         "NeedsOclp": False,
         "OcValidateStatus": "not-run",
         "OcValidateOutput": "",
+        "MacRecoveryPath": "",
         "Error": ""
     }
 
@@ -276,6 +282,8 @@ def main():
             patch.name for patch in ocpe.ac.patches if getattr(patch, "checked", False)
         ])
 
+        macrecovery_path = find_named_file(ocpe.k.ock_files_dir, "macrecovery.py") or ""
+
         result.update({
             "Success": True,
             "EfiDirectory": efi_directory,
@@ -287,6 +295,7 @@ def main():
             "NeedsOclp": bool(needs_oclp),
             "OcValidateStatus": "success",
             "OcValidateOutput": validation_output.strip(),
+            "MacRecoveryPath": macrecovery_path,
             "Error": ""
         })
 
