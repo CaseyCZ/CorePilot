@@ -40,7 +40,7 @@ class StrictPolicyResponder:
     def __init__(self, profile):
         self.profile = profile
 
-    def __call__(self, _utils_self, prompt="Press Enter to continue..."):
+    def answer(self, prompt="Press Enter to continue..."):
         text = (prompt or "").strip()
         lower = text.lower()
 
@@ -90,16 +90,42 @@ def validate_target_with_upstream(utils, target, native_range, oclp_range):
     )
 
 
+def run_self_test():
+    profile = {
+        "AudioMode": "Deferred on Tahoe",
+        "WifiMode": "itlwm + HeliPort"
+    }
+    responder = StrictPolicyResponder(profile)
+
+    assert responder.answer("Press Enter to continue...") == ""
+    assert responder.answer("Select audio kext for your system: ") == "2"
+    assert responder.answer("Select kext for your AMD Navi 21 GPU (default: WhateverGreen): ") == "2"
+    assert responder.answer("Select kext for your Intel WiFi device (default: itlwm): ") == "2"
+    assert responder.answer("Enter the ID of the codec layout you want to use (default: 7): ") == ""
+
+    try:
+        responder.answer("Unknown future upstream question?")
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Unknown upstream prompts must fail closed.")
+
+    print("CorePilot OpCore bridge self-test OK")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--upstream", required=True)
-    parser.add_argument("--workspace", required=True)
+    parser.add_argument("--upstream")
+    parser.add_argument("--workspace")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
     if args.self_test:
-        print("CorePilot OpCore bridge syntax OK")
+        run_self_test()
         return 0
+
+    if not args.upstream or not args.workspace:
+        parser.error("--upstream and --workspace are required unless --self-test is used")
 
     workspace = os.path.abspath(args.workspace)
     upstream = os.path.abspath(args.upstream)
@@ -136,7 +162,12 @@ def main():
         # Patch upstream input centrally. Only known policy prompts are accepted;
         # any new prompt fails closed instead of guessing.
         from Scripts import utils as upstream_utils
-        upstream_utils.Utils.request_input = StrictPolicyResponder(profile)
+        policy_responder = StrictPolicyResponder(profile)
+
+        def corepilot_request_input(_utils_instance, prompt="Press Enter to continue..."):
+            return policy_responder.answer(prompt)
+
+        upstream_utils.Utils.request_input = corepilot_request_input
 
         ocpe = upstream_module.OCPE()
         ocpe.result_dir = os.path.join(workspace, "Results")
