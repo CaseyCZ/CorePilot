@@ -351,6 +351,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_compatibilityReport is null)
         {
             PlanStatus = "Verification could not be completed. Open the Activity Log for details.";
+            ActivityLog.Warning("Verification", PlanStatus);
             RefreshActionAvailability();
             return;
         }
