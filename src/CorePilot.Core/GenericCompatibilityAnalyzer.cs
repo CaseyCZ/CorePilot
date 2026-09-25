@@ -124,14 +124,23 @@ public sealed class GenericCompatibilityAnalyzer
         findings.Add(new(
             string.IsNullOrWhiteSpace(hardware.Cpu)
                 ? CompatibilityState.Unknown
-                : CompatibilityState.Supported,
+                : target.Id == "windows-11"
+                    ? CompatibilityState.Warning
+                    : CompatibilityState.Supported,
             "CPU",
             string.IsNullOrWhiteSpace(hardware.Cpu)
                 ? "CPU could not be identified"
-                : "CPU detected",
+                : target.Id == "windows-11"
+                    ? "CPU detected · exact Microsoft support-list match not asserted"
+                    : "CPU detected",
             string.IsNullOrWhiteSpace(hardware.Cpu)
                 ? "CorePilot could not read the processor model."
-                : hardware.Cpu));
+                : target.Id == "windows-11"
+                    ? hardware.Cpu + " · CorePilot verifies the local processor identity and core platform checks, but does not currently claim an exact match against Microsoft's model-by-model Windows 11 CPU list."
+                    : hardware.Cpu,
+            string.IsNullOrWhiteSpace(hardware.Cpu) || target.Id != "windows-11"
+                ? null
+                : "Windows Setup remains the final authority for the exact processor model requirement."));
 
         return new(
             target.Id,
