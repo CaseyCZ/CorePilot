@@ -18,7 +18,9 @@ public sealed record SupportBundleContext(
     MacOSAutomationProfile? AutomationProfile,
     UsbTargetSafetyReport? UsbSafety,
     OpCoreStagingResult? Workspace,
-    OnlineSourceSnapshot? OnlineSources);
+    OnlineSourceSnapshot? OnlineSources,
+    PreparedIsoImage? PreparedIso,
+    GenericUsbWriteResult? GenericUsbWrite);
 
 public sealed record SupportBundleResult(
     string BundlePath,
@@ -102,6 +104,16 @@ public sealed class SupportBundleService
                 tempRoot,
                 "online-sources.json",
                 context.OnlineSources,
+                cancellationToken);
+            await WriteJsonAsync(
+                tempRoot,
+                "prepared-iso.json",
+                context.PreparedIso,
+                cancellationToken);
+            await WriteJsonAsync(
+                tempRoot,
+                "generic-usb-write.json",
+                context.GenericUsbWrite,
                 cancellationToken);
             await CopySanitizedSessionLogAsync(
                 tempRoot,
@@ -471,6 +483,6 @@ public sealed class SupportBundleService
         - USB target identity fingerprints,
         - destructive confirmation phrases.
 
-        Physical disk writing is enabled only through CorePilot's guarded macOS workflow after live source checks, target re-inspection, manifest verification, short-lived preflight and exact typed confirmation.
+        Physical disk writing is enabled only through CorePilot's guarded writers after live source checks, target re-inspection, payload/hash verification and exact typed confirmation. macOS additionally uses its manifest-bound short-lived preflight.
         """;
 }
