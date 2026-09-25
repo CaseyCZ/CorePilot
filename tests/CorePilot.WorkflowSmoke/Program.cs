@@ -333,7 +333,137 @@ var appleSonoma = compatibilityAnalyzer.Analyze(
 Assert(!appleSonoma.CanProceed,
     "2017 MacBook Pro Sonoma path must not be treated as natively supported until OCLP integration exists");
 
-Console.WriteLine("CorePilot genuine-Apple Ventura compatibility smoke test OK");
+var appleTahoe = compatibilityAnalyzer.Analyze(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("tahoe-26", "macOS Tahoe 26"));
+
+Assert(!appleTahoe.CanProceed,
+    "2017 MacBook Pro Tahoe path must remain blocked until the OCLP legacy-Mac path is verified");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "Patcher" &&
+        x.State == CorePilot.Core.CompatibilityState.ActionRequired),
+    "legacy Apple Tahoe result must explicitly show that OCLP is required");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "GPU" &&
+        x.State == CorePilot.Core.CompatibilityState.Supported),
+    "MacBookPro14,2 result must report its known OCLP graphics path");
+Assert(appleTahoe.Findings.Any(x =>
+        x.Component == "T1 / Wi-Fi / USB" &&
+        x.State == CorePilot.Core.CompatibilityState.ActionRequired),
+    "MacBookPro14,2 Tahoe result must expose hardware patch-readiness checks");
+
+Console.WriteLine("CorePilot genuine-Apple compatibility smoke test OK");
+
+
+OnlineSourceResolution LiveSource(
+    string id,
+    string name,
+    string repository,
+    string version) =>
+    new(
+        Id: id,
+        Name: name,
+        Role: "test",
+        Trust: "upstream",
+        Strategy: "githubRelease",
+        Repository: repository,
+        SourceUrl: $"https://github.com/{repository}/releases/latest",
+        Critical: false,
+        Success: true,
+        Live: true,
+        FromCache: false,
+        Version: version,
+        ResolvedRef: version,
+        PublishedAt: DateTimeOffset.UtcNow,
+        VerifiedCommit: null,
+        CheckedAt: DateTimeOffset.UtcNow,
+        Error: null);
+
+var autoResolver = new MacOSAutoResolutionService();
+
+var appleOclpSnapshot = new OnlineSourceSnapshot(
+    "macos",
+    DateTimeOffset.UtcNow,
+    "test",
+    true,
+    new[]
+    {
+        LiveSource(
+            "macos.oclp",
+            "OpenCore Legacy Patcher",
+            "dortania/OpenCore-Legacy-Patcher",
+            "test-current")
+    });
+
+var appleTahoeAuto = await autoResolver.ResolveAsync(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("tahoe-26", "macOS Tahoe 26"),
+    appleTahoe,
+    profile: null,
+    appleOclpSnapshot,
+    hasDeepScan: false);
+
+Assert(appleTahoeAuto.Items.Any(x =>
+        x.SourceId == "macos.oclp" &&
+        x.State == MacOSAutoResolutionState.SourceReady),
+    "legacy Apple auto resolver must find the current live OCLP source");
+Assert(!appleTahoeAuto.AutomaticConfigurationReady &&
+       appleTahoeAuto.UnresolvedCount > 0,
+    "legacy Apple Tahoe must stay blocked while model-specific OCLP work remains unresolved");
+
+var appleVenturaAuto = await autoResolver.ResolveAsync(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("ventura-13", "macOS Ventura 13"),
+    appleVentura,
+    profile: null,
+    verifySnapshot: null,
+    hasDeepScan: false);
+
+Assert(appleVenturaAuto.AutomaticConfigurationReady,
+    "native Apple Ventura must be ready without Hackintosh patches or Deep Scan");
+
+var pcVenturaTarget =
+    new CorePilot.Core.SystemVariant("ventura-13", "macOS Ventura 13");
+var pcVenturaHardware = testHardware with { FirmwareMode = "UEFI" };
+var pcVenturaCompatibility =
+    compatibilityAnalyzer.Analyze(pcVenturaHardware, pcVenturaTarget);
+var pcProfile =
+    new MacOSAutomationPlanner().Build(
+        pcVenturaHardware,
+        pcVenturaTarget,
+        pcVenturaCompatibility);
+
+var pcSourceSnapshot = new OnlineSourceSnapshot(
+    "macos",
+    DateTimeOffset.UtcNow,
+    "test",
+    true,
+    new[]
+    {
+        LiveSource("macos.kext.lilu", "Lilu", "acidanthera/Lilu", "test"),
+        LiveSource("macos.kext.virtualsmc", "VirtualSMC", "acidanthera/VirtualSMC", "test"),
+        LiveSource("macos.kext.whatevergreen", "WhateverGreen", "acidanthera/WhateverGreen", "test")
+    });
+
+var pcAuto = await autoResolver.ResolveAsync(
+    pcVenturaHardware,
+    pcVenturaTarget,
+    pcVenturaCompatibility,
+    pcProfile,
+    pcSourceSnapshot,
+    hasDeepScan: true);
+
+Assert(pcAuto.AutomaticConfigurationReady,
+    "compatible PC with Deep Scan and live required kext sources must become auto-configured");
+Assert(pcAuto.Items.Any(x =>
+        x.Category == "SMBIOS" &&
+        x.State == MacOSAutoResolutionState.Prepared),
+    "auto resolver must prepare the SMBIOS choice from detected hardware");
+Assert(pcAuto.Items.Count(x =>
+        x.State == MacOSAutoResolutionState.SourceReady) >= 3,
+    "auto resolver must locate the required live kext sources");
+
+Console.WriteLine("CorePilot automatic hardware-resolution smoke test OK");
 
 
 var sourceCatalog = OnlineSourceCatalogService.LoadBundledCatalog();
@@ -359,6 +489,9 @@ var requiredOnlineSources = new[]
     "macos.kext.virtualsmc",
     "macos.kext.whatevergreen",
     "macos.kext.applealc",
+    "macos.kext.itlwm",
+    "macos.heliport",
+    "macos.amd-vanilla",
     "windows.microsoft-windows11",
     "windows.rufus",
     "linux.ubuntu",

@@ -4,7 +4,9 @@
     {
       "id": "macos.apple-download-install",
       "name": "Apple - Download and install macOS",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "official-install-guide",
       "trust": "official",
       "strategy": "webPage",
@@ -17,7 +19,9 @@
     {
       "id": "macos.apple-version-index",
       "name": "Apple - macOS version index",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "official-version-index",
       "trust": "official",
       "strategy": "webPage",
@@ -30,7 +34,9 @@
     {
       "id": "macos.dortania-guide",
       "name": "Dortania OpenCore Install Guide",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "hackintosh-guide",
       "trust": "upstream",
       "strategy": "webPage",
@@ -43,7 +49,9 @@
     {
       "id": "macos.opencore",
       "name": "OpenCorePkg",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "bootloader",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -56,7 +64,9 @@
     {
       "id": "macos.opcore-simplify",
       "name": "OpCore Simplify",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "automation-engine",
       "trust": "upstream",
       "strategy": "githubBranchHead",
@@ -70,7 +80,9 @@
     {
       "id": "macos.macrecoveryx",
       "name": "MacRecoveryX",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "recovery-tool",
       "trust": "community",
       "strategy": "githubRelease",
@@ -82,7 +94,9 @@
     {
       "id": "macos.usbtoolbox",
       "name": "USBToolBox",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "usb-mapping",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -94,7 +108,9 @@
     {
       "id": "macos.propertree",
       "name": "ProperTree",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "plist-editor",
       "trust": "upstream",
       "strategy": "githubBranchHead",
@@ -107,7 +123,9 @@
     {
       "id": "macos.ocat",
       "name": "OpenCore Auxiliary Tools",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "opencore-config-tool",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -119,7 +137,9 @@
     {
       "id": "macos.hackintool",
       "name": "Hackintool",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "diagnostics",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -131,7 +151,9 @@
     {
       "id": "macos.gensmbios",
       "name": "GenSMBIOS",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "smbios",
       "trust": "upstream",
       "strategy": "githubBranchHead",
@@ -144,7 +166,9 @@
     {
       "id": "macos.oclp",
       "name": "OpenCore Legacy Patcher",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "legacy-mac",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -156,7 +180,9 @@
     {
       "id": "macos.oclp-mod-kgp",
       "name": "OCLP Mod - kgp",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "legacy-mac-experimental",
       "trust": "experimental",
       "strategy": "githubBranchHead",
@@ -170,7 +196,9 @@
     {
       "id": "macos.kext.lilu",
       "name": "Lilu",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -182,7 +210,9 @@
     {
       "id": "macos.kext.virtualsmc",
       "name": "VirtualSMC",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -194,7 +224,9 @@
     {
       "id": "macos.kext.whatevergreen",
       "name": "WhateverGreen",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -206,7 +238,9 @@
     {
       "id": "macos.kext.applealc",
       "name": "AppleALC",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -218,7 +252,9 @@
     {
       "id": "macos.kext.intelmausi",
       "name": "IntelMausi",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -230,7 +266,9 @@
     {
       "id": "macos.kext.airportbrcmfixup",
       "name": "AirportBrcmFixup",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -242,7 +280,9 @@
     {
       "id": "macos.kext.nvmefix",
       "name": "NVMeFix",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -254,7 +294,9 @@
     {
       "id": "macos.kext.restrictevents",
       "name": "RestrictEvents",
-      "systems": ["macos"],
+      "systems": [
+        "macos"
+      ],
       "role": "kext",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -266,7 +308,9 @@
     {
       "id": "windows.microsoft-windows11",
       "name": "Microsoft Windows 11 download",
-      "systems": ["windows"],
+      "systems": [
+        "windows"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -278,7 +322,9 @@
     {
       "id": "windows.microsoft-windows10",
       "name": "Microsoft Windows 10 download",
-      "systems": ["windows"],
+      "systems": [
+        "windows"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -290,7 +336,10 @@
     {
       "id": "windows.rufus-site",
       "name": "Rufus official site",
-      "systems": ["windows", "linux"],
+      "systems": [
+        "windows",
+        "linux"
+      ],
       "role": "usb-writer-reference",
       "trust": "upstream",
       "strategy": "webPage",
@@ -302,7 +351,10 @@
     {
       "id": "windows.rufus",
       "name": "Rufus",
-      "systems": ["windows", "linux"],
+      "systems": [
+        "windows",
+        "linux"
+      ],
       "role": "usb-writer-reference",
       "trust": "upstream",
       "strategy": "githubRelease",
@@ -314,7 +366,9 @@
     {
       "id": "linux.ubuntu",
       "name": "Ubuntu Desktop",
-      "systems": ["linux"],
+      "systems": [
+        "linux"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -326,7 +380,9 @@
     {
       "id": "linux.fedora",
       "name": "Fedora Workstation",
-      "systems": ["linux"],
+      "systems": [
+        "linux"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -338,7 +394,9 @@
     {
       "id": "linux.debian",
       "name": "Debian",
-      "systems": ["linux"],
+      "systems": [
+        "linux"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -350,7 +408,9 @@
     {
       "id": "linux.mint",
       "name": "Linux Mint",
-      "systems": ["linux"],
+      "systems": [
+        "linux"
+      ],
       "role": "official-download",
       "trust": "official",
       "strategy": "webPage",
@@ -358,6 +418,52 @@
       "critical": false,
       "resolveOnVerify": true,
       "requireVerifiedCommit": false
+    },
+    {
+      "id": "macos.kext.itlwm",
+      "name": "itlwm / AirportItlwm",
+      "systems": [
+        "macos"
+      ],
+      "role": "kext",
+      "trust": "upstream",
+      "strategy": "githubRelease",
+      "repository": "OpenIntelWireless/itlwm",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Resolved only when detected Intel Wi-Fi needs the OpenIntelWireless stack."
+    },
+    {
+      "id": "macos.heliport",
+      "name": "HeliPort",
+      "systems": [
+        "macos"
+      ],
+      "role": "wifi-client",
+      "trust": "upstream",
+      "strategy": "githubRelease",
+      "repository": "OpenIntelWireless/HeliPort",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Resolved only when the automatic Wi-Fi plan selects itlwm + HeliPort."
+    },
+    {
+      "id": "macos.amd-vanilla",
+      "name": "AMD Vanilla",
+      "systems": [
+        "macos"
+      ],
+      "role": "kernel-patches",
+      "trust": "upstream",
+      "strategy": "githubBranchHead",
+      "repository": "AMD-OSX/AMD_Vanilla",
+      "branch": "master",
+      "critical": false,
+      "resolveOnVerify": false,
+      "requireVerifiedCommit": false,
+      "notes": "Resolved only for AMD CPU configurations that require the AMD Vanilla patch set."
     }
   ]
 }

@@ -199,13 +199,55 @@
 
                     <TabItem Header="Compatibility">
                         <Grid Margin="6,12,6,6">
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="12"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Compatibility" FontSize="20" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding CompatibilitySummary}" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
 
-                            <ListView Grid.Row="2" ItemsSource="{Binding CompatibilityItems}" Background="Transparent"
+                            <Border Grid.Row="2"
+                                    Background="#12151A"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="INSTALLATION RESULT"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding CompatibilityVerdict}"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,10"/>
+
+                                    <TextBlock Text="{Binding CompatibilityInstallPath}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Required fixes / patches / drivers"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="{Binding CompatibilityRequirements}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="Automatic configuration"
+                                               FontWeight="SemiBold"
+                                               Margin="0,14,0,4"/>
+                                    <TextBlock Text="{Binding CompatibilityAutoConfiguration}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <ListView Grid.Row="4" ItemsSource="{Binding CompatibilityItems}" Background="Transparent"
                                       BorderThickness="0" Foreground="{StaticResource TextBrush}">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
