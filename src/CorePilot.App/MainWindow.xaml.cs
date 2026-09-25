@@ -371,7 +371,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "Auditing downloaded OpenCore/kext source URLs and SHA-256 metadata…");
 
             var componentAudit = await _componentAuditService.AuditAsync(
-                _opCoreStage);
+                _opCoreStage,
+                _lastOnlineSourceSnapshot);
 
             ActivityLog.Info(
                 "Supply chain",
