@@ -273,7 +273,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else
         {
-            PlanStatus = $"Verification finished: {_compatibilityReport.Summary}. Review the Compatibility tab.";
+            PlanStatus =
+                $"Verification finished: {CompatibilityVerdict}. {_compatibilityReport.Summary}. " +
+                "Open Compatibility to see the exact required fixes and installation path.";
             ActivityLog.Warning("Verification", PlanStatus);
         }
     }
@@ -1008,10 +1010,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (system.Id == "macos" &&
             MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
         {
-            CompatibilityInstallPath = target.Id == "ventura-13" &&
-                                       _compatibilityReport.CanProceed
-                ? "Installation path: native Apple installer. OpenCore/OCLP patches are not required for this target."
-                : "Installation path: OpenCore Legacy Patcher is required for this newer macOS. CorePilot keeps Write to disk blocked until that legacy-Mac path is explicitly supported and verified.";
+            if (target.Id == "ventura-13" &&
+                _compatibilityReport.CanProceed)
+            {
+                CompatibilityInstallPath =
+                    "Installation path: native Apple installer. OpenCore/OCLP patches are not required for this target.";
+            }
+            else
+            {
+                var oclp = _lastOnlineSourceSnapshot?.Sources.FirstOrDefault(x =>
+                    x.Id.Equals("macos.oclp", StringComparison.OrdinalIgnoreCase));
+
+                var oclpStatus = oclp is { Success: true }
+                    ? $" Current online OCLP source: {(string.IsNullOrWhiteSpace(oclp.Version) ? "current release" : oclp.Version)} · {(oclp.Live ? "LIVE" : "CACHE")}."
+                    : "";
+
+                CompatibilityInstallPath =
+                    "Installation path: OpenCore Legacy Patcher is required for this newer macOS. CorePilot keeps Write to disk blocked until that legacy-Mac path is explicitly supported and verified." +
+                    oclpStatus;
+            }
         }
         else if (system.Id == "macos")
         {
@@ -1051,22 +1068,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         foreach (var argument in _compatibilityReport.BootArguments)
             AddRequirement($"Boot argument: {argument}");
-
-        if (system.Id == "macos")
-        {
-            var oclp = _lastOnlineSourceSnapshot?.Sources.FirstOrDefault(x =>
-                x.Id.Equals("macos.oclp", StringComparison.OrdinalIgnoreCase));
-
-            if (oclp is { Success: true })
-            {
-                var version = string.IsNullOrWhiteSpace(oclp.Version)
-                    ? "current release"
-                    : oclp.Version;
-
-                AddRequirement(
-                    $"Online patcher source: OpenCore Legacy Patcher {version} · {(oclp.Live ? "LIVE" : "CACHE")}.");
-            }
-        }
 
         CompatibilityRequirements = requirements.Count == 0
             ? "No additional fixes, patches, kexts or boot arguments are required by the current compatibility result."
