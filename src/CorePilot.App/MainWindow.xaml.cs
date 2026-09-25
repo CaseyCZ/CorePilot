@@ -82,6 +82,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<UsbDriveInfo> UsbDrives { get; } = [];
     public ObservableCollection<HardwareDisplayItem> HardwareItems { get; } = [];
     public ObservableCollection<CompatibilityFinding> CompatibilityItems { get; } = [];
+    public ObservableCollection<PreparationItem> PreparationItems { get; } = [];
     public ActivityLogService ActivityLog => App.Log;
 
     public bool CanChangeInputs => !ActivityLog.IsBusy;
@@ -897,6 +898,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _verificationCompleted = false;
         CompatibilityItems.Clear();
+        PreparationItems.Clear();
         _compatibilityReport = null;
         _automationProfile = null;
         _autoResolution = null;
@@ -917,6 +919,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _verificationCompleted = false;
         CompatibilityItems.Clear();
+        PreparationItems.Clear();
         _compatibilityReport = null;
         _automationProfile = null;
         _autoResolution = null;
@@ -998,6 +1001,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetCompatibilityDecision(string message)
     {
+        PreparationItems.Clear();
         CompatibilityVerdict = "NOT PREPARED";
         CompatibilityInstallPath = message;
         CompatibilityRequirements =
@@ -1502,6 +1506,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_preparationResult is null)
             return;
 
+        PreparationItems.Clear();
+        foreach (var item in _preparationResult.Items)
+            PreparationItems.Add(item);
+
         CompatibilityVerdict = _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
@@ -1600,7 +1608,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             CompatibilityInstallPath =
-                $"Installation path: {system.DisplayName} compatibility is verified here; physical media writing for this system is not enabled in this build.";
+                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image and validate it for this computer before Write to disk is enabled.";
         }
 
         var requirements = new List<string>();
