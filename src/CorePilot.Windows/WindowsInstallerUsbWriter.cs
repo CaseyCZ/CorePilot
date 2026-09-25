@@ -16,13 +16,20 @@ public sealed class WindowsInstallerUsbWriter
 
     public static string RequiredConfirmationPhrase(
         UsbTargetSafetyReport target,
-        PreparedIsoImage image)
+        PreparedIsoImage image,
+        WindowsMediaOptions? options = null)
     {
+        options ??= WindowsMediaOptions.Standard;
+
         var fingerprint = target.IdentityFingerprint.Length > 12
             ? target.IdentityFingerprint[..12]
             : target.IdentityFingerprint;
 
-        return $"ERASE DISK {target.DiskIndex} {fingerprint} AND WRITE {image.DisplayName}".ToUpperInvariant();
+        var mode = options.ExtendedHardwareCompatibility || options.LegacyBiosCompatible
+            ? " OLDER-PC"
+            : "";
+
+        return $"ERASE DISK {target.DiskIndex} {fingerprint} AND WRITE {image.DisplayName}{mode}".ToUpperInvariant();
     }
 
     public async Task<GenericUsbWriteResult> WriteAsync(
@@ -30,8 +37,10 @@ public sealed class WindowsInstallerUsbWriter
         UsbTargetSafetyReport freshTarget,
         string typedConfirmation,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        WindowsMediaOptions? options = null)
     {
+        options ??= WindowsMediaOptions.Standard;
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException(
                 "Windows installer USB writing currently runs on Windows.");
@@ -49,7 +58,8 @@ public sealed class WindowsInstallerUsbWriter
 
         var expectedPhrase = RequiredConfirmationPhrase(
             freshTarget,
-            image);
+            image,
+            options);
 
         if (!typedConfirmation.Equals(
                 expectedPhrase,
@@ -107,16 +117,33 @@ public sealed class WindowsInstallerUsbWriter
             root,
             "CorePilot-Windows-UsbWrite.ps1");
 
+        var partitionScheme = options.LegacyBiosCompatible
+            ? new[]
+            {
+                "convert mbr",
+                $"create partition primary size={partitionMiB}",
+                "active"
+            }
+            : new[]
+            {
+                "convert gpt",
+                $"create partition primary size={partitionMiB}"
+            };
+
+        var diskPartLines = new List<string>
+        {
+            $"select disk {freshTarget.DiskIndex}",
+            "clean"
+        };
+        diskPartLines.AddRange(partitionScheme);
+        diskPartLines.Add("format fs=fat32 quick label=COREPILOT");
+        diskPartLines.Add($"assign letter={driveLetter}");
+        diskPartLines.Add("exit");
+        diskPartLines.Add("");
+
         var diskPart = string.Join(
             Environment.NewLine,
-            $"select disk {freshTarget.DiskIndex}",
-            "clean",
-            "convert gpt",
-            $"create partition primary size={partitionMiB}",
-            "format fs=fat32 quick label=COREPILOT",
-            $"assign letter={driveLetter}",
-            "exit",
-            "");
+            diskPartLines);
 
         await File.WriteAllTextAsync(
             diskPartPath,
@@ -143,6 +170,7 @@ public sealed class WindowsInstallerUsbWriter
             image,
             freshTarget,
             driveLetter,
+            options,
             cancellationToken);
 
         if (!File.Exists(resultPath))
@@ -187,6 +215,9 @@ public sealed class WindowsInstallerUsbWriter
             sourceIsoSha256 = image.Sha256,
             sourceUrl = image.SourceUrl,
             sourceManifest = image.ManifestPath,
+            windowsMediaMode = options.ModeText,
+            extendedHardwareCompatibility = options.ExtendedHardwareCompatibility,
+            legacyBiosCompatible = options.LegacyBiosCompatible,
             splitInstallWim =
                 resultRoot.TryGetProperty("splitInstallWim", out var splitNode) &&
                 splitNode.ValueKind == JsonValueKind.True,
@@ -241,7 +272,9 @@ param(
     [Parameter(Mandatory=$true)][string]$IsoPathB64,
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
-    [Parameter(Mandatory=$true)][string]$DriveLetter
+    [Parameter(Mandatory=$true)][string]$DriveLetter,
+    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility,
+    [Parameter(Mandatory=$true)][int]$LegacyBiosCompatible
 )
 
 $ErrorActionPreference = 'Stop'
@@ -381,6 +414,51 @@ try {
         Assert-SameFile $sourceEsd (Join-Path $destinationSources "install.esd")
     }
 
+    $customizationSha256 = ""
+    if ($ExtendedHardwareCompatibility -eq 1) {
+        $autoUnattend = @'
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+</unattend>
+'@
+        $autoPath = Join-Path $destinationRoot "autounattend.xml"
+        [IO.File]::WriteAllText(
+            $autoPath,
+            $autoUnattend,
+            [Text.UTF8Encoding]::new($false))
+        $customizationSha256 = (Get-FileHash -LiteralPath $autoPath -Algorithm SHA256).Hash
+    }
+
+    if ($LegacyBiosCompatible -eq 1) {
+        $bootsect = Join-Path $sourceRoot "boot\\bootsect.exe"
+        if (-not (Test-Path -LiteralPath $bootsect)) {
+            throw "Legacy BIOS compatibility requested but boot\\bootsect.exe is missing from the Windows ISO."
+        }
+
+        & $bootsect /nt60 ($DriveLetter + ":") /force /mbr
+        if ($LASTEXITCODE -ne 0) {
+            throw "bootsect failed while making the Windows USB Legacy BIOS compatible."
+        }
+    }
+
     $critical = @(
         "efi\\boot\\bootx64.efi",
         "sources\\boot.wim"
@@ -403,6 +481,9 @@ try {
         driveLetter = $DriveLetter + ":"
         splitInstallWim = $splitInstallWim
         verifiedBootFiles = $verified
+        extendedHardwareCompatibility = ($ExtendedHardwareCompatibility -eq 1)
+        legacyBiosCompatible = ($LegacyBiosCompatible -eq 1)
+        customizationSha256 = $customizationSha256
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 finally {
@@ -419,6 +500,7 @@ finally {
         PreparedIsoImage image,
         UsbTargetSafetyReport target,
         char driveLetter,
+        WindowsMediaOptions options,
         CancellationToken cancellationToken)
     {
         static string B64(string value) =>
@@ -457,7 +539,11 @@ finally {
             "-ResultPathB64",
             B64(resultPath),
             "-DriveLetter",
-            driveLetter.ToString()
+            driveLetter.ToString(),
+            "-ExtendedHardwareCompatibility",
+            (options.ExtendedHardwareCompatibility ? "1" : "0"),
+            "-LegacyBiosCompatible",
+            (options.LegacyBiosCompatible ? "1" : "0")
         })
         {
             start.ArgumentList.Add(argument);
