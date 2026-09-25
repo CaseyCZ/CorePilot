@@ -25,7 +25,8 @@ public sealed record OnlineSourceDefinition(
     bool Critical,
     bool ResolveOnVerify,
     bool RequireVerifiedCommit,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<string>? UseFor = null);
 
 public sealed record OnlineSourceCatalogDocument(
     int SchemaVersion,
@@ -252,6 +253,25 @@ public sealed class OnlineSourceCatalogService
             loaded.Origin,
             loaded.FromRemote,
             results);
+    }
+
+    public async Task<IReadOnlyList<OnlineSourceDefinition>> GetKnowledgeSourcesAsync(
+        string systemId,
+        string useCase,
+        CancellationToken cancellationToken = default)
+    {
+        var loaded = await LoadCatalogAsync(cancellationToken);
+
+        return loaded.Catalog.Sources
+            .Where(x =>
+                x.Systems.Contains(systemId, StringComparer.OrdinalIgnoreCase) &&
+                x.UseFor is not null &&
+                x.UseFor.Contains(useCase, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(x => x.Trust.Equals("official", StringComparison.OrdinalIgnoreCase) ? 0 :
+                          x.Trust.Equals("upstream", StringComparison.OrdinalIgnoreCase) ? 1 :
+                          x.Trust.Equals("community", StringComparison.OrdinalIgnoreCase) ? 2 : 3)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public async Task<OnlineSourceResolution> ResolveRequiredSourceAsync(
