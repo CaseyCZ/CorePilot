@@ -51,6 +51,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
+    private bool _verificationCompleted;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -80,6 +81,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool CanConfirmTarget => Decision(CorePilotWorkflowAction.ConfirmTarget).Enabled;
     public bool CanSimulateWrite => Decision(CorePilotWorkflowAction.SimulateWrite).Enabled;
     public bool CanCreateSupportBundle => !ActivityLog.IsBusy;
+    public bool CanVerify => !ActivityLog.IsBusy;
+    public bool CanWriteToDisk =>
+        !ActivityLog.IsBusy &&
+        _verificationCompleted &&
+        _compatibilityReport?.CanProceed == true;
+    public string WriteToDiskToolTip =>
+        !_verificationCompleted
+            ? "Run Verify first. USB is not required for verification."
+            : _compatibilityReport?.CanProceed != true
+                ? "The selected system did not pass compatibility verification."
+                : "Select/connect a USB target. This development build performs the final target safety check but physical disk writing is still disabled.";
 
     public string ScanHardwareToolTip => Decision(CorePilotWorkflowAction.ScanHardware).Reason;
     public string DeepScanToolTip => Decision(CorePilotWorkflowAction.DeepScan).Reason;
@@ -194,12 +206,104 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SystemCombo.SelectedIndex = 0;
         Loaded += async (_, _) =>
         {
-            await RefreshDrivesAsync();
-            await ScanHardwareAsync();
+            await RefreshDrivesAsync(silentNoUsb: true);
+            PlanStatus = "Choose a system and version, then press Verify. USB is not required for verification.";
+            UsbSafetyStatus = "USB is optional for verification. Connect it only when you are ready to write.";
         };
     }
 
     private async void ScanHardware_OnClick(object sender, RoutedEventArgs e) => await ScanHardwareAsync();
+
+    private async void Verify_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (SystemCombo.SelectedItem is not ISystemModule ||
+            VariantCombo.SelectedItem is not SystemVariant target)
+        {
+            PlanStatus = "Choose a system and version first.";
+            return;
+        }
+
+        _verificationCompleted = false;
+        RefreshActionAvailability();
+        PlanStatus = $"Verifying {target.DisplayName} against this computer…";
+
+        await ScanHardwareAsync();
+
+        if (_compatibilityReport is null)
+        {
+            PlanStatus = "Verification could not be completed. Open the Activity Log for details.";
+            RefreshActionAvailability();
+            return;
+        }
+
+        _verificationCompleted = true;
+        RefreshActionAvailability();
+
+        if (_compatibilityReport.CanProceed)
+        {
+            var nativeApple =
+                _hardwareReport is not null &&
+                MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
+
+            PlanStatus = nativeApple
+                ? $"Verified ✅ {target.DisplayName} is compatible with this Apple Mac. USB was not required for this check."
+                : $"Verified ✅ {_compatibilityReport.Summary}. USB was not required for this check.";
+
+            ActivityLog.Success("Verification", PlanStatus);
+        }
+        else
+        {
+            PlanStatus = $"Verification finished: {_compatibilityReport.Summary}. Review the Compatibility tab.";
+            ActivityLog.Warning("Verification", PlanStatus);
+        }
+    }
+
+    private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!_verificationCompleted || _compatibilityReport?.CanProceed != true)
+        {
+            PlanStatus = "Run Verify successfully before writing to a disk.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo)
+            await RefreshDrivesAsync(silentNoUsb: true);
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Connect a USB flash drive, open the USB list, then press Write to disk again.";
+            UsbSafetyStatus = "No USB target selected.";
+            return;
+        }
+
+        try
+        {
+            ActivityLog.Start("Write readiness", "Checking the selected USB target before write…");
+            var report = await _usbSafetyInspector.InspectAsync(usb);
+            _usbSafetyReport = report;
+            UsbSafetyStatus = report.Summary;
+
+            if (report.IsBlocked)
+            {
+                PlanStatus = $"Write blocked: {report.Summary}";
+                ActivityLog.Warning("Write readiness", PlanStatus);
+                return;
+            }
+
+            PlanStatus =
+                "Compatibility and USB safety checks passed ✅ " +
+                "Physical disk writing is intentionally disabled in this development build, so CorePilot stopped before changing the disk.";
+            ActivityLog.Success("Write readiness", PlanStatus);
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"USB write readiness check failed: {ex.Message}";
+            ActivityLog.Error("Write readiness", PlanStatus, ex);
+        }
+    }
+
+    private async void UsbCombo_OnDropDownOpened(object sender, EventArgs e) =>
+        await RefreshDrivesAsync(silentNoUsb: true);
 
     private WorkflowActionDecision Decision(CorePilotWorkflowAction action) =>
         _actionPolicy.Evaluate(
@@ -287,6 +391,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanConfirmTarget));
         OnPropertyChanged(nameof(CanSimulateWrite));
         OnPropertyChanged(nameof(CanCreateSupportBundle));
+        OnPropertyChanged(nameof(CanVerify));
+        OnPropertyChanged(nameof(CanWriteToDisk));
+        OnPropertyChanged(nameof(WriteToDiskToolTip));
 
         OnPropertyChanged(nameof(ScanHardwareToolTip));
         OnPropertyChanged(nameof(DeepScanToolTip));
@@ -462,6 +569,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ActivityLog.Start("Hardware", "Scanning local hardware…");
             _hardwareReport = await _scanner.ScanAsync();
             _deepScanExport = null;
+            _verificationCompleted = false;
             _workflowStateMachine.Reset("Local hardware scan refreshed; previous downstream state revoked.");
             AdvanceWorkflow(
                 MacOSWorkflowPhase.HardwareScanned,
@@ -547,7 +655,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async Task RefreshDrivesAsync()
+    private async Task RefreshDrivesAsync(bool silentNoUsb = false)
     {
         try
         {
@@ -575,8 +683,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (UsbDrives.Count == 0)
             {
-                PlanStatus = "No USB disk detected. Connect a USB flash drive and press Refresh drives.";
-                ActivityLog.Warning("Drives", PlanStatus);
+                UsbSafetyStatus = "USB is optional for verification. Connect it only when you are ready to write.";
+
+                if (!silentNoUsb)
+                    PlanStatus = "No USB disk detected. Verification still works without one.";
+
+                ActivityLog.Info("Drives", "No USB disk detected. Verification can continue without a target disk.");
             }
             else
             {
@@ -603,14 +715,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (Variants.Count > 0)
             VariantCombo.SelectedIndex = 0;
 
-        PlanStatus = module.Description;
-        RunCompatibilityAnalysis();
+        _verificationCompleted = false;
+        CompatibilityItems.Clear();
+        _compatibilityReport = null;
+        _automationProfile = null;
+        CompatibilitySummary = "Press Verify to check this system against the detected hardware.";
+        PlanStatus = "Press Verify. USB is not required for compatibility checking.";
+        InvalidateWorkflowAfter(
+            HardwareBaselinePhase,
+            "System selection changed; verification required.");
         RefreshActionAvailability();
     }
 
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        RunCompatibilityAnalysis();
+        _verificationCompleted = false;
+        CompatibilityItems.Clear();
+        _compatibilityReport = null;
+        _automationProfile = null;
+        CompatibilitySummary = "Press Verify to check this version against the detected hardware.";
+        PlanStatus = "Press Verify. USB is not required for compatibility checking.";
+        InvalidateWorkflowAfter(
+            HardwareBaselinePhase,
+            "Version selection changed; verification required.");
         RefreshActionAvailability();
     }
 
@@ -646,7 +773,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _compatibilityReport = _macAnalyzer.Analyze(_hardwareReport, target);
-        _automationProfile = _macAutomationPlanner.Build(_hardwareReport, target, _compatibilityReport);
+        _automationProfile = MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport)
+            ? null
+            : _macAutomationPlanner.Build(_hardwareReport, target, _compatibilityReport);
 
         foreach (var finding in _compatibilityReport.Findings)
             CompatibilityItems.Add(finding);

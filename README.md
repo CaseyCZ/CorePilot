@@ -4,7 +4,9 @@
 
 Target workflow:
 
-**Choose an operating system → choose a USB drive → CorePilot handles the rest.**
+**Choose an operating system → Verify → optionally choose a USB drive → Write to disk.**
+
+The main UI intentionally exposes only the two workflow actions **Verify** and **Write to disk**. Internal safety/build/preflight stages remain in the state machine and Activity Log instead of appearing as separate buttons.
 
 ## Download released Windows build
 
@@ -118,3 +120,25 @@ dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 ```
 
 GitHub Actions validates the Python bridge, logging-backend safety guard, state-machine transitions and workflow action policy, then publishes a self-contained `CorePilot-win-x64` test artifact.
+
+
+## Simple two-step UI
+
+The development UI now keeps the normal flow intentionally small:
+
+1. **Verify** — scans hardware and evaluates compatibility without requiring any USB disk.
+2. **Write to disk** — becomes available only after a successful verification. The USB list refreshes when opened.
+
+The current development build still stops before physical disk modification; **Write to disk** performs the final USB target/safety readiness check only until the physical writer is explicitly enabled.
+
+### Genuine Apple Mac path
+
+CorePilot now separates genuine Apple hardware from Hackintosh/OpenCore compatibility rules.
+
+For **MacBookPro14,1 / 14,2 / 14,3 (2017)** with **macOS Ventura 13**:
+
+- Ventura is treated as natively supported.
+- no Hackintosh kexts, kernel patches or OpenCore boot arguments are requested.
+- firmware/graphics are evaluated as part of the known Apple platform instead of generic PC rules.
+
+Newer macOS targets on the 2017 MacBook Pro are not marked natively supported; they stay blocked until the dedicated OpenCore Legacy Patcher path is integrated.

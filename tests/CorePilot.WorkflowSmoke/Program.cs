@@ -288,3 +288,48 @@ Assert(venturaCompatibility.Findings.Any(x =>
     "Kaby Lake graphics must use the native Ventura compatibility path");
 
 Console.WriteLine("CorePilot hardware compatibility regression smoke test OK");
+
+
+var apple2017Hardware = new CorePilot.Core.HardwareReport(
+    "TEST-MAC",
+    "Apple Inc.",
+    "MacBookPro14,2",
+    "Laptop",
+    "Intel(R) Core(TM) i5-7267U CPU @ 3.10GHz",
+    2,
+    4,
+    "Apple Inc. Mac-827FB448E656EC26",
+    "Unknown",
+    null,
+    8L * 1024 * 1024 * 1024,
+    new CorePilot.Core.HardwareDeviceInfo[]
+    {
+        new("GPU", "Intel(R) Iris(R) Plus Graphics 650", @"PCI\VEN_8086&DEV_5927&SUBSYS_0175106B&REV_06"),
+        new("GPU", "SudoMaker Virtual Display Adapter", @"ROOT\DISPLAY\0000")
+    },
+    Array.Empty<CorePilot.Core.UsbDriveInfo>());
+
+var appleVentura = compatibilityAnalyzer.Analyze(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("ventura-13", "macOS Ventura 13"));
+
+Assert(appleVentura.CanProceed,
+    "2017 MacBook Pro must pass native Ventura compatibility");
+Assert(appleVentura.Findings.Any(x =>
+        x.Component == "macOS" &&
+        x.State == CorePilot.Core.CompatibilityState.Supported &&
+        x.Title.Contains("officially supported", StringComparison.OrdinalIgnoreCase)),
+    "2017 MacBook Pro must explicitly report Ventura as officially supported");
+Assert(appleVentura.RequiredKexts.Count == 0 &&
+       appleVentura.RequiredPatches.Count == 0 &&
+       appleVentura.BootArguments.Count == 0,
+    "native Apple Ventura path must not require Hackintosh kexts, patches or boot arguments");
+
+var appleSonoma = compatibilityAnalyzer.Analyze(
+    apple2017Hardware,
+    new CorePilot.Core.SystemVariant("sonoma-14", "macOS Sonoma 14"));
+
+Assert(!appleSonoma.CanProceed,
+    "2017 MacBook Pro Sonoma path must not be treated as natively supported until OCLP integration exists");
+
+Console.WriteLine("CorePilot genuine-Apple Ventura compatibility smoke test OK");
