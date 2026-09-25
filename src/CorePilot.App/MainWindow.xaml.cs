@@ -224,6 +224,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _lastOnlineSourceSnapshot = null;
         RefreshActionAvailability();
 
+        if (_targetMode == InstallationTargetMode.OtherComputer &&
+            module.Id == "macos")
+        {
+            PrepareCompatibilityForOtherComputer(module, target);
+            _preparationResult = BuildPreparationResult(module, target);
+            _verificationCompleted = true;
+            ApplyPreparationResultToUi(module, target);
+            RefreshActionAvailability();
+
+            PlanStatus =
+                "TARGET HARDWARE REQUIRED · macOS preparation is hardware-specific. " +
+                "Run CorePilot on the target Mac/PC in This computer mode, or use a future target-hardware import path.";
+            ActivityLog.Warning("Preparation", PlanStatus);
+            return;
+        }
+
         try
         {
             ActivityLog.Start(
