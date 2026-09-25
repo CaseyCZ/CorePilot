@@ -26,6 +26,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly UsbTargetSafetyInspector _usbSafetyInspector = new();
     private readonly MacOSUsbWritePlanService _usbWritePlanService = new();
     private readonly MacOSUsbExecutionPreflightService _usbExecutionPreflightService = new();
+    private readonly MacOSUsbTypedConfirmationService _usbTypedConfirmationService = new();
     private HardwareSnifferExportResult? _deepScanExport;
     private OpCoreStagingResult? _opCoreStage;
     private OpCoreBuildResult? _lastEfiBuild;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private UsbTargetSafetyReport? _usbSafetyReport;
     private MacOSUsbWritePlanResult? _lastUsbWritePlan;
     private MacOSUsbExecutionPreflightResult? _lastUsbExecutionPreflight;
+    private MacOSUsbTypedConfirmationResult? _lastUsbTypedConfirmation;
     private HardwareReport? _hardwareReport;
     private CompatibilityReport? _compatibilityReport;
     private MacOSAutomationProfile? _automationProfile;
@@ -172,6 +174,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _usbSafetyReport = null;
         _lastUsbWritePlan = null;
         _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
         UsbSafetyStatus = UsbCombo.SelectedItem is UsbDriveInfo
             ? "USB target changed — safety inspection required."
             : "USB target not selected.";
@@ -192,6 +195,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _usbSafetyReport = report;
             _lastUsbWritePlan = null;
             _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
             UsbSafetyStatus = report.Summary;
         }
         catch (Exception ex)
@@ -211,6 +215,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _usbSafetyReport = null;
             _lastUsbWritePlan = null;
             _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
             UsbSafetyStatus = "USB list refreshed — safety inspection required.";
 
             UsbDrives.Clear();
@@ -262,6 +267,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _lastInstallerManifest = null;
         _lastUsbWritePlan = null;
         _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
         MacPlanDetails = "";
         OnPropertyChanged(nameof(MacPlanVisibility));
 
@@ -418,6 +424,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastInstallerManifest = null;
             _lastUsbWritePlan = null;
         _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
 
             PlanStatus =
                 $"EFI build complete ✅ {result.EfiDirectory}. " +
@@ -480,6 +487,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastInstallerManifest = manifest;
             _lastUsbWritePlan = null;
         _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
 
             PlanStatus =
                 $"Apple Recovery + installer manifest ready ✅ " +
@@ -554,6 +562,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _lastUsbWritePlan = plan;
             _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
 
             var confirmation = plan.RequiresStrongConfirmation
                 ? " · future strong confirmation required"
@@ -596,6 +605,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (freshTarget.IsBlocked)
             {
                 _lastUsbExecutionPreflight = null;
+                _lastUsbTypedConfirmation = null;
                 _usbSafetyReport = freshTarget;
                 UsbSafetyStatus = freshTarget.Summary;
                 PlanStatus = $"Execution preflight BLOCKED: {freshTarget.Summary}";
@@ -612,6 +622,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 freshTarget);
 
             _lastUsbExecutionPreflight = result;
+            _lastUsbTypedConfirmation = null;
+            ConfirmationTextBox.Text = "";
 
             PlanStatus =
                 $"Execution preflight ready ✅ ID {result.PreflightId[..8]} · " +
@@ -622,7 +634,65 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             _lastUsbExecutionPreflight = null;
+            _lastUsbTypedConfirmation = null;
             PlanStatus = $"Execution preflight failed: {ex.Message}";
+        }
+    }
+
+    private async void ConfirmTarget_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_opCoreStage is null ||
+            _lastInstallerManifest is null ||
+            _lastUsbWritePlan is null ||
+            _lastUsbExecutionPreflight is null)
+        {
+            PlanStatus = "Run a fresh execution preflight before confirmation.";
+            return;
+        }
+
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = "Select the same USB target used by the execution preflight.";
+            return;
+        }
+
+        try
+        {
+            PlanStatus = "Re-inspecting USB before accepting typed confirmation…";
+            var freshTarget = await _usbSafetyInspector.InspectAsync(usb);
+
+            if (freshTarget.IsBlocked)
+            {
+                _lastUsbTypedConfirmation = null;
+                _lastUsbExecutionPreflight = null;
+                _usbSafetyReport = freshTarget;
+                UsbSafetyStatus = freshTarget.Summary;
+                PlanStatus = $"Confirmation BLOCKED: {freshTarget.Summary}";
+                return;
+            }
+
+            _usbSafetyReport = freshTarget;
+            UsbSafetyStatus = freshTarget.Summary;
+
+            var result = await _usbTypedConfirmationService.CreateAsync(
+                _opCoreStage,
+                _lastInstallerManifest,
+                _lastUsbWritePlan,
+                _lastUsbExecutionPreflight,
+                freshTarget,
+                ConfirmationTextBox.Text);
+
+            _lastUsbTypedConfirmation = result;
+
+            PlanStatus =
+                $"Typed confirmation accepted ✅ ID {result.ConfirmationId[..8]} · " +
+                $"valid only until {result.ExpiresAt.ToLocalTime():HH:mm:ss}. " +
+                "Physical disk writing is still disabled.";
+        }
+        catch (Exception ex)
+        {
+            _lastUsbTypedConfirmation = null;
+            PlanStatus = $"Confirmation rejected: {ex.Message}";
         }
     }
 
