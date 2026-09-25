@@ -273,8 +273,8 @@ param(
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
     [Parameter(Mandatory=$true)][string]$DriveLetter,
-    [Parameter(Mandatory=$true)][bool]$ExtendedHardwareCompatibility,
-    [Parameter(Mandatory=$true)][bool]$LegacyBiosCompatible
+    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility,
+    [Parameter(Mandatory=$true)][int]$LegacyBiosCompatible
 )
 
 $ErrorActionPreference = 'Stop'
@@ -415,7 +415,7 @@ try {
     }
 
     $customizationSha256 = ""
-    if ($ExtendedHardwareCompatibility) {
+    if ($ExtendedHardwareCompatibility -eq 1) {
         $autoUnattend = @'
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
@@ -447,7 +447,7 @@ try {
         $customizationSha256 = (Get-FileHash -LiteralPath $autoPath -Algorithm SHA256).Hash
     }
 
-    if ($LegacyBiosCompatible) {
+    if ($LegacyBiosCompatible -eq 1) {
         $bootsect = Join-Path $sourceRoot "boot\\bootsect.exe"
         if (-not (Test-Path -LiteralPath $bootsect)) {
             throw "Legacy BIOS compatibility requested but boot\\bootsect.exe is missing from the Windows ISO."
@@ -481,8 +481,8 @@ try {
         driveLetter = $DriveLetter + ":"
         splitInstallWim = $splitInstallWim
         verifiedBootFiles = $verified
-        extendedHardwareCompatibility = $ExtendedHardwareCompatibility
-        legacyBiosCompatible = $LegacyBiosCompatible
+        extendedHardwareCompatibility = ($ExtendedHardwareCompatibility -eq 1)
+        legacyBiosCompatible = ($LegacyBiosCompatible -eq 1)
         customizationSha256 = $customizationSha256
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
@@ -541,9 +541,9 @@ finally {
             "-DriveLetter",
             driveLetter.ToString(),
             "-ExtendedHardwareCompatibility",
-            options.ExtendedHardwareCompatibility.ToString(),
+            (options.ExtendedHardwareCompatibility ? "1" : "0"),
             "-LegacyBiosCompatible",
-            options.LegacyBiosCompatible.ToString()
+            (options.LegacyBiosCompatible ? "1" : "0")
         })
         {
             start.ArgumentList.Add(argument);
