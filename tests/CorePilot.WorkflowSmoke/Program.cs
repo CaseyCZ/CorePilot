@@ -625,8 +625,12 @@ try
 
     using var verifiedHttp = new HttpClient(new DelegateHttpHandler(request =>
     {
-        if (request.RequestUri?.AbsoluteUri ==
-            "https://api.github.com/repos/CaseyCZ/CorePilot/commits/main")
+        if (request.RequestUri?.Host.Equals(
+                "api.github.com",
+                StringComparison.OrdinalIgnoreCase) == true &&
+            request.RequestUri.AbsolutePath.EndsWith(
+                "/repos/CaseyCZ/CorePilot/commits/main",
+                StringComparison.OrdinalIgnoreCase))
         {
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
@@ -635,8 +639,15 @@ try
             };
         }
 
-        if (request.RequestUri?.AbsoluteUri ==
-            $"https://raw.githubusercontent.com/CaseyCZ/CorePilot/{verifiedSha}/src/CorePilot.Core/Data/source-catalog.json")
+        if (request.RequestUri?.Host.Equals(
+                "raw.githubusercontent.com",
+                StringComparison.OrdinalIgnoreCase) == true &&
+            request.RequestUri.AbsolutePath.Contains(
+                $"/CaseyCZ/CorePilot/{verifiedSha}/",
+                StringComparison.OrdinalIgnoreCase) &&
+            request.RequestUri.AbsolutePath.EndsWith(
+                "/src/CorePilot.Core/Data/source-catalog.json",
+                StringComparison.OrdinalIgnoreCase))
         {
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
