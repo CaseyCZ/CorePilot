@@ -2,6 +2,11 @@ namespace CorePilot.Core;
 
 public sealed record HardwareDisplayItem(string Category, string Name, string Details);
 
+public sealed record HardwareDeviceInfo(string Category, string Name, string PnpDeviceId)
+{
+    public string Details => string.IsNullOrWhiteSpace(PnpDeviceId) ? "" : PnpDeviceId;
+}
+
 public sealed record UsbDriveInfo(string DeviceId, string Model, long SizeBytes, bool IsUsb)
 {
     public string SizeText => SizeBytes <= 0 ? "Unknown size" : $"{SizeBytes / 1024d / 1024d / 1024d:0.#} GB";
@@ -12,27 +17,31 @@ public sealed record HardwareReport(
     string ComputerName,
     string Manufacturer,
     string Model,
+    string FormFactor,
     string Cpu,
+    int CpuCores,
+    int CpuThreads,
     string Motherboard,
     string FirmwareMode,
     bool? SecureBoot,
     long MemoryBytes,
-    IReadOnlyList<string> Gpus,
-    IReadOnlyList<string> NetworkAdapters,
-    IReadOnlyList<string> AudioDevices,
+    IReadOnlyList<HardwareDeviceInfo> Devices,
     IReadOnlyList<UsbDriveInfo> Disks)
 {
     public IEnumerable<HardwareDisplayItem> ToDisplayItems()
     {
-        yield return new("System", $"{Manufacturer} {Model}".Trim(), ComputerName);
-        yield return new("CPU", Cpu, "");
+        yield return new("System", $"{Manufacturer} {Model}".Trim(), $"{ComputerName} · {FormFactor}");
+        yield return new("CPU", Cpu, CpuCores > 0 ? $"{CpuCores} cores / {CpuThreads} threads" : "");
         yield return new("Motherboard", Motherboard, "");
         yield return new("Firmware", FirmwareMode, $"Secure Boot: {FormatBool(SecureBoot)}");
         yield return new("Memory", $"{MemoryBytes / 1024d / 1024d / 1024d:0.#} GB", "");
-        foreach (var gpu in Gpus) yield return new("GPU", gpu, "");
-        foreach (var adapter in NetworkAdapters) yield return new("Network", adapter, "");
-        foreach (var audio in AudioDevices) yield return new("Audio", audio, "");
+
+        foreach (var device in Devices)
+            yield return new(device.Category, device.Name, device.Details);
     }
+
+    public IReadOnlyList<HardwareDeviceInfo> DevicesByCategory(string category) =>
+        Devices.Where(x => x.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToArray();
 
     private static string FormatBool(bool? value) => value switch
     {
@@ -40,6 +49,47 @@ public sealed record HardwareReport(
         false => "Disabled",
         null => "Unknown"
     };
+}
+
+public enum CompatibilityState
+{
+    Supported,
+    ActionRequired,
+    Warning,
+    Blocked,
+    Unknown
+}
+
+public sealed record CompatibilityFinding(
+    CompatibilityState State,
+    string Component,
+    string Title,
+    string Details,
+    string? SuggestedAction = null,
+    string? Reference = null)
+{
+    public string StateText => State switch
+    {
+        CompatibilityState.Supported => "OK",
+        CompatibilityState.ActionRequired => "ACTION",
+        CompatibilityState.Warning => "WARNING",
+        CompatibilityState.Blocked => "BLOCKED",
+        _ => "UNKNOWN"
+    };
+}
+
+public sealed record CompatibilityReport(
+    string TargetId,
+    IReadOnlyList<CompatibilityFinding> Findings,
+    IReadOnlyList<string> RequiredKexts,
+    IReadOnlyList<string> RequiredPatches,
+    IReadOnlyList<string> BootArguments)
+{
+    public bool CanProceed => Findings.All(x => x.State != CompatibilityState.Blocked);
+    public int BlockerCount => Findings.Count(x => x.State == CompatibilityState.Blocked);
+    public string Summary => CanProceed
+        ? $"No blocking issue detected · {Findings.Count} checks"
+        : $"{BlockerCount} blocking issue{(BlockerCount == 1 ? "" : "s")} detected";
 }
 
 public sealed record SystemVariant(string Id, string DisplayName);
