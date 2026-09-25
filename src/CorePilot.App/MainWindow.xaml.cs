@@ -59,6 +59,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _planStatus = "Select a system and USB drive, then prepare an installation plan.";
     private string _usbSafetyStatus = "USB target not inspected. No physical-disk writes are enabled.";
     private string _compatibilitySummary = "Scan hardware and select macOS to run compatibility checks.";
+    private string _compatibilityVerdict = "NOT CHECKED";
+    private string _compatibilityInstallPath = "Press Verify to determine whether the selected system is installable on this computer.";
+    private string _compatibilityRequirements = "Required fixes, patches, drivers and boot arguments will appear here.";
     private string _workflowStatus = "Workflow · IDLE · Not started.";
 
     public ObservableCollection<ISystemModule> Systems { get; } = [];
@@ -118,6 +121,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _compatibilitySummary;
         private set { _compatibilitySummary = value; OnPropertyChanged(); }
+    }
+
+    public string CompatibilityVerdict
+    {
+        get => _compatibilityVerdict;
+        private set { _compatibilityVerdict = value; OnPropertyChanged(); }
+    }
+
+    public string CompatibilityInstallPath
+    {
+        get => _compatibilityInstallPath;
+        private set { _compatibilityInstallPath = value; OnPropertyChanged(); }
+    }
+
+    public string CompatibilityRequirements
+    {
+        get => _compatibilityRequirements;
+        private set { _compatibilityRequirements = value; OnPropertyChanged(); }
     }
 
     public string WorkflowStatus
@@ -866,6 +887,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _compatibilityReport = null;
         _automationProfile = null;
         CompatibilitySummary = "Press Verify to check this system against the detected hardware.";
+        ResetCompatibilityDecision("Press Verify to evaluate this system.");
         PlanStatus = "Press Verify. USB is not required for compatibility checking.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
@@ -880,6 +902,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _compatibilityReport = null;
         _automationProfile = null;
         CompatibilitySummary = "Press Verify to check this version against the detected hardware.";
+        ResetCompatibilityDecision("Press Verify to evaluate this version.");
         PlanStatus = "Press Verify. USB is not required for compatibility checking.";
         InvalidateWorkflowAfter(
             HardwareBaselinePhase,
@@ -906,6 +929,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_hardwareReport is null)
         {
             CompatibilitySummary = "Scan hardware first.";
+            ResetCompatibilityDecision("Hardware has not been scanned yet.");
             return;
         }
 
@@ -913,6 +937,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             VariantCombo.SelectedItem is not SystemVariant target)
         {
             CompatibilitySummary = "Choose a system and version first.";
+            ResetCompatibilityDecision("Choose a system and version first.");
             return;
         }
 
@@ -940,6 +965,114 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CompatibilityItems.Add(finding);
 
         CompatibilitySummary = _compatibilityReport.Summary;
+        UpdateCompatibilityDecision(system, target);
+    }
+
+    private void ResetCompatibilityDecision(string message)
+    {
+        CompatibilityVerdict = "NOT CHECKED";
+        CompatibilityInstallPath = message;
+        CompatibilityRequirements =
+            "Required fixes, patches, drivers and boot arguments will appear here after Verify.";
+    }
+
+    private void UpdateCompatibilityDecision(
+        ISystemModule system,
+        SystemVariant target)
+    {
+        if (_compatibilityReport is null || _hardwareReport is null)
+        {
+            ResetCompatibilityDecision("Compatibility analysis has not completed.");
+            return;
+        }
+
+        var blockerCount = _compatibilityReport.Findings.Count(x =>
+            x.State == CompatibilityState.Blocked);
+        var unknownCount = _compatibilityReport.Findings.Count(x =>
+            x.State == CompatibilityState.Unknown);
+        var actionCount = _compatibilityReport.Findings.Count(x =>
+            x.State == CompatibilityState.ActionRequired);
+        var warningCount = _compatibilityReport.Findings.Count(x =>
+            x.State == CompatibilityState.Warning);
+
+        CompatibilityVerdict = blockerCount > 0
+            ? "NOT READY TO INSTALL"
+            : unknownCount > 0
+                ? "REVIEW REQUIRED"
+                : actionCount > 0
+                    ? "INSTALLABLE WITH REQUIRED FIXES"
+                    : warningCount > 0
+                        ? "COMPATIBLE WITH WARNINGS"
+                        : "READY TO INSTALL";
+
+        if (system.Id == "macos" &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
+        {
+            CompatibilityInstallPath = target.Id == "ventura-13" &&
+                                       _compatibilityReport.CanProceed
+                ? "Installation path: native Apple installer. OpenCore/OCLP patches are not required for this target."
+                : "Installation path: OpenCore Legacy Patcher is required for this newer macOS. CorePilot keeps Write to disk blocked until that legacy-Mac path is explicitly supported and verified.";
+        }
+        else if (system.Id == "macos")
+        {
+            CompatibilityInstallPath =
+                "Installation path: CorePilot OpenCore/Hackintosh workflow. Deep Scan resolves the exact EFI, kexts, patches and boot arguments before writing.";
+        }
+        else
+        {
+            CompatibilityInstallPath =
+                $"Installation path: {system.DisplayName} compatibility is verified here; physical media writing for this system is not enabled in this build.";
+        }
+
+        var requirements = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddRequirement(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+
+            var normalized = value.Trim();
+            if (seen.Add(normalized))
+                requirements.Add(normalized);
+        }
+
+        foreach (var finding in _compatibilityReport.Findings.Where(x =>
+                     x.State is CompatibilityState.Blocked
+                         or CompatibilityState.ActionRequired
+                         or CompatibilityState.Unknown))
+            AddRequirement(finding.SuggestedAction);
+
+        foreach (var patch in _compatibilityReport.RequiredPatches)
+            AddRequirement($"Patch: {patch}");
+
+        foreach (var kext in _compatibilityReport.RequiredKexts)
+            AddRequirement($"Driver/kext: {kext}");
+
+        foreach (var argument in _compatibilityReport.BootArguments)
+            AddRequirement($"Boot argument: {argument}");
+
+        if (system.Id == "macos")
+        {
+            var oclp = _lastOnlineSourceSnapshot?.Sources.FirstOrDefault(x =>
+                x.Id.Equals("macos.oclp", StringComparison.OrdinalIgnoreCase));
+
+            if (oclp is { Success: true })
+            {
+                var version = string.IsNullOrWhiteSpace(oclp.Version)
+                    ? "current release"
+                    : oclp.Version;
+
+                AddRequirement(
+                    $"Online patcher source: OpenCore Legacy Patcher {version} · {(oclp.Live ? "LIVE" : "CACHE")}.");
+            }
+        }
+
+        CompatibilityRequirements = requirements.Count == 0
+            ? "No additional fixes, patches, kexts or boot arguments are required by the current compatibility result."
+            : string.Join(
+                Environment.NewLine,
+                requirements.Select(x => "• " + x));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
