@@ -37,6 +37,8 @@ public sealed class SupportBundleService
         "CorePilotWorkspace.json",
         "CorePilotAutomationProfile.json",
         "CorePilotEfiBuild.json",
+        "CorePilotDownloadedComponents.json",
+        "CorePilotDownloadedComponents.sha256",
         "CorePilotRecovery.json",
         "CorePilotInstallerManifest.json",
         "CorePilotInstallerManifest.sha256",
