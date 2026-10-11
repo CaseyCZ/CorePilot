@@ -1,0 +1,341 @@
+<Window x:Class="CorePilot.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CorePilot"
+        Width="1100" Height="680"
+        MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource PageBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Grid Margin="24"
+          Background="{StaticResource PageBrush}"
+          TextElement.Foreground="{StaticResource TextBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="CorePilot"
+                           FontSize="30"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextBrush}"/>
+                <TextBlock Text="Hardware-aware boot media assistant · simple two-step workflow"
+                           Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="12,8" MaxWidth="460">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding ActivityLog.StateText}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding ActivityLog.CurrentArea}"
+                                   Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding ActivityLog.CurrentStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,2,0,0"/>
+                        <ProgressBar Height="3"
+                                     Margin="0,7,0,2"
+                                     IsIndeterminate="{Binding ActivityLog.IsBusy}"
+                                     Value="0"/>
+                        <TextBlock Text="{Binding WorkflowStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Top"
+                                Margin="12,0,0,0">
+                        <Button Content="Open log"
+                                Click="OpenLog_OnClick"
+                                Margin="0,0,0,6"/>
+                        <Button Content="Support bundle"
+                                Click="CreateSupportBundle_OnClick"
+                                IsEnabled="{Binding CanCreateSupportBundle}"
+                                ToolTip="Create a redacted troubleshooting ZIP from CorePilot diagnostics."
+                                ToolTipService.ShowOnDisabled="True"
+                                Margin="0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="360"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Create boot media"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <TextBlock Text="1. Choose whether you are preparing for this computer or another one. Verify scans hardware when needed, searches online for usable solutions and validates the prepared result.  2. Write to disk only copies the already prepared system to USB."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,6,0,20"/>
+
+                        <TextBlock Text="System"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="SystemCombo"
+                                  ItemsSource="{Binding Systems}"
+                                  DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
+                                  SelectionChanged="SystemCombo_OnSelectionChanged"/>
+
+                        <TextBlock Text="Version"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="VariantCombo"
+                                  ItemsSource="{Binding Variants}"
+                                  DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
+                                  SelectionChanged="VariantCombo_OnSelectionChanged"/>
+
+                        <TextBlock Text="Target computer"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <Grid Margin="0,4,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="ThisComputerButton"
+                                    Grid.Column="0"
+                                    Content="This computer"
+                                    Click="ThisComputer_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0"/>
+                            <Button x:Name="OtherComputerButton"
+                                    Grid.Column="2"
+                                    Content="Other computer"
+                                    Click="OtherComputer_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0"/>
+                        </Grid>
+                        <TextBlock Text="{Binding TargetModeStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,0,0,12"/>
+
+                        <Button Content="Verify"
+                                Click="Verify_OnClick"
+                                IsEnabled="{Binding CanVerify}"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Margin="0,12,0,10"/>
+
+                        <Border Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,18">
+                            <TextBlock Text="{Binding PlanStatus}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextBrush}"/>
+                        </Border>
+
+                        <TextBlock Text="USB drive · only needed for writing"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <ComboBox x:Name="UsbCombo"
+                                  ItemsSource="{Binding UsbDrives}"
+                                  DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanChangeInputs}"
+                                  DropDownOpened="UsbCombo_OnDropDownOpened"
+                                  SelectionChanged="UsbCombo_OnSelectionChanged"/>
+
+                        <TextBlock Text="{Binding UsbSafetyStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,4,0,10"/>
+
+                        <Button Content="Write to disk"
+                                Click="WriteToDisk_OnClick"
+                                IsEnabled="{Binding CanWriteToDisk}"
+                                ToolTip="{Binding WriteToDiskToolTip}"
+                                ToolTipService.ShowOnDisabled="True"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Margin="0,4,0,8"/>
+
+                        <TextBlock Text="Write to disk uses the system already prepared by Verify. The selected USB is erased only after a fresh identity check, payload re-validation, verified preflight and an exact typed confirmation phrase."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}"/>
+
+                        <TextBox x:Name="ConfirmationTextBox"
+                                 Visibility="Collapsed"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border Grid.Column="2" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="14">
+                <TabControl Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="{StaticResource TextBrush}">
+                    <TabItem Header="Hardware">
+                        <Grid Margin="6,12,6,6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Hardware"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="This computer mode scans hardware automatically. Other computer mode prepares Windows/Linux media without using this PC as the compatibility gate."
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,10,0,0">
+                                <TextBlock Text="{Binding DeepScanStatus}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <ListView Grid.Row="3" ItemsSource="{Binding HardwareItems}" Background="Transparent"
+                                      BorderThickness="0" Foreground="{StaticResource TextBrush}">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="105"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Category}" Foreground="{StaticResource MutedBrush}"/>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource MutedBrush}"
+                                                               TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Preparation">
+                        <Grid Margin="6,12,6,6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Preparation" FontSize="20" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding CompatibilitySummary}" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <Border Grid.Row="2"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="INSTALLATION RESULT"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding CompatibilityVerdict}"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,10"/>
+
+                                    <TextBlock Text="{Binding CompatibilityInstallPath}"
+                                               Foreground="{StaticResource TextBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Problems found / fixes / drivers / patches"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="{Binding CompatibilityRequirements}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="Automatic configuration"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,14,0,4"/>
+                                    <TextBlock Text="{Binding CompatibilityAutoConfiguration}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <ListView Grid.Row="4" ItemsSource="{Binding PreparationItems}" Background="Transparent"
+                                      BorderThickness="0" Foreground="{StaticResource TextBrush}">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource RowBrush}"
+                                                BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                CornerRadius="4"
+                                                Padding="8,11"
+                                                Margin="0,0,0,3">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding StateText}"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           FontWeight="Bold"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Category}" Foreground="{StaticResource MutedBrush}"/>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Text="{Binding Problem}"
+                                                               Foreground="{StaticResource TextBrush}"
+                                                               FontWeight="SemiBold"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Resolution}" Foreground="{StaticResource MutedBrush}"
+                                                               TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding Source}"
+                                                               Foreground="{StaticResource TextBrush}"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded Hackintosh/OpenCore, Windows and Linux USB writing enabled."
+                   Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
+    </Grid>
+</Window>

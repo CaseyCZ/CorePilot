@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>CorePilot</AssemblyName>
+    <RootNamespace>CorePilot.App</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CorePilot.Core\CorePilot.Core.csproj" />
+    <ProjectReference Include="..\CorePilot.Hardware\CorePilot.Hardware.csproj" />
+    <ProjectReference Include="..\CorePilot.MacOS\CorePilot.MacOS.csproj" />
+    <ProjectReference Include="..\CorePilot.Windows\CorePilot.Windows.csproj" />
+    <ProjectReference Include="..\CorePilot.Linux\CorePilot.Linux.csproj" />
+  </ItemGroup>
+</Project>

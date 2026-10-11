@@ -1,0 +1,154 @@
+<Window x:Class="CorePilot.App.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CorePilot Activity Log"
+        Width="1050" Height="650"
+        MinWidth="760" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Grid Margin="20"
+          Background="{StaticResource PageBrush}"
+          TextElement.Foreground="{StaticResource TextBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="170"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <TextBlock Text="Activity Log" FontSize="24" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding CurrentStatus}"
+                           Foreground="{StaticResource MutedBrush}"
+                           TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding LogFilePath}"
+                           Foreground="{StaticResource MutedBrush}"
+                           FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                <Button Content="Open folder" Click="OpenFolder_OnClick"/>
+                <Button Content="Copy path" Click="CopyPath_OnClick"/>
+                <Button x:Name="CopySelectedButton"
+                        Content="Copy selected"
+                        Click="CopySelected_OnClick"
+                        IsEnabled="False"/>
+                <Button Content="Clear view" Click="ClearView_OnClick"/>
+            </WrapPanel>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="Level"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"/>
+
+                <ComboBox x:Name="LevelFilterCombo"
+                          Grid.Column="2"
+                          SelectedIndex="0"
+                          Margin="0"
+                          SelectionChanged="LevelFilterCombo_OnSelectionChanged">
+                    <ComboBoxItem Content="All" Tag="All"/>
+                    <ComboBoxItem Content="Errors" Tag="Error"/>
+                    <ComboBoxItem Content="Warnings" Tag="Warning"/>
+                    <ComboBoxItem Content="Success" Tag="Success"/>
+                    <ComboBoxItem Content="Info" Tag="Info"/>
+                </ComboBox>
+
+                <TextBox x:Name="SearchBox"
+                         Grid.Column="4"
+                         MinHeight="34"
+                         Padding="8"
+                         VerticalContentAlignment="Center"
+                         ToolTip="Search time, level, area, message or exception detail"
+                         TextChanged="SearchBox_OnTextChanged"/>
+
+                <TextBlock x:Name="CountText"
+                           Grid.Column="6"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedBrush}"/>
+
+                <Button Grid.Column="8"
+                        Content="Clear filters"
+                        Click="ClearFilters_OnClick"
+                        Margin="0"/>
+            </Grid>
+        </Border>
+
+        <ListView x:Name="LogList"
+                  Grid.Row="4"
+                  SelectionMode="Single"
+                  SelectionChanged="LogList_OnSelectionChanged"
+                  Background="{StaticResource CardBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1"
+                  Foreground="{StaticResource TextBrush}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Time" Width="105" DisplayMemberBinding="{Binding TimeText}"/>
+                    <GridViewColumn Header="Level" Width="90" DisplayMemberBinding="{Binding LevelText}"/>
+                    <GridViewColumn Header="Area" Width="145" DisplayMemberBinding="{Binding Area}"/>
+                    <GridViewColumn Header="Message" Width="660" DisplayMemberBinding="{Binding Message}"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <Border Grid.Row="6"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Selected entry detail / stack trace"
+                           FontWeight="SemiBold"/>
+                <TextBox Grid.Row="1"
+                         Margin="0,8,0,0"
+                         Text="{Binding SelectedItem.Detail, ElementName=LogList}"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         Background="Transparent"
+                         Foreground="{StaticResource TextBrush}"
+                         BorderThickness="0"
+                         FontFamily="Consolas"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
