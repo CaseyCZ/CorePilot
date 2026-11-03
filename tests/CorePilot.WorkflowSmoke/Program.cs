@@ -1318,10 +1318,13 @@ foreach (var requiredMainControl in new[]
     "x:Name=\"SystemCombo\"",
     "x:Name=\"VariantCombo\"",
     "Content=\"Verify\"",
-    "Content=\"Prepare media\"",
-    "Content=\"Cancel current operation\"",
+    "Content=\"{x:Static app:UiStrings.CreateInstallationUsb}\"",
+    "Content=\"{Binding CancelActionLabel}\"",
     "x:Name=\"UsbCombo\"",
-    "Content=\"Write to disk\"",
+    "Content=\"Prepare media only\"",
+    "Content=\"Write prepared media to USB\"",
+    "x:Name=\"AdvancedEraseConfirmationCheckBox\"",
+    "x:Name=\"NativeMacGuidePanel\"",
     "Header=\"Hardware\"",
     "Header=\"Preparation\""
 })
