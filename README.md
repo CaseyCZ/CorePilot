@@ -14,7 +14,7 @@ The main UI exposes **Verify**, **Create installation USB** and a context-sensit
 
 ## Quick start
 
-1. Select Windows or Linux, its version and the target computer.
+1. Select the operating system, its version and the target computer.
 2. Click **Verify** to check requirements. No full installer download happens here.
 3. Choose the USB drive. CorePilot checks it before downloading any installation files.
 4. Click **Create installation USB**. If needed, CorePilot downloads the installer and checks it; an interrupted Windows ISO download can be resumed when the server supports it.
@@ -24,7 +24,7 @@ The main UI exposes **Verify**, **Create installation USB** and a context-sensit
 | --- | --- | --- | --- |
 | Windows 10/11 | Yes | Yes | Microsoft download or user-selected x64 ISO |
 | Ubuntu, Fedora, Debian, Mint | Yes | Yes | Publisher-checksum-verified Linux ISO |
-| macOS / OpenCore | Hardware-specific | Not automated | Use guarded Advanced workflow on the target machine; native Apple writer work remains |
+| macOS / OpenCore | Hardware-specific | Not automated | Supported OpenCore hardware only; uses the same Create button and guarded write checks. Native Apple/OCLP writer remains unavailable |
 
 **macOS notice:** Apple software licenses and supported hardware requirements still apply. OpenCore/Hackintosh support is experimental and at your own risk; CorePilot does not grant permission to install macOS on unsupported equipment.
 
@@ -55,7 +55,7 @@ The current non-destructive pipeline includes hardware discovery, compatibility,
 
 ### Current guarded writer ✅
 
-The simple UI uses **Verify**, followed by **Create installation USB** with a separate erase confirmation for Windows/Linux. Hardware-specific macOS preparation still uses the guarded **Advanced options** workflow.
+For a compatible OpenCore target, the main UI also supports **Verify → select USB → Create installation USB → confirm erase**. All existing macOS manifest, live-source, identity and execution-preflight checks remain mandatory. Advanced options provide the same separate preparation and writing controls, plus an optional typed confirmation phrase. The genuine-Apple/OCLP writer is still a separate, unsupported path.
 
 For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolves compatibility. **Prepare media** then performs the non-destructive payload stages:
 
@@ -73,7 +73,7 @@ For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolv
 
 - a second live-source refresh immediately before destructive authorization
 - exact USB identity inspection and short-lived preflight
-- exact typed erase phrase
+- separate erase confirmation showing model, capacity, disk number and drive letters; optional typed phrase in Advanced
 - another identity check inside the elevated erase boundary
 - GPT/FAT32 creation and verified EFI/Recovery copy
 - mounted-volume-to-physical-disk verification
@@ -157,10 +157,10 @@ does not depend on colour alone. The main status panel, compatibility verdict,
 preparation rows and activity indicator share these meanings.
 
 1. **Verify** — checks hardware, compatibility, current sources and possible installation paths. Does not download the full installer image. No USB disk is required.
-2. **Create installation USB** — for Windows/Linux, select a USB first, then CorePilot checks capacity and safety before downloading or inspecting an installer. Windows downloads use bounded HTTP Range resume when the server permits it.
+2. **Create installation USB** — for Windows/Linux and supported OpenCore targets, select a USB first, then CorePilot checks capacity and safety before preparing the installer. Windows downloads use bounded HTTP Range resume when the server permits it.
 3. **Confirm erase** — a separate dialog identifies the exact model, disk number, size and existing drive letters. Advanced mode can still require the exact typed phrase. The prepared payload and the USB identity are revalidated before destructive writing; once writing starts, cancellation is intentionally unavailable.
 
-For supported Hackintosh/OpenCore targets the flow is now: **Verify** → Hardware Sniffer Deep Scan and compatibility resolution. Then **Prepare media** → current verified OpCore-Simplify staging → hardware-specific EFI/kext/patch configuration → `ocvalidate` + structural/integrity audit → Apple Recovery → final installer manifest. Then **Write to disk** → live-source revalidation → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
+For supported Hackintosh/OpenCore targets, **Verify** performs Hardware Sniffer Deep Scan and compatibility resolution. **Create installation USB** runs the non-destructive preparation (current verified OpCore-Simplify staging, EFI/kext/patch configuration, `ocvalidate`, structural/integrity audit, Apple Recovery and final installer manifest), then live-source revalidation, USB safety inspection, manifest-bound write plan, short-lived preflight, explicit erase confirmation, final USB identity check, elevated physical write and file SHA-256 verification. Advanced offers separate Prepare/Write actions and typed erase confirmation.
 
 For **Windows 10/11**, This computer mode checks the detected hardware, while Other computer mode prepares standard universal media without using this PC as the compatibility gate. In This computer mode, Windows 11 may automatically use the guarded compatibility profile when TPM 2.0 is the remaining supported blocker; Legacy BIOS is not treated as resolved. CorePilot can fetch the current official retail ISO using the GitHub-verified Fido source or inspect a user-selected ISO. Optional Czech regional/keyboard and privacy-focused setup defaults are off by default. Neither option creates an account or saves an account password. The writer keeps the Windows USB on the GPT/FAT32 UEFI path, applies the selected customization profile when requested, and automatically splits an oversized `install.wim` with DISM when required.
 

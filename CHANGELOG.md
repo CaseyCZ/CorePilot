@@ -8,6 +8,7 @@
 - Add resumable Windows ISO downloads with partial-file metadata, bounded retries, and safe restart when a download object changes.
 - Add opt-in Czech regional/keyboard and privacy-focused Windows setup choices. Account creation remains inside Windows Setup and no password is stored on USB.
 - Keep advanced typed disk confirmation and separate preparation/writing controls available.
+- Use the same primary Create installation USB action for supported OpenCore targets, preserving the macOS preflight and USB identity protections. Show device name, capacity and letters in both standard and advanced erase confirmations.
 
 ## 0.18 — November 2026
 

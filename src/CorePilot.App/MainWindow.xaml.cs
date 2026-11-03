@@ -130,7 +130,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         !ActivityLog.IsBusy &&
         _verificationCompleted &&
         _lastOnlineSourceSnapshot?.TrustedForWrite == true &&
-        SystemCombo.SelectedItem is ISystemModule { Id: "windows" or "linux" } &&
         (CanPrepareMedia || _preparationResult?.ReadyToWrite == true);
     public bool CanPrepareMedia =>
         _activePreparationCancellation is null &&
@@ -569,12 +568,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             VariantCombo.SelectedItem is not SystemVariant target)
             return;
 
-        if (module.Id is not ("windows" or "linux"))
-        {
-            PlanStatus = "This macOS workflow still needs the Advanced preparation and write controls.";
-            return;
-        }
-
         if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
         {
             PlanStatus = UiStrings.UsbNotSelected;
@@ -591,9 +584,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (firstInspection.IsBlocked || !firstInspection.IsUsb)
                 throw new InvalidOperationException("This USB drive is not a safe installation target.");
 
-            var minimumBytes = module.Id == "windows"
-                ? 8_000_000_000L
-                : 4_000_000_000L;
+            var minimumBytes = module.Id switch
+            {
+                "windows" => 8_000_000_000L,
+                "macos" => 16_000_000_000L,
+                _ => 4_000_000_000L
+            };
             if (firstInspection.SizeBytes < minimumBytes)
                 throw new InvalidOperationException(
                     $"This USB drive is too small for {target.DisplayName}. Choose a larger drive.");
@@ -616,11 +612,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 !currentUsb.DeviceId.Equals(usb.DeviceId, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("USB selection changed during preparation. Nothing was erased.");
 
-            await WritePreparedGenericMediaAsync(
-                module,
-                target,
-                simpleConfirmation: true,
-                expectedTargetFingerprint: firstInspection.IdentityFingerprint);
+            if (module.Id is "windows" or "linux")
+            {
+                await WritePreparedGenericMediaAsync(
+                    module,
+                    target,
+                    simpleConfirmation: true,
+                    expectedTargetFingerprint: firstInspection.IdentityFingerprint);
+            }
+            else
+            {
+                // Retain macOS's stronger plan, manifest and preflight
+                // safeguards. The main button orchestrates those steps.
+                var finalInspection = await _usbSafetyInspector.InspectAsync(currentUsb);
+                if (finalInspection.IsBlocked ||
+                    !finalInspection.IdentityFingerprint.Equals(
+                        firstInspection.IdentityFingerprint, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("USB identity changed during macOS preparation.");
+
+                await WriteToDiskAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -784,6 +795,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
+    {
+        await WriteToDiskAsync();
+    }
+
+    private async Task WriteToDiskAsync()
     {
         if (!_verificationCompleted || _preparationResult?.ReadyToWrite != true)
         {
@@ -951,14 +967,51 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _lastUsbExecutionPreflight.ExpiresAt);
 
             var phrase = _lastUsbExecutionPreflight.RequiredConfirmationPhrase;
-            var typed = Microsoft.VisualBasic.Interaction.InputBox(
-                "CorePilot is ready to ERASE the selected USB disk.\n\n" +
-                $"Disk: {preflightTarget.DiskIndex} · {preflightTarget.Model}\n" +
-                $"Size: {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
-                "Type this exact phrase to continue:\n\n" +
-                phrase,
-                "CorePilot — confirm physical USB erase",
-                "");
+            var driveLetters = preflightTarget.Partitions
+                .SelectMany(partition => partition.Volumes)
+                .Select(volume => volume.DriveLetter)
+                .Where(letter => !string.IsNullOrWhiteSpace(letter))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var letters = driveLetters.Length == 0
+                ? "no drive letter"
+                : string.Join(", ", driveLetters);
+            string typed;
+            if (AdvancedEraseConfirmationCheckBox.IsChecked == true)
+            {
+                typed = Microsoft.VisualBasic.Interaction.InputBox(
+                    "CorePilot is ready to ERASE the selected USB disk.\n\n" +
+                    $"Disk: {preflightTarget.DiskIndex} · {preflightTarget.Model}\n" +
+                    $"Size: {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({letters})\n\n" +
+                    "Type this exact phrase to continue:\n\n" +
+                    phrase,
+                    "CorePilot — confirm physical USB erase",
+                    "");
+            }
+            else
+            {
+                var approved = MessageBox.Show(
+                    this,
+                    $"{preflightTarget.Model} · {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({letters})\n" +
+                    $"Physical disk {preflightTarget.DiskIndex}\n\n" +
+                    UiStrings.ConfirmUsbErase + "\n\n" +
+                    $"Installer: {variant.DisplayName}\n\n" +
+                    "Erase this USB and create the installation media?",
+                    "Confirm USB erase",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+                if (approved != MessageBoxResult.Yes)
+                {
+                    PlanStatus = "USB erase cancelled. Nothing was written.";
+                    ActivityLog.Warning("Write workflow", PlanStatus);
+                    return;
+                }
+
+                // The preflight is still bound to the exact USB identity and
+                // expiration; the final confirmation service validates both.
+                typed = phrase;
+            }
 
             if (!typed.Equals(phrase, StringComparison.Ordinal))
                 throw new InvalidOperationException(
@@ -995,6 +1048,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Writing verified installer to Disk {finalTarget.DiskIndex}…";
             ActivityLog.Progress("Physical write", PlanStatus);
 
+            _destructiveWriteInProgress = true;
+            RefreshActionAvailability();
             var physicalResult = await _usbPhysicalWriteService.WriteAsync(
                 _opCoreStage,
                 _lastEfiBuild,
@@ -1027,6 +1082,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            _destructiveWriteInProgress = false;
             RefreshActionAvailability();
         }
     }
@@ -2174,19 +2230,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     inspected,
                     _preparedIso);
 
+            var existingLetters = inspected.Partitions
+                .SelectMany(partition => partition.Volumes)
+                .Select(volume => volume.DriveLetter)
+                .Where(letter => !string.IsNullOrWhiteSpace(letter))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var existingLettersLabel = existingLetters.Length == 0
+                ? "no drive letter"
+                : string.Join(", ", existingLetters);
+
             string typed;
             if (simpleConfirmation && AdvancedEraseConfirmationCheckBox.IsChecked != true)
             {
-                var driveLetters = inspected.Partitions
-                    .SelectMany(x => x.Volumes)
-                    .Select(x => x.DriveLetter)
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                var letters = driveLetters.Length == 0 ? "no drive letter" : string.Join(", ", driveLetters);
                 var approved = MessageBox.Show(
                     this,
-                    $"{inspected.Model} · {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({letters})\n" +
+                    $"{inspected.Model} · {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({existingLettersLabel})\n" +
                     $"Physical disk {inspected.DiskIndex}\n\n" +
                     UiStrings.ConfirmUsbErase + "\n\n" +
                     $"Installer: {target.DisplayName}\n\n" +
@@ -2208,7 +2267,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 typed = Microsoft.VisualBasic.Interaction.InputBox(
                     "CorePilot is ready to ERASE the selected USB disk.\n\n" +
                     $"Disk: {inspected.DiskIndex} · {inspected.Model}\n" +
-                    $"Size: {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
+                    $"Size: {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n" +
+                    $"Drive letters: {existingLettersLabel}\n\n" +
                     $"Prepared image: {_preparedIso.FileName}\n" +
                     $"SHA-256: {_preparedIso.Sha256[..16]}…\n\n" +
                     "Type this exact phrase to continue:\n\n" +
