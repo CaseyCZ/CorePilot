@@ -23,6 +23,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private readonly GenericCompatibilityAnalyzer _genericAnalyzer = new();
     private readonly WindowsIsoPreparationService _windowsIsoPreparation;
+    private readonly WindowsCustomIsoPreparationService _customWindowsIsoPreparation = new();
     private readonly LinuxIsoPreparationService _linuxIsoPreparation = new();
     private readonly WindowsInstallerUsbWriter _windowsUsbWriter = new();
     private readonly LinuxRawUsbWriter _linuxUsbWriter = new();
@@ -69,10 +70,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CancellationTokenSource? _activePreparationCancellation;
     private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
     private bool _windowsCompatibilityMedia;
+    private string? _selectedWindowsIsoPath;
+    private string _windowsImageSourceStatus = "Microsoft download will be used.";
+    private string _activeOperationLabel = UiStrings.CancelPreparation;
+    private bool _destructiveWriteInProgress;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
-    private string _planStatus = "Choose a system and version, then Verify. Media downloads begin only after Prepare media.";
+    private string _planStatus = "Choose a system and version, then Verify. Installer downloads begin only after you select USB and click Create installation USB.";
     private string _usbSafetyStatus = "USB is optional during Verify. Connect/select it only when the prepared system is ready to write.";
     private string _compatibilitySummary = "Select a system and press Verify. CorePilot will scan hardware, search for solutions, configure and validate an installation path.";
     private string _compatibilityVerdict = "NOT PREPARED";
@@ -90,10 +95,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<PreparationItem> PreparationItems { get; } = [];
     public ActivityLogService ActivityLog => App.Log;
 
+    public string WindowsImageSourceStatus
+    {
+        get => _windowsImageSourceStatus;
+        private set
+        {
+            _windowsImageSourceStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        }
+    }
+
+    public string WindowsImageSourceStatusTone =>
+        _selectedWindowsIsoPath is null ? UiStatusTone.Neutral : UiStatusTone.Warning;
+
+    public string WindowsSetupSummary =>
+        (WindowsCzechRegionCheckBox?.IsChecked == true
+            ? "Region and keyboard: Czech Republic. "
+            : "Region and keyboard: standard setup. ") +
+        "Account: you'll create it during setup. " +
+        (WindowsPrivacySetupCheckBox?.IsChecked == true
+            ? "Privacy: use selected setup defaults where supported."
+            : "Privacy: standard Windows questions.");
+
     public bool CanChangeInputs => _activePreparationCancellation is null && !ActivityLog.IsBusy;
     public bool CanCreateSupportBundle => _activePreparationCancellation is null && !ActivityLog.IsBusy;
     public bool CanVerify => _activePreparationCancellation is null && !ActivityLog.IsBusy;
     public bool CanCancel => _activePreparationCancellation is not null;
+    public string CancelActionLabel => _activeOperationLabel;
+    public Visibility CancelButtonVisibility =>
+        _destructiveWriteInProgress ? Visibility.Collapsed : Visibility.Visible;
+    public bool CanCreateInstallationUsb =>
+        _activePreparationCancellation is null &&
+        !ActivityLog.IsBusy &&
+        _verificationCompleted &&
+        _lastOnlineSourceSnapshot?.TrustedForWrite == true &&
+        (CanPrepareMedia || _preparationResult?.ReadyToWrite == true);
     public bool CanPrepareMedia =>
         _activePreparationCancellation is null &&
         !ActivityLog.IsBusy &&
@@ -248,8 +285,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
-            PlanStatus = "Choose a system, version and target computer. Verify checks compatibility; Prepare media downloads the installer only when requested.";
-            UsbSafetyStatus = "USB is optional while preparing the system. Connect it when CorePilot reports READY TO WRITE.";
+            PlanStatus = "Choose a system, version and target computer. Verify checks compatibility without downloading an installer.";
+            UsbSafetyStatus = "USB is optional for Verify. Select your USB before creating installation media.";
         };
     }
 
@@ -267,6 +304,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         using var cancellation = new CancellationTokenSource();
         _activePreparationCancellation = cancellation;
+        _activeOperationLabel = UiStrings.CancelCheck;
         RefreshActionAvailability();
 
         try
@@ -467,10 +505,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "An unverified/cached catalog or stale critical source cannot authorize USB writing.";
             ActivityLog.Warning("Preparation", PlanStatus);
         }
+        else if (module.Id == "macos" &&
+                 _hardwareReport is not null &&
+                 MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
+        {
+            PlanStatus = _compatibilityReport.CanProceed
+                ? "NATIVE MAC · This target is compatible, but the full installer must be created on a Mac. Open the Genuine Apple Mac installer guide. CorePilot will not erase a USB for this path."
+                : "LEGACY MAC · This macOS target needs additional OpenCore Legacy Patcher support. Check the official guide; CorePilot will not write an unverified installer.";
+            ActivityLog.Warning("Preparation", PlanStatus);
+        }
         else if (IsMediaPreparationApplicable)
         {
-            PlanStatus = $"VERIFIED · {target.DisplayName} compatibility and sources checked. Press Prepare media to download the installer. No ISO has been downloaded.";
-            ActivityLog.Success("Verification", PlanStatus);
+            PlanStatus = module.Id == "windows" && _selectedWindowsIsoPath is not null
+                ? $"READY TO PREPARE ⚠ Compatibility checked. Select USB and click Create installation USB to inspect your custom {target.DisplayName} ISO. Origin still not verified."
+                : $"VERIFIED · {target.DisplayName} compatibility and sources checked. Select USB and click Create installation USB. No ISO has been downloaded.";
+            if (_selectedWindowsIsoPath is not null && module.Id == "windows")
+                ActivityLog.Warning("Verification", PlanStatus);
+            else
+                ActivityLog.Success("Verification", PlanStatus);
         }
         else if (_preparationResult.ReadyToWrite)
         {
@@ -483,7 +535,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? $"READY TO WRITE ⚠ {target.DisplayName} installer media is prepared for {TargetComputerLabel}, but compatibility warnings remain. " +
                   $"{_preparationResult.Summary}. Review Preparation before writing."
                 : $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
-                  $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
+                  $"{_preparationResult.Summary}. Select USB and create the installation media.";
 
             if (compatibilityWarnings)
                 ActivityLog.Warning("Preparation", PlanStatus);
@@ -518,16 +570,128 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RefreshActionAvailability();
     }
 
-    private async void PrepareMedia_OnClick(object sender, RoutedEventArgs e)
+    private async void CreateInstallationUsb_OnClick(object sender, RoutedEventArgs e)
     {
-        if (!CanPrepareMedia ||
+        if (!CanCreateInstallationUsb ||
             SystemCombo.SelectedItem is not ISystemModule module ||
             VariantCombo.SelectedItem is not SystemVariant target)
             return;
 
+        if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+        {
+            PlanStatus = UiStrings.UsbNotSelected;
+            UsbSafetyStatus = "USB target not selected. Nothing was downloaded or erased.";
+            UsbCombo.Focus();
+            return;
+        }
+
+        try
+        {
+            // This is intentionally before any installer download.
+            var firstInspection = await _usbSafetyInspector.InspectAsync(usb);
+            UsbSafetyStatus = firstInspection.Summary;
+            if (firstInspection.IsBlocked || !firstInspection.IsUsb)
+                throw new InvalidOperationException("This USB drive is not a safe installation target.");
+
+            var minimumBytes = module.Id switch
+            {
+                "windows" => 8_000_000_000L,
+                "macos" => 16_000_000_000L,
+                _ => 4_000_000_000L
+            };
+            if (firstInspection.SizeBytes < minimumBytes)
+                throw new InvalidOperationException(
+                    $"This USB drive is too small for {target.DisplayName}. Choose a larger drive.");
+
+            if (_selectedWindowsIsoPath is not null && module.Id == "windows")
+            {
+                var selectedLength = new FileInfo(_selectedWindowsIsoPath).Length;
+                if (firstInspection.SizeBytes < selectedLength + 1024L * 1024L * 1024L)
+                    throw new InvalidOperationException("The selected USB is too small for this ISO.");
+            }
+
+            if (_preparationResult?.ReadyToWrite != true)
+            {
+                var prepared = await PrepareMediaAsync();
+                if (!prepared)
+                    return;
+            }
+
+            if (UsbCombo.SelectedItem is not UsbDriveInfo currentUsb ||
+                !currentUsb.DeviceId.Equals(usb.DeviceId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("USB selection changed during preparation. Nothing was erased.");
+
+            if (module.Id is "windows" or "linux")
+            {
+                await WritePreparedGenericMediaAsync(
+                    module,
+                    target,
+                    simpleConfirmation: true,
+                    expectedTargetFingerprint: firstInspection.IdentityFingerprint);
+            }
+            else
+            {
+                // Retain macOS's stronger plan, manifest and preflight
+                // safeguards. The main button orchestrates those steps.
+                var finalInspection = await _usbSafetyInspector.InspectAsync(currentUsb);
+                if (finalInspection.IsBlocked ||
+                    !finalInspection.IdentityFingerprint.Equals(
+                        firstInspection.IdentityFingerprint, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("USB identity changed during macOS preparation.");
+
+                await WriteToDiskAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = $"Preparation stopped safely: {ex.Message}";
+            ActivityLog.Error("Create USB", PlanStatus, ex);
+        }
+        finally
+        {
+            RefreshActionAvailability();
+        }
+    }
+
+    private async void PrepareMedia_OnClick(object sender, RoutedEventArgs e)
+    {
+        await PrepareMediaAsync();
+    }
+
+    private async Task<bool> PrepareMediaAsync()
+    {
+        if (!CanPrepareMedia ||
+            SystemCombo.SelectedItem is not ISystemModule module ||
+            VariantCombo.SelectedItem is not SystemVariant target)
+            return false;
+
+        if (module.Id is "windows" or "linux")
+        {
+            if (UsbCombo.SelectedItem is not UsbDriveInfo usb)
+            {
+                PlanStatus = UiStrings.UsbNotSelected;
+                return false;
+            }
+
+            var minimumBytes = module.Id == "windows"
+                ? 8_000_000_000L
+                : 4_000_000_000L;
+            if (usb.SizeBytes < minimumBytes)
+            {
+                PlanStatus = "This USB drive is too small. Choose a larger one before downloading.";
+                return false;
+            }
+        }
+
         using var cancellation = new CancellationTokenSource();
         _activePreparationCancellation = cancellation;
+        _activeOperationLabel = module.Id is "windows" or "linux" &&
+                                (module.Id != "windows" || _selectedWindowsIsoPath is null)
+            ? UiStrings.CancelDownload
+            : UiStrings.CancelPreparation;
         RefreshActionAvailability();
+
+        var completed = false;
 
         try
         {
@@ -549,13 +713,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _preparationResult = BuildPreparationResult(module, target);
             ApplyPreparationResultToUi(module, target);
             PlanStatus = _preparationResult.ReadyToWrite
-                ? $"READY TO WRITE · {target.DisplayName} installer verified. Select a USB drive and press Write to disk."
+                ? _preparedIso?.UserSelected == true
+                    ? $"READY TO WRITE ⚠ Custom {target.DisplayName} ISO selected. Origin still not verified. Select USB and click Create installation USB."
+                    : $"READY TO WRITE · {target.DisplayName} installer prepared. Select USB and click Create installation USB."
                 : $"Preparation completed, but {target.DisplayName} is not ready to write. Review Preparation for unresolved items.";
 
-            if (_preparationResult.ReadyToWrite)
+            if (_preparedIso?.UserSelected == true)
+                ActivityLog.Warning("Preparation", PlanStatus);
+            else if (_preparationResult.ReadyToWrite)
                 ActivityLog.Success("Preparation", PlanStatus);
             else
                 ActivityLog.Warning("Preparation", PlanStatus);
+            completed = _preparationResult.ReadyToWrite;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -579,6 +748,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _activePreparationCancellation = null;
             RefreshActionAvailability();
         }
+
+        return completed;
     }
 
     private void ResetPreparedMedia()
@@ -633,6 +804,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private async void WriteToDisk_OnClick(object sender, RoutedEventArgs e)
+    {
+        await WriteToDiskAsync();
+    }
+
+    private async Task WriteToDiskAsync()
     {
         if (!_verificationCompleted || _preparationResult?.ReadyToWrite != true)
         {
@@ -800,14 +976,51 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _lastUsbExecutionPreflight.ExpiresAt);
 
             var phrase = _lastUsbExecutionPreflight.RequiredConfirmationPhrase;
-            var typed = Microsoft.VisualBasic.Interaction.InputBox(
-                "CorePilot is ready to ERASE the selected USB disk.\n\n" +
-                $"Disk: {preflightTarget.DiskIndex} · {preflightTarget.Model}\n" +
-                $"Size: {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
-                "Type this exact phrase to continue:\n\n" +
-                phrase,
-                "CorePilot — confirm physical USB erase",
-                "");
+            var driveLetters = preflightTarget.Partitions
+                .SelectMany(partition => partition.Volumes)
+                .Select(volume => volume.DriveLetter)
+                .Where(letter => !string.IsNullOrWhiteSpace(letter))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var letters = driveLetters.Length == 0
+                ? "no drive letter"
+                : string.Join(", ", driveLetters);
+            string typed;
+            if (AdvancedEraseConfirmationCheckBox.IsChecked == true)
+            {
+                typed = Microsoft.VisualBasic.Interaction.InputBox(
+                    "CorePilot is ready to ERASE the selected USB disk.\n\n" +
+                    $"Disk: {preflightTarget.DiskIndex} · {preflightTarget.Model}\n" +
+                    $"Size: {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({letters})\n\n" +
+                    "Type this exact phrase to continue:\n\n" +
+                    phrase,
+                    "CorePilot — confirm physical USB erase",
+                    "");
+            }
+            else
+            {
+                var approved = MessageBox.Show(
+                    this,
+                    $"{preflightTarget.Model} · {preflightTarget.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({letters})\n" +
+                    $"Physical disk {preflightTarget.DiskIndex}\n\n" +
+                    UiStrings.ConfirmUsbErase + "\n\n" +
+                    $"Installer: {variant.DisplayName}\n\n" +
+                    "Erase this USB and create the installation media?",
+                    "Confirm USB erase",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+                if (approved != MessageBoxResult.Yes)
+                {
+                    PlanStatus = "USB erase cancelled. Nothing was written.";
+                    ActivityLog.Warning("Write workflow", PlanStatus);
+                    return;
+                }
+
+                // The preflight is still bound to the exact USB identity and
+                // expiration; the final confirmation service validates both.
+                typed = phrase;
+            }
 
             if (!typed.Equals(phrase, StringComparison.Ordinal))
                 throw new InvalidOperationException(
@@ -844,6 +1057,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Writing verified installer to Disk {finalTarget.DiskIndex}…";
             ActivityLog.Progress("Physical write", PlanStatus);
 
+            _destructiveWriteInProgress = true;
+            RefreshActionAvailability();
             var physicalResult = await _usbPhysicalWriteService.WriteAsync(
                 _opCoreStage,
                 _lastEfiBuild,
@@ -876,6 +1091,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            _destructiveWriteInProgress = false;
             RefreshActionAvailability();
         }
     }
@@ -938,6 +1154,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CanWriteToDisk));
         OnPropertyChanged(nameof(WriteToDiskToolTip));
+        OnPropertyChanged(nameof(CanCreateInstallationUsb));
+        OnPropertyChanged(nameof(CancelActionLabel));
+        OnPropertyChanged(nameof(CancelButtonVisibility));
     }
 
     private void OpenLog_OnClick(object sender, RoutedEventArgs e) =>
@@ -1137,10 +1356,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             foreach (var disk in disks.Where(x => x.IsUsb))
                 UsbDrives.Add(disk);
 
-            if (UsbDrives.Count > 0)
-                UsbCombo.SelectedItem = current is null
-                    ? UsbDrives[0]
-                    : UsbDrives.FirstOrDefault(x => x.DeviceId == current.DeviceId) ?? UsbDrives[0];
+            // Never silently choose the first USB. The person must explicitly
+            // select a device before any download or destructive operation.
+            if (current is not null)
+                UsbCombo.SelectedItem = UsbDrives.FirstOrDefault(x => x.DeviceId == current.DeviceId);
 
             if (UsbDrives.Count == 0)
             {
@@ -1171,11 +1390,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : "another computer";
 
     private WindowsMediaOptions CurrentWindowsMediaOptions =>
-        SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
+        (SystemCombo.SelectedItem is ISystemModule { Id: "windows" } &&
         VariantCombo.SelectedItem is SystemVariant { Id: "windows-11" } &&
         _windowsCompatibilityMedia
             ? WindowsMediaOptions.Compatibility
-            : WindowsMediaOptions.Standard;
+            : WindowsMediaOptions.Standard) with
+        {
+            CzechRegionalSettings = WindowsCzechRegionCheckBox.IsChecked == true,
+            PrivacyFocusedSetup = WindowsPrivacySetupCheckBox.IsChecked == true
+        };
 
     private void ThisComputer_OnClick(object sender, RoutedEventArgs e)
     {
@@ -1249,6 +1472,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UpdateTargetModeUi()
     {
+        UpdateWindowsIsoOptionsVisibility();
         var thisComputerSelected =
             _targetMode == InstallationTargetMode.ThisComputer;
 
@@ -1266,6 +1490,122 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
                 ? "Other computer · macOS needs the target computer's hardware before CorePilot can safely build a hardware-specific installer."
                 : "Other computer · Windows/Linux media is prepared without using this PC's TPM, CPU, Secure Boot or firmware state as a compatibility gate.";
+    }
+
+    private void UpdateWindowsIsoOptionsVisibility()
+    {
+        if (WindowsIsoOptionsPanel is null)
+            return;
+
+        WindowsIsoOptionsPanel.Visibility =
+            SystemCombo.SelectedItem is ISystemModule { Id: "windows" }
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        NativeMacGuidePanel.Visibility =
+            SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        WindowsIsoChecksumPanel.Visibility =
+            _selectedWindowsIsoPath is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OpenAppleInstallerGuide_OnClick(object sender, RoutedEventArgs e) =>
+        OpenInstallerGuide("https://support.apple.com/en-us/101578");
+
+    private void OpenOclpInstallerGuide_OnClick(object sender, RoutedEventArgs e) =>
+        OpenInstallerGuide("https://dortania.github.io/OpenCore-Legacy-Patcher/INSTALLER.html");
+
+    private void OpenInstallerGuide(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = "Could not open the official installer guide in your browser.";
+            ActivityLog.Error("Installer guide", PlanStatus, ex);
+        }
+    }
+
+    private void ChooseWindowsIso_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanChangeInputs)
+            return;
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose an existing Windows ISO",
+            Filter = "ISO image (*.iso)|*.iso",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        _selectedWindowsIsoPath = Path.GetFullPath(dialog.FileName);
+        WindowsIsoChecksumTextBox.Clear();
+        WindowsImageSourceStatus =
+            $"Custom ISO: {Path.GetFileName(_selectedWindowsIsoPath)}. Origin still not verified.";
+        OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        UpdateWindowsIsoOptionsVisibility();
+        InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void UseOfficialWindowsIso_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanChangeInputs || _selectedWindowsIsoPath is null)
+            return;
+
+        ResetWindowsIsoSelection();
+        InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void WindowsIsoChecksum_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_selectedWindowsIsoPath is not null && CanChangeInputs)
+            InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void WindowsSetupOption_OnChanged(object sender, RoutedEventArgs e)
+    {
+        if (WindowsCzechRegionCheckBox is null || WindowsPrivacySetupCheckBox is null)
+            return;
+
+        OnPropertyChanged(nameof(WindowsSetupSummary));
+        if (CanChangeInputs)
+            InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void ResetWindowsIsoSelection()
+    {
+        _selectedWindowsIsoPath = null;
+        if (WindowsIsoChecksumTextBox is not null)
+            WindowsIsoChecksumTextBox.Clear();
+        WindowsImageSourceStatus = "Microsoft download will be used.";
+        OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        UpdateWindowsIsoOptionsVisibility();
+    }
+
+    private void InvalidatePreparedImageAfterSourceChange()
+    {
+        if (_preparedIso is not null)
+        {
+            ResetPreparedMedia();
+            if (SystemCombo.SelectedItem is ISystemModule module &&
+                VariantCombo.SelectedItem is SystemVariant target &&
+                _compatibilityReport is not null)
+            {
+                _preparationResult = BuildPreparationResult(module, target);
+                ApplyPreparationResultToUi(module, target);
+            }
+        }
+
+        PlanStatus = _verificationCompleted
+            ? "Installation image choice updated. Select USB and click Create installation USB."
+            : "Installation image choice updated. Run Verify before preparing media.";
+        RefreshActionAvailability();
     }
 
     private void SetSegmentButtonState(Button button, bool selected)
@@ -1475,6 +1815,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _windowsCompatibilityMedia = false;
+        ResetWindowsIsoSelection();
         UpdateTargetModeUi();
         _verificationCompleted = false;
         CompatibilityItems.Clear();
@@ -1793,7 +2134,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ActivityLog.Progress(
             "Preparation",
-            $"Resolving and preparing the current official {target.DisplayName} installer image…");
+            module.Id == "windows" && _selectedWindowsIsoPath is not null
+                ? "Checking the Windows ISO you selected…"
+                : $"Resolving and preparing the current official {target.DisplayName} installer image…");
 
         var progress = new Progress<string>(message =>
         {
@@ -1805,6 +2148,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _preparedIso = module.Id switch
         {
+            "windows" when _selectedWindowsIsoPath is not null =>
+                await _customWindowsIsoPreparation.PrepareAsync(
+                    target,
+                    _selectedWindowsIsoPath,
+                    WindowsIsoChecksumTextBox.Text,
+                    progress,
+                    cancellationToken),
             "windows" => await _windowsIsoPreparation.PrepareAsync(
                 target,
                 progress,
@@ -1825,6 +2175,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? CurrentWindowsMediaOptions
                 : null;
 
+        if (_preparedIso.UserSelected)
+        {
+            WindowsImageSourceStatus = _preparedIso.ExpectedSha256 is null
+                ? "Custom ISO checked. Origin still not verified."
+                : "Checksum matches the value you entered. Origin still not verified.";
+        }
+
         ActivityLog.Info(
             "Installer image",
             $"Prepared {_preparedIso.FileName} · {_preparedIso.SizeBytes / 1024d / 1024d / 1024d:0.00} GB · SHA-256 {_preparedIso.Sha256[..16]}… · {_preparedIso.Provenance}");
@@ -1832,7 +2189,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task WritePreparedGenericMediaAsync(
         ISystemModule module,
-        SystemVariant target)
+        SystemVariant target,
+        bool simpleConfirmation = false,
+        string? expectedTargetFingerprint = null)
     {
         if (_preparedIso is null ||
             !_preparedIso.SystemId.Equals(
@@ -1886,6 +2245,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 throw new InvalidOperationException(
                     $"USB target is blocked: {inspected.Summary}");
 
+            if (expectedTargetFingerprint is not null &&
+                !inspected.IdentityFingerprint.Equals(expectedTargetFingerprint, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "The USB drive changed after it was selected. Nothing was erased.");
+
+            if (module.Id == "windows")
+                WindowsInstallerUsbWriter.EnsureImageIsNotOnTargetUsb(_preparedIso, inspected);
+
             var phrase = module.Id == "windows"
                 ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
                     inspected,
@@ -1895,16 +2262,52 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     inspected,
                     _preparedIso);
 
-            var typed = Microsoft.VisualBasic.Interaction.InputBox(
-                "CorePilot is ready to ERASE the selected USB disk.\n\n" +
-                $"Disk: {inspected.DiskIndex} · {inspected.Model}\n" +
-                $"Size: {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n\n" +
-                $"Prepared image: {_preparedIso.FileName}\n" +
-                $"SHA-256: {_preparedIso.Sha256[..16]}…\n\n" +
-                "Type this exact phrase to continue:\n\n" +
-                phrase,
-                $"CorePilot — confirm {module.DisplayName} USB erase",
-                "");
+            var existingLetters = inspected.Partitions
+                .SelectMany(partition => partition.Volumes)
+                .Select(volume => volume.DriveLetter)
+                .Where(letter => !string.IsNullOrWhiteSpace(letter))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var existingLettersLabel = existingLetters.Length == 0
+                ? "no drive letter"
+                : string.Join(", ", existingLetters);
+
+            string typed;
+            if (simpleConfirmation && AdvancedEraseConfirmationCheckBox.IsChecked != true)
+            {
+                var approved = MessageBox.Show(
+                    this,
+                    $"{inspected.Model} · {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB ({existingLettersLabel})\n" +
+                    $"Physical disk {inspected.DiskIndex}\n\n" +
+                    UiStrings.ConfirmUsbErase + "\n\n" +
+                    $"Installer: {target.DisplayName}\n\n" +
+                    "Erase this USB and create the installation media?",
+                    "Confirm USB erase",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+                if (approved != MessageBoxResult.Yes)
+                {
+                    PlanStatus = "USB erase cancelled. Nothing was written.";
+                    ActivityLog.Warning("Write workflow", PlanStatus);
+                    return;
+                }
+                typed = phrase;
+            }
+            else
+            {
+                typed = Microsoft.VisualBasic.Interaction.InputBox(
+                    "CorePilot is ready to ERASE the selected USB disk.\n\n" +
+                    $"Disk: {inspected.DiskIndex} · {inspected.Model}\n" +
+                    $"Size: {inspected.SizeBytes / 1024d / 1024d / 1024d:0.#} GB\n" +
+                    $"Drive letters: {existingLettersLabel}\n\n" +
+                    $"Prepared image: {_preparedIso.FileName}\n" +
+                    $"SHA-256: {_preparedIso.Sha256[..16]}…\n\n" +
+                    "Type this exact phrase to continue:\n\n" +
+                    phrase,
+                    $"CorePilot — confirm {module.DisplayName} USB erase",
+                    "");
+            }
 
             if (!typed.Equals(phrase, StringComparison.Ordinal))
                 throw new InvalidOperationException(
@@ -1925,6 +2328,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ActivityLog.Progress("Physical write", message);
             });
 
+            _destructiveWriteInProgress = true;
+            RefreshActionAvailability();
+
             _lastGenericUsbWrite = module.Id == "windows"
                 ? await _windowsUsbWriter.WriteAsync(
                     _preparedIso,
@@ -1942,10 +2348,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 throw new InvalidOperationException(
                     "Physical writer completed without a verified result.");
 
-            PlanStatus =
-                $"USB READY ✅ {target.DisplayName} · Disk {_lastGenericUsbWrite.TargetDiskIndex} · " +
-                $"verified write transcript {_lastGenericUsbWrite.TranscriptSha256[..16]}….";
-            ActivityLog.Success("Physical write", PlanStatus);
+            PlanStatus = _preparedIso.UserSelected
+                ? $"USB READY ⚠ {target.DisplayName} written to disk {_lastGenericUsbWrite.TargetDiskIndex}. Custom ISO origin still not verified."
+                : $"USB READY ✅ {target.DisplayName} · Disk {_lastGenericUsbWrite.TargetDiskIndex} · " +
+                  $"verified write transcript {_lastGenericUsbWrite.TranscriptSha256[..16]}….";
+            if (_preparedIso.UserSelected)
+                ActivityLog.Warning("Physical write", PlanStatus);
+            else
+                ActivityLog.Success("Physical write", PlanStatus);
         }
         catch (Exception ex)
         {
@@ -1954,6 +2364,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            _destructiveWriteInProgress = false;
             RefreshActionAvailability();
         }
     }
@@ -1990,12 +2401,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (imagePrepared)
             {
                 genericItems.Add(new(
-                    PreparationItemState.ResolvedAutomatically,
+                    _preparedIso!.UserSelected
+                        ? PreparationItemState.UnverifiedOrigin
+                        : PreparationItemState.ResolvedAutomatically,
                     "Installer image",
-                    _preparedIso!.FileName,
-                    _preparedIso.ExpectedSha256 is null
-                        ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
-                        : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
+                    _preparedIso.FileName,
+                    _preparedIso.UserSelected
+                        ? _preparedIso.ExpectedSha256 is null
+                            ? "You selected this file yourself. We checked its installer structure and recorded its checksum, but its origin is not verified."
+                            : "The checksum matches the value you entered. Origin still not verified."
+                        : _preparedIso.ExpectedSha256 is null
+                            ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
+                            : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
                     _preparedIso.SourceUrl));
 
                 if (system.Id == "windows" &&
@@ -2142,22 +2559,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _targetMode == InstallationTargetMode.ThisComputer &&
             _compatibilityReport?.Findings.Any(x =>
                 x.State is CompatibilityState.Warning or CompatibilityState.Unknown) == true;
+        var genuineApple =
+            system.Id == "macos" &&
+            _hardwareReport is not null &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
 
         CompatibilityVerdict =
-            _preparationResult.ReadyToWrite && compatibilityWarnings
+            genuineApple
+                ? _compatibilityReport?.CanProceed == true
+                    ? "NATIVE MAC · CREATE INSTALLER ON A MAC"
+                    : "LEGACY MAC · REVIEW OCLP REQUIREMENTS"
+                : _preparationResult.ReadyToWrite && _preparedIso?.UserSelected == true
+                ? "READY TO WRITE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
+                : _preparationResult.ReadyToWrite && compatibilityWarnings
                 ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
+                : IsMediaPreparationApplicable && _selectedWindowsIsoPath is not null && system.Id == "windows"
+                    ? "READY TO PREPARE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
                 : IsMediaPreparationApplicable
                     ? "VERIFIED · READY TO PREPARE MEDIA"
                 : _preparationResult.Verdict;
 
-        CompatibilityInstallPath = _preparationResult.ReadyToWrite
-            ? compatibilityWarnings
+        CompatibilityInstallPath = genuineApple
+            ? "CorePilot does not create full native Apple macOS installation media from Windows. Use the Genuine Apple Mac installer guide above. Unsupported Mac models also require an OCLP compatibility review."
+            : _preparationResult.ReadyToWrite
+            ? _preparedIso?.UserSelected == true
+                ? $"CorePilot checked the structure and architecture of your {target.DisplayName} installer. Its origin is not verified, even if your checksum matches."
+                : compatibilityWarnings
                 ? $"CorePilot prepared and validated writable {target.DisplayName} installer media for {TargetComputerLabel}, but the remaining compatibility warnings are not claimed as solved."
                 : $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : IsMediaPreparationApplicable
-                    ? $"Compatibility and trusted sources were checked for {target.DisplayName}. Click Prepare media to start downloading or building the installer."
+                    ? system.Id == "windows" && _selectedWindowsIsoPath is not null
+                        ? $"Compatibility was checked for {target.DisplayName}. Select USB and click Create installation USB to inspect your ISO."
+                        : system.Id is "windows" or "linux"
+                            ? $"Compatibility and sources were checked for {target.DisplayName}. Select USB and click Create installation USB."
+                            : $"Compatibility and sources were checked for {target.DisplayName}. Use Advanced options to prepare the installer."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
 
         if (system.Id != "macos")
@@ -2250,7 +2687,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             CompatibilityInstallPath =
-                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image for {TargetComputerLabel} before Write to disk is enabled.";
+                $"Installation path: Verify checks compatibility for {TargetComputerLabel}; Create installation USB prepares the selected {system.DisplayName} image only after a USB is chosen.";
         }
 
         var requirements = new List<string>();

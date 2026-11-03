@@ -33,7 +33,9 @@ public static class UiStatusTone
         // A ready result with warnings is amber, never green.
         if (value.Contains('⚠') ||
             value.Contains("WARNING") ||
+            value.Contains("NATIVE MAC") ||
             value.Contains("REVIEW") ||
+            value.Contains("ORIGIN NOT VERIFIED") ||
             value.Contains("MANUAL") ||
             value.Contains("REQUIRED FIX") ||
             value.Contains("INSPECTION REQUIRED") ||

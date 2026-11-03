@@ -26,6 +26,24 @@ public sealed class GenericCompatibilityAnalyzer
     {
         var findings = new List<CompatibilityFinding>();
 
+        // Detect only. Driver injection is a separate, guarded future feature.
+        var intelStorageControllers = hardware.DevicesByCategory("Storage")
+            .Where(device =>
+                device.Name.Contains("VMD", StringComparison.OrdinalIgnoreCase) ||
+                device.Name.Contains("Rapid Storage", StringComparison.OrdinalIgnoreCase) ||
+                device.Name.Contains("Intel RST", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (intelStorageControllers.Length > 0)
+        {
+            findings.Add(new(
+                CompatibilityState.Warning,
+                "Storage driver",
+                "Intel RST/VMD may need a driver during setup",
+                "Detected storage controller: " + string.Join(", ", intelStorageControllers.Select(x => x.Name).Take(3)) +
+                ". Windows Setup might not see the installation disk without its driver.",
+                "If Windows Setup cannot find the disk, load the official Intel RST/VMD storage driver provided for this computer. CorePilot does not inject drivers automatically."));
+        }
+
         var minMemory = target.Id == "windows-11" ? 4L * GiB : 2L * GiB;
         if (hardware.MemoryBytes >= minMemory)
         {

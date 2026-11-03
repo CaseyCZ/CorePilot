@@ -14,6 +14,24 @@ public sealed class WindowsInstallerUsbWriter
         PropertyNameCaseInsensitive = true
     };
 
+    public static void EnsureImageIsNotOnTargetUsb(
+        PreparedIsoImage image,
+        UsbTargetSafetyReport target)
+    {
+        if (!image.UserSelected)
+            return;
+
+        var imageRoot = Path.GetPathRoot(image.IsoPath)?.TrimEnd('\\');
+        if (string.IsNullOrEmpty(imageRoot) || imageRoot.Length != 2 || imageRoot[1] != ':')
+            return;
+
+        if (target.Partitions.SelectMany(x => x.Volumes).Any(volume =>
+                volume.DriveLetter.TrimEnd('\\').Equals(
+                    imageRoot, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException(
+                "The selected ISO is stored on the USB you are about to erase. Move it to your computer first.");
+    }
+
     public static string RequiredConfirmationPhrase(
         UsbTargetSafetyReport target,
         PreparedIsoImage image,
@@ -56,6 +74,8 @@ public sealed class WindowsInstallerUsbWriter
             throw new InvalidOperationException(
                 "The selected target is not a safe writable USB disk.");
 
+        EnsureImageIsNotOnTargetUsb(image, freshTarget);
+
         var expectedPhrase = RequiredConfirmationPhrase(
             freshTarget,
             image,
@@ -82,6 +102,11 @@ public sealed class WindowsInstallerUsbWriter
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(
                 "Prepared Windows ISO changed after Verify.");
+
+        if (image.UserSelected && image.ExpectedSha256 is not null &&
+            !actualIsoSha.Equals(image.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException(
+                "The selected ISO no longer matches the checksum you entered.");
 
         var isoLength = new FileInfo(image.IsoPath).Length;
         if (freshTarget.SizeBytes < isoLength + 1024L * 1024L * 1024L)
@@ -183,16 +208,26 @@ public sealed class WindowsInstallerUsbWriter
         var writtenExtended =
             resultRoot.TryGetProperty("extendedHardwareCompatibility", out var extendedNode) &&
             extendedNode.ValueKind == JsonValueKind.True;
+        var writtenCzech =
+            resultRoot.TryGetProperty("czechRegionalSettings", out var czechNode) &&
+            czechNode.ValueKind == JsonValueKind.True;
+        var writtenPrivacy =
+            resultRoot.TryGetProperty("privacyFocusedSetup", out var privacyNode) &&
+            privacyNode.ValueKind == JsonValueKind.True;
         var customizationSha256 =
             resultRoot.TryGetProperty("customizationSha256", out var customizationNode)
                 ? customizationNode.GetString() ?? ""
                 : "";
 
-        if (writtenExtended != options.ExtendedHardwareCompatibility)
+        if (writtenExtended != options.ExtendedHardwareCompatibility ||
+            writtenCzech != options.CzechRegionalSettings ||
+            writtenPrivacy != options.PrivacyFocusedSetup)
             throw new InvalidOperationException(
                 "Windows USB writer result does not match the media mode prepared by Verify.");
 
-        if (options.ExtendedHardwareCompatibility &&
+        if ((options.ExtendedHardwareCompatibility ||
+             options.CzechRegionalSettings ||
+             options.PrivacyFocusedSetup) &&
             !IsSha256(customizationSha256))
             throw new InvalidOperationException(
                 "Windows compatibility customization was requested but its written SHA-256 was not returned.");
@@ -278,10 +313,13 @@ param(
     [Parameter(Mandatory=$true)][Int64]$ExpectedSize,
     [Parameter(Mandatory=$true)][string]$ExpectedSerialB64,
     [Parameter(Mandatory=$true)][string]$IsoPathB64,
+    [Parameter(Mandatory=$true)][string]$ExpectedIsoSha256,
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
     [Parameter(Mandatory=$true)][string]$DriveLetter,
-    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility
+    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility,
+    [Parameter(Mandatory=$true)][int]$CzechRegionalSettings,
+    [Parameter(Mandatory=$true)][int]$PrivacyFocusedSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -340,6 +378,13 @@ if (-not [string]::IsNullOrWhiteSpace($expectedSerial) -and
 
 if (-not (Test-Path -LiteralPath $isoPath)) {
     throw "Prepared Windows ISO disappeared before writing."
+}
+
+# Check the exact bytes again inside the elevated erase boundary. The user
+# may have selected a file outside CorePilot's cache, which can be replaced.
+$actualIsoSha256 = (Get-FileHash -LiteralPath $isoPath -Algorithm SHA256).Hash
+if (-not [string]::Equals($actualIsoSha256, $ExpectedIsoSha256, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The Windows ISO changed after preparation. USB erasure was blocked."
 }
 
 $mounted = $null
@@ -422,6 +467,7 @@ try {
     }
 
     $customizationSha256 = ""
+    $autoUnattend = ""
     if ($ExtendedHardwareCompatibility -eq 1) {
         $autoUnattend = @'
 <?xml version="1.0" encoding="utf-8"?>
@@ -442,6 +488,64 @@ try {
   </settings>
 </unattend>
 '@
+    }
+
+    if ($CzechRegionalSettings -eq 1 -or $PrivacyFocusedSetup -eq 1) {
+        if ([string]::IsNullOrWhiteSpace($autoUnattend)) {
+            $autoUnattend = '<unattend xmlns="urn:schemas-microsoft-com:unattend" />'
+        }
+
+        [xml]$xml = $autoUnattend
+        $ns = $xml.DocumentElement.NamespaceURI
+
+        function Add-UnattendChild($parent, [string]$name, [string]$value) {
+            $child = $xml.CreateElement($name, $ns)
+            $child.InnerText = $value
+            $parent.AppendChild($child) | Out-Null
+            return $child
+        }
+
+        function Add-UnattendComponent([string]$pass, [string]$componentName) {
+            $settings = $xml.CreateElement('settings', $ns)
+            $settings.SetAttribute('pass', $pass)
+            $component = $xml.CreateElement('component', $ns)
+            $component.SetAttribute('name', $componentName)
+            $component.SetAttribute('processorArchitecture', 'amd64')
+            $component.SetAttribute('publicKeyToken', '31bf3856ad364e35')
+            $component.SetAttribute('language', 'neutral')
+            $component.SetAttribute('versionScope', 'nonSxS')
+            $settings.AppendChild($component) | Out-Null
+            $xml.DocumentElement.AppendChild($settings) | Out-Null
+            return $component
+        }
+
+        if ($CzechRegionalSettings -eq 1) {
+            # Preserve the ISO's actual display language; only set supported
+            # region/keyboard defaults. An English ISO may lack Czech UI files.
+            $component = Add-UnattendComponent 'windowsPE' 'Microsoft-Windows-International-Core-WinPE'
+            Add-UnattendChild $component 'InputLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'SystemLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'UserLocale' 'cs-CZ' | Out-Null
+
+            $component = Add-UnattendComponent 'oobeSystem' 'Microsoft-Windows-International-Core'
+            Add-UnattendChild $component 'InputLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'SystemLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'UserLocale' 'cs-CZ' | Out-Null
+        }
+
+        if ($PrivacyFocusedSetup -eq 1) {
+            # Only the documented setup defaults; do not add a local password,
+            # bypass account creation, or silently change security services.
+            $component = Add-UnattendComponent 'oobeSystem' 'Microsoft-Windows-Shell-Setup'
+            $oobe = $xml.CreateElement('OOBE', $ns)
+            $component.AppendChild($oobe) | Out-Null
+            Add-UnattendChild $oobe 'ProtectYourPC' '3' | Out-Null
+        }
+
+        $autoUnattend = $xml.OuterXml
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($autoUnattend)) {
         $autoPath = Join-Path $destinationRoot "autounattend.xml"
         [IO.File]::WriteAllText(
             $autoPath,
@@ -474,6 +578,8 @@ try {
         splitInstallWim = $splitInstallWim
         verifiedBootFiles = $verified
         extendedHardwareCompatibility = ($ExtendedHardwareCompatibility -eq 1)
+        czechRegionalSettings = ($CzechRegionalSettings -eq 1)
+        privacyFocusedSetup = ($PrivacyFocusedSetup -eq 1)
         customizationSha256 = $customizationSha256
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
@@ -525,6 +631,8 @@ finally {
             B64(target.SerialNumber),
             "-IsoPathB64",
             B64(image.IsoPath),
+            "-ExpectedIsoSha256",
+            image.Sha256,
             "-DiskPartScriptB64",
             B64(diskPartPath),
             "-ResultPathB64",
@@ -532,7 +640,11 @@ finally {
             "-DriveLetter",
             driveLetter.ToString(),
             "-ExtendedHardwareCompatibility",
-            (options.ExtendedHardwareCompatibility ? "1" : "0")
+            (options.ExtendedHardwareCompatibility ? "1" : "0"),
+            "-CzechRegionalSettings",
+            (options.CzechRegionalSettings ? "1" : "0"),
+            "-PrivacyFocusedSetup",
+            (options.PrivacyFocusedSetup ? "1" : "0")
         })
         {
             start.ArgumentList.Add(argument);

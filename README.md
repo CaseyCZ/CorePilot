@@ -1,14 +1,43 @@
 # CorePilot
 
+[Changelog](CHANGELOG.md) · [Latest Windows release](https://github.com/CaseyCZ/CorePilot/releases/latest)
+
 **CorePilot** is a hardware-aware boot media creator for Windows.
 
 Target workflow:
 
-**Choose an operating system → choose This computer or Other computer → Verify → Prepare media → choose a USB drive → Write to disk.**
+**Choose an operating system → choose This computer or Other computer → Verify → select a USB drive → Create installation USB → confirm erase.**
 
-**Verify** checks the target hardware, available installation paths, compatibility and live sources. It does **not** download a full Windows/Linux installer ISO or build the macOS Recovery payload. **Prepare media** is the explicit, non-destructive download/build step, which hashes and validates the resulting payload. A detected incompatibility is treated as a remediation task first; it becomes a final blocker only when the currently implemented safe paths cannot resolve it.
+**Verify** checks the target hardware, available installation paths, compatibility and live sources. It does **not** download a full Windows/Linux installer ISO or build the macOS Recovery payload. **Create installation USB** is the explicit user action that prepares the image only after a USB has been selected and checked; the final erase always needs separate approval. A detected incompatibility is treated as a remediation task first; it becomes a final blocker only when the currently implemented safe paths cannot resolve it.
 
-The main UI exposes **Verify**, **Prepare media**, **Cancel current operation**, and **Write to disk**. Cancel stops cooperative verification and Windows/Linux ISO download operations, including the running Fido resolver. macOS external preparation tools stop at the next safe operation boundary. **Write to disk cannot be interrupted after the destructive operation begins** and never invents or rebuilds a configuration: it consumes the payload validated by Prepare media, then re-validates sources/manifest/USB identity before erasing the selected target.
+The main UI exposes **Verify**, **Create installation USB** and a context-sensitive **Cancel** action. **Advanced options** retain separate preparation/writing and typed erase confirmation. Cancel stops cooperative verification and Windows/Linux ISO download operations, including the running Fido resolver. macOS external preparation tools stop at the next safe operation boundary. **Writing cannot be interrupted after the destructive operation begins** and never invents or rebuilds a configuration: it consumes the prepared payload, then re-validates sources/manifest/USB identity before erasing the selected target.
+
+## Quick start
+
+1. Select the operating system, its version and the target computer.
+2. Click **Verify** to check requirements. No full installer download happens here.
+3. Choose the USB drive. CorePilot checks it before downloading any installation files.
+4. Click **Create installation USB**. If needed, CorePilot downloads the installer and checks it; an interrupted Windows ISO download can be resumed when the server supports it.
+5. Read the final confirmation showing the **USB model, size, drive letters and disk number**. Approve erasure only if it is the correct device.
+
+| System | This computer | Other computer | Notes |
+| --- | --- | --- | --- |
+| Windows 10/11 | Yes | Yes | Microsoft download or user-selected x64 ISO |
+| Ubuntu, Fedora, Debian, Mint | Yes | Yes | Publisher-checksum-verified Linux ISO |
+| macOS / OpenCore | Hardware-specific | Not automated | Supported OpenCore hardware only; uses the same Create button and guarded write checks. Native Apple/OCLP writer remains unavailable |
+
+**macOS notice:** Apple software licenses and supported hardware requirements still apply. OpenCore/Hackintosh support is experimental and at your own risk; CorePilot does not grant permission to install macOS on unsupported equipment.
+
+### Genuine Apple Mac: guided installer creation
+
+For a genuine Apple Mac, the Windows app displays an **English-language installer guide** and keeps physical USB writing **disabled**. A full Apple installation USB must be created on a compatible Mac using Apple's `createinstallmedia` process:
+
+1. On a compatible Mac, get the full macOS installer from Apple.
+2. Connect a **32 GB or larger** USB disk, back up its contents and identify its exact volume. The installer process erases the USB.
+3. Follow [Apple's bootable installer instructions](https://support.apple.com/en-us/101578) on that Mac.
+4. If the target Mac no longer supports the selected macOS natively, verify its model, version and patch requirements in the [OpenCore Legacy Patcher installer guide](https://dortania.github.io/OpenCore-Legacy-Patcher/INSTALLER.html). Do not assume an OCLP patch path is available for every OS and Mac combination.
+
+This is an explicit *guided hand-off*, **not** a claim that CorePilot on Windows can create a complete native Apple installer. It never automatically downloads Apple installers or erases a USB for a genuine Apple target.
 
 ## Download released Windows build
 
@@ -37,7 +66,7 @@ The current non-destructive pipeline includes hardware discovery, compatibility,
 
 ### Current guarded writer ✅
 
-The simple UI separates **Verify**, **Prepare media**, and **Write to disk**.
+For a compatible OpenCore target, the main UI also supports **Verify → select USB → Create installation USB → confirm erase**. All existing macOS manifest, live-source, identity and execution-preflight checks remain mandatory. Advanced options provide the same separate preparation and writing controls, plus an optional typed confirmation phrase. The genuine-Apple/OCLP writer is still a separate, unsupported path.
 
 For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolves compatibility. **Prepare media** then performs the non-destructive payload stages:
 
@@ -55,7 +84,7 @@ For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolv
 
 - a second live-source refresh immediately before destructive authorization
 - exact USB identity inspection and short-lived preflight
-- exact typed erase phrase
+- separate erase confirmation showing model, capacity, disk number and drive letters; optional typed phrase in Advanced
 - another identity check inside the elevated erase boundary
 - GPT/FAT32 creation and verified EFI/Recovery copy
 - mounted-volume-to-physical-disk verification
@@ -69,11 +98,13 @@ For **Windows 11**, This computer mode evaluates the detected PC first. If TPM 2
 
 In **Other computer** mode, Windows/Linux media preparation intentionally ignores this PC's TPM, CPU, Secure Boot and firmware state. Because the target hardware is unknown, CorePilot prepares standard Windows media and does not claim target-PC compatibility.
 
-Prepare media resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, applies the selected setup compatibility profile when required and re-hashes critical boot files.
+For the official download, Prepare media resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. Alternatively, select **Choose ISO file…** to use a Windows installer ISO already on your computer. CorePilot inspects its boot files, Windows version and x64 architecture, computes SHA-256 and optionally compares it with a checksum you enter. **A user-selected checksum does not prove official origin:** the custom ISO remains amber / **origin not verified**, even when it matches. The original ISO is not copied or modified. It is re-hashed before writing and must not be stored on the USB being erased.
+
+The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted ISO, splits `install.wim` when it exceeds FAT32 limits, applies the selected setup compatibility profile when required and re-hashes critical boot files.
 
 **Linux** verification is scoped to the selected distribution only. Prepare media downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
 
-Windows and Linux use **Verify → Prepare media → READY TO WRITE → Write to disk**. Verify does not begin a large download; Prepare media downloads and validates the selected official installer image before USB is selected.
+Windows and Linux use **Verify → select USB → Create installation USB → confirm erase → write**. Verify does not begin a large download; the USB is checked before CorePilot prepares the installer.
 
 ## Support Bundle
 
@@ -126,7 +157,7 @@ dotnet run --project src/CorePilot.App/CorePilot.App.csproj
 GitHub Actions validates the Python bridge, isolated physical-writer safety markers, online-source trust/fallback behavior, component-integrity gates, state-machine transitions, Windows/Linux/macOS compatibility checks, then publishes a self-contained versioned `CorePilot-win-x64` test artifact.
 
 
-## Three-stage workflow and cancellation
+## Detailed workflow and cancellation
 
 The development UI now keeps the normal flow intentionally small:
 
@@ -137,12 +168,12 @@ does not depend on colour alone. The main status panel, compatibility verdict,
 preparation rows and activity indicator share these meanings.
 
 1. **Verify** — checks hardware, compatibility, current sources and possible installation paths. Does not download the full installer image. No USB disk is required.
-2. **Prepare media** — explicitly downloads and hashes the official Windows/Linux ISO, or stages and validates supported Hackintosh/OpenCore EFI and Apple Recovery payloads. The operation may be cancelled at safe boundaries. USB is not modified.
-3. **Write to disk** — becomes available only when CorePilot has a prepared writable result and trusted live-source catalog. It re-validates the prepared payload and performs the guarded destructive USB stages. This stage is intentionally not cancellable once destructive writing starts.
+2. **Create installation USB** — for Windows/Linux and supported OpenCore targets, select a USB first, then CorePilot checks capacity and safety before preparing the installer. Windows downloads use bounded HTTP Range resume when the server permits it.
+3. **Confirm erase** — a separate dialog identifies the exact model, disk number, size and existing drive letters. Advanced mode can still require the exact typed phrase. The prepared payload and the USB identity are revalidated before destructive writing; once writing starts, cancellation is intentionally unavailable.
 
-For supported Hackintosh/OpenCore targets the flow is now: **Verify** → Hardware Sniffer Deep Scan and compatibility resolution. Then **Prepare media** → current verified OpCore-Simplify staging → hardware-specific EFI/kext/patch configuration → `ocvalidate` + structural/integrity audit → Apple Recovery → final installer manifest. Then **Write to disk** → live-source revalidation → USB safety inspection → manifest-bound write plan → short-lived preflight → exact typed erase phrase → final USB identity check → elevated physical write → SHA-256 verification of every copied EFI/Recovery file.
+For supported Hackintosh/OpenCore targets, **Verify** performs Hardware Sniffer Deep Scan and compatibility resolution. **Create installation USB** runs the non-destructive preparation (current verified OpCore-Simplify staging, EFI/kext/patch configuration, `ocvalidate`, structural/integrity audit, Apple Recovery and final installer manifest), then live-source revalidation, USB safety inspection, manifest-bound write plan, short-lived preflight, explicit erase confirmation, final USB identity check, elevated physical write and file SHA-256 verification. Advanced offers separate Prepare/Write actions and typed erase confirmation.
 
-For **Windows 10/11**, This computer mode checks the detected hardware, while Other computer mode prepares standard universal media without using this PC as the compatibility gate. In This computer mode, Windows 11 may automatically use the guarded compatibility profile when TPM 2.0 is the remaining supported blocker; Legacy BIOS is not treated as resolved. Prepare media resolves the current official Microsoft retail ISO through the GitHub-verified Fido source, downloads it, records its SHA-256 and prepares it for the guarded Windows USB writer. The writer keeps the Windows USB on the GPT/FAT32 UEFI path, applies the verified setup compatibility profile when selected, and automatically splits an oversized `install.wim` with DISM when required.
+For **Windows 10/11**, This computer mode checks the detected hardware, while Other computer mode prepares standard universal media without using this PC as the compatibility gate. In This computer mode, Windows 11 may automatically use the guarded compatibility profile when TPM 2.0 is the remaining supported blocker; Legacy BIOS is not treated as resolved. CorePilot can fetch the current official retail ISO using the GitHub-verified Fido source or inspect a user-selected ISO. Optional Czech regional/keyboard and privacy-focused setup defaults are off by default. Neither option creates an account or saves an account password. The writer keeps the Windows USB on the GPT/FAT32 UEFI path, applies the selected customization profile when requested, and automatically splits an oversized `install.wim` with DISM when required.
 
 For **Ubuntu, Fedora, Debian and Linux Mint**, Prepare media resolves the current official x86_64 image, downloads the publisher checksum, verifies the ISO SHA-256, and prepares it for the guarded Linux raw-image writer. After writing, CorePilot reads back the full image-length region from the USB and requires the SHA-256 to match before reporting success.
 
