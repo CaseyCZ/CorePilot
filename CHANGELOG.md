@@ -2,6 +2,7 @@
 
 ## Unreleased — development branch
 
+- Improve hardware-aware Hackintosh preparation: select one version-specific Intel Wi-Fi kext family, defer unsupported Tahoe audio instead of requiring AppleALC, and explicitly warn when audio layout or post-install USB port mapping is not verified. Actual model/device support still depends on upstream EFI generation and verification.
 - Correct 2017 genuine Apple Mac Sonoma/Sequoia/Tahoe classifications: an OCLP-assisted manual installation may be possible. Tahoe 26 with OCLP 3.0 RC stays amber/experimental; this Windows app still never claims to write a native Apple installer. Warn T1-equipped Touch Bar models against whole-disk erasure.
 - Add user-selected Windows 10/11 ISO inspection with optional user-entered checksum. Custom ISO origin remains unverified and amber, including when the checksum matches.
 - Rehash Windows ISOs inside the elevated erase boundary; block using an ISO stored on the target USB.

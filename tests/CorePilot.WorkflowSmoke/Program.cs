@@ -290,6 +290,33 @@ Assert(venturaCompatibility.Findings.Any(x =>
         x.State == CorePilot.Core.CompatibilityState.Supported),
     "Kaby Lake graphics must use the native Ventura compatibility path");
 
+var intelWifiHardware = testHardware with
+{
+    Devices = testHardware.Devices.Concat(new CorePilot.Core.HardwareDeviceInfo[]
+    {
+        new("Network", "Intel(R) Wi-Fi 6 AX200", @"PCI\VEN_8086&DEV_2723&SUBSYS_00848086"),
+        new("Audio", "Realtek(R) Audio", @"HDAUDIO\FUNC_01&VEN_10EC&DEV_0295")
+    }).ToArray()
+};
+var wifiVentura = compatibilityAnalyzer.Analyze(
+    intelWifiHardware,
+    new CorePilot.Core.SystemVariant("ventura-13", "macOS Ventura 13"));
+var wifiTahoe = compatibilityAnalyzer.Analyze(
+    intelWifiHardware,
+    new CorePilot.Core.SystemVariant("tahoe-26", "macOS Tahoe 26"));
+Assert(wifiVentura.RequiredKexts.Any(x => x.StartsWith("AirportItlwm", StringComparison.OrdinalIgnoreCase)) &&
+       !wifiVentura.RequiredKexts.Any(x => x.StartsWith("itlwm", StringComparison.OrdinalIgnoreCase)),
+    "Ventura should select only the target-specific AirportItlwm candidate");
+Assert(wifiTahoe.RequiredKexts.Any(x => x.StartsWith("itlwm", StringComparison.OrdinalIgnoreCase)) &&
+       !wifiTahoe.RequiredKexts.Any(x => x.StartsWith("AirportItlwm", StringComparison.OrdinalIgnoreCase)),
+    "Tahoe should select only the itlwm/HeliPort candidate, never both Intel Wi-Fi kexts");
+Assert(wifiTahoe.Findings.Any(x => x.Component == "Audio" && x.State == CorePilot.Core.CompatibilityState.Warning) &&
+       !wifiTahoe.RequiredKexts.Any(x => x.StartsWith("AppleALC", StringComparison.OrdinalIgnoreCase)),
+    "Tahoe audio must remain an explicit warning, not silently select unverified AppleALC");
+Assert(wifiVentura.Findings.Any(x => x.Component == "Audio" && x.State == CorePilot.Core.CompatibilityState.Warning) &&
+       wifiVentura.Findings.Any(x => x.Component == "USB mapping" && x.State == CorePilot.Core.CompatibilityState.Warning),
+    "Unknown audio layout and final USB map must never be presented as fully verified");
+
 Console.WriteLine("CorePilot hardware compatibility regression smoke test OK");
 
 

@@ -30,10 +30,37 @@ public sealed class MacOSCompatibilityAnalyzer
         AnalyzeFirmware(hardware, findings);
         AnalyzeCpu(hardware, findings, patches);
         AnalyzeGraphics(hardware, target, findings, kexts, bootArgs);
-        AnalyzeNetwork(hardware, findings, kexts);
+        AnalyzeNetwork(hardware, target, findings, kexts);
 
         if (hardware.DevicesByCategory("Audio").Count > 0)
-            kexts.Add("AppleALC.kext (layout-id still needs device-specific resolution)");
+        {
+            if (target.Id == "tahoe-26")
+            {
+                findings.Add(new(
+                    CompatibilityState.Warning,
+                    "Audio",
+                    "Audio on Tahoe is not automatically resolved",
+                    "The normal AppleALC path cannot be assumed on macOS Tahoe. CorePilot defers audio instead of selecting an unverified root patch.",
+                    "Verify the actual audio solution for this codec and macOS before claiming audio will work."));
+            }
+            else
+            {
+                kexts.Add("AppleALC.kext (layout-id still needs device-specific resolution)");
+                findings.Add(new(
+                    CompatibilityState.Warning,
+                    "Audio",
+                    "Audio layout needs codec-specific verification",
+                    "AppleALC alone does not determine the correct audio layout-id for this motherboard/codec.",
+                    "Verify the detected audio codec and working layout before claiming that audio is configured."));
+            }
+        }
+
+        findings.Add(new(
+            CompatibilityState.Warning,
+            "USB mapping",
+            "Installer USB mapping is temporary",
+            "The installer can use a temporary USB mapping. This does not confirm that every USB port will work after installation.",
+            "Create and verify the final USB port map on the target hardware after installing macOS."));
 
         return new CompatibilityReport(
             target.Id,
@@ -468,6 +495,7 @@ public sealed class MacOSCompatibilityAnalyzer
 
     private static void AnalyzeNetwork(
         HardwareReport hardware,
+        SystemVariant target,
         ICollection<CompatibilityFinding> findings,
         ISet<string> kexts)
     {
@@ -478,13 +506,20 @@ public sealed class MacOSCompatibilityAnalyzer
                     || adapter.Name.Contains("Wireless", StringComparison.OrdinalIgnoreCase)
                     || adapter.Name.Contains("AX", StringComparison.OrdinalIgnoreCase)))
             {
-                kexts.Add("itlwm/AirportItlwm (version-specific)");
+                // The two OpenIntelWireless drivers are mutually exclusive.
+                // The initial selection is version-specific; the upstream
+                // builder still checks the actual adapter and exact release.
+                var driver = target.Id == "ventura-13"
+                    ? "AirportItlwm.kext (Ventura-specific build)"
+                    : "itlwm.kext (with HeliPort; target-specific build)";
+                kexts.Add(driver);
                 findings.Add(new(
                     CompatibilityState.ActionRequired,
                     "Wi-Fi",
                     adapter.Name,
-                    "Intel Wi-Fi is not natively supported by macOS and requires the OpenIntelWireless stack.",
-                    "Resolve the exact chipset and target-specific itlwm/AirportItlwm build."));
+                    $"Intel Wi-Fi needs a chipset-compatible driver. CorePilot selected {driver} as a target-specific candidate, not a guarantee that this adapter is supported.",
+                    "Verify the exact PCI device ID against the current OpenIntelWireless release. Never load itlwm and AirportItlwm together.",
+                    "https://openintelwireless.github.io/itlwm/Installation.html"));
             }
         }
     }

@@ -74,6 +74,8 @@ For a compatible OpenCore target, the main UI also supports **Verify → select 
 
 For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolves compatibility. **Prepare media** then performs the non-destructive payload stages:
 
+**Hardware readiness is not the same as boot readiness:** CorePilot distinguishes provisional Intel Wi-Fi driver choices from the final chipset-compatible version, and it does not claim that an unknown audio `layout-id` or the installer's temporary USB port map will provide fully working audio and USB ports after installation. Tahoe audio is left for explicit review instead of assuming AppleALC works. These are shown as compatibility warnings until there is device-specific evidence. On real Apple Macs, the separate OCLP path applies instead of Hackintosh kext selection.
+
 - live online-source + preparation-knowledge refresh
 - Hardware Sniffer Deep Scan
 - hardware-specific remediation/source resolution
