@@ -130,6 +130,12 @@ GitHub Actions validates the Python bridge, isolated physical-writer safety mark
 
 The development UI now keeps the normal flow intentionally small:
 
+The dark UI uses a consistent status palette: **green** for ready/verified results,
+**amber** for warnings and manual intervention, **red** for blockers and failures,
+and **blue** while checking or downloading. Text labels remain visible, so status
+does not depend on colour alone. The main status panel, compatibility verdict,
+preparation rows and activity indicator share these meanings.
+
 1. **Verify** — checks hardware, compatibility, current sources and possible installation paths. Does not download the full installer image. No USB disk is required.
 2. **Prepare media** — explicitly downloads and hashes the official Windows/Linux ISO, or stages and validates supported Hackintosh/OpenCore EFI and Apple Recovery payloads. The operation may be cancelled at safe boundaries. USB is not modified.
 3. **Write to disk** — becomes available only when CorePilot has a prepared writable result and trusted live-source catalog. It re-validates the prepared payload and performs the guarded destructive USB stages. This stage is intentionally not cancellable once destructive writing starts.

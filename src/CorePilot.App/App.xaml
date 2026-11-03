@@ -15,6 +15,67 @@
         <SolidColorBrush x:Key="TextBrush" Color="#F8FAFC"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#94A3B8"/>
         <SolidColorBrush x:Key="DisabledBrush" Color="#475569"/>
+        <SolidColorBrush x:Key="StatusSuccessTextBrush" Color="#4ADE80"/>
+        <SolidColorBrush x:Key="StatusSuccessPanelBrush" Color="#102A20"/>
+        <SolidColorBrush x:Key="StatusSuccessBorderBrush" Color="#247D4B"/>
+        <SolidColorBrush x:Key="StatusWarningTextBrush" Color="#FBBF24"/>
+        <SolidColorBrush x:Key="StatusWarningPanelBrush" Color="#302417"/>
+        <SolidColorBrush x:Key="StatusWarningBorderBrush" Color="#A16207"/>
+        <SolidColorBrush x:Key="StatusErrorTextBrush" Color="#FDA4AF"/>
+        <SolidColorBrush x:Key="StatusErrorPanelBrush" Color="#331A25"/>
+        <SolidColorBrush x:Key="StatusErrorBorderBrush" Color="#BE3654"/>
+        <SolidColorBrush x:Key="StatusInfoTextBrush" Color="#7DD3FC"/>
+        <SolidColorBrush x:Key="StatusInfoPanelBrush" Color="#102637"/>
+        <SolidColorBrush x:Key="StatusInfoBorderBrush" Color="#0369A1"/>
+
+        <!-- All status surfaces use semantic tones and keep their text labels. -->
+        <Style x:Key="StatusTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Success">
+                    <Setter Property="Foreground" Value="{StaticResource StatusSuccessTextBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Warning">
+                    <Setter Property="Foreground" Value="{StaticResource StatusWarningTextBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Error">
+                    <Setter Property="Foreground" Value="{StaticResource StatusErrorTextBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Info">
+                    <Setter Property="Foreground" Value="{StaticResource StatusInfoTextBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StatusPanelStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Success">
+                    <Setter Property="Background" Value="{StaticResource StatusSuccessPanelBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource StatusSuccessBorderBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Warning">
+                    <Setter Property="Background" Value="{StaticResource StatusWarningPanelBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource StatusWarningBorderBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Error">
+                    <Setter Property="Background" Value="{StaticResource StatusErrorPanelBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource StatusErrorBorderBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Info">
+                    <Setter Property="Background" Value="{StaticResource StatusInfoPanelBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource StatusInfoBorderBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StatusBadgeStyle" TargetType="Border" BasedOn="{StaticResource StatusPanelStyle}">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
 
         <Style TargetType="Window">
             <Setter Property="FontFamily" Value="Segoe UI"/>
