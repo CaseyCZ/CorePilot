@@ -557,10 +557,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _preparedIso = null;
         _preparedWindowsMediaOptions = null;
+        _lastGenericUsbWrite = null;
         _opCoreStage = null;
         _lastEfiBuild = null;
         _lastRecovery = null;
         _lastInstallerManifest = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        InvalidateWorkflowAfter(
+            MacOSWorkflowPhase.CompatibilityReady,
+            "Prepared payload invalidated; verification may be reused but USB authorization was revoked.");
     }
 
     private int CountRelevantCriticalSourceFailures(

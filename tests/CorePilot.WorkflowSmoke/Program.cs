@@ -1317,6 +1317,16 @@ var verificationSection = mainCode[verificationStart..mediaPrepareStart];
 Assert(!verificationSection.Contains("PrepareGenericIsoAsync(", StringComparison.Ordinal) &&
        !verificationSection.Contains("PrepareMacOSPayloadAsync(", StringComparison.Ordinal),
     "Verify must not download full installer media or build a macOS recovery payload");
+var prepareSection = mainCode[mediaPrepareStart..genericPrepareStart];
+Assert(prepareSection.Contains("PrepareGenericIsoAsync(module, target, cancellation.Token)", StringComparison.Ordinal) &&
+       prepareSection.Contains("ResetPreparedMedia();", StringComparison.Ordinal) &&
+       mainCode.Contains("public bool CanCancel", StringComparison.Ordinal),
+    "Prepare media must be cancellable and revoke any incomplete payload");
+
+var windowsIsoCode = await File.ReadAllTextAsync(Path.Combine(
+    repoRoot, "src", "CorePilot.Windows", "WindowsIsoPreparationService.cs"));
+Assert(windowsIsoCode.Contains("process.Kill(entireProcessTree: true)", StringComparison.Ordinal),
+    "cancelling Windows preparation must stop the active Fido resolver process");
 
 Console.WriteLine("CorePilot Verify/Prepare/Cancel separation regression smoke test OK");
 
