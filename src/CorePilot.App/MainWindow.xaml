@@ -1,6 +1,7 @@
 <Window x:Class="CorePilot.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="clr-namespace:CorePilot.App"
         Title="CorePilot"
         Width="1100" Height="680"
         MinWidth="820" MinHeight="520"
@@ -89,7 +90,7 @@
                                    FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}"/>
-                        <TextBlock Text="1. Verify checks hardware and sources without downloading an installer ISO.  2. Prepare media downloads and validates the installation files.  3. Write to disk erases the selected USB after confirmation."
+                        <TextBlock Text="1. Verify checks compatibility.  2. Select the USB drive and choose Create installation USB.  3. CorePilot prepares the installer, then asks before erasing the USB."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,6,0,20"/>
@@ -172,6 +173,29 @@
                                            Foreground="{StaticResource StatusWarningTextBrush}"
                                            TextWrapping="Wrap" Margin="0,0,0,6"/>
                             </StackPanel>
+                            <TextBlock Text="Optional Windows setup changes"
+                                       Foreground="{StaticResource TextBrush}"
+                                       FontWeight="SemiBold" Margin="0,7,0,6"/>
+                            <CheckBox x:Name="WindowsCzechRegionCheckBox"
+                                      Content="Czech region and keyboard"
+                                      Foreground="{StaticResource TextBrush}"
+                                      IsEnabled="{Binding CanChangeInputs}"
+                                      Checked="WindowsSetupOption_OnChanged"
+                                      Unchecked="WindowsSetupOption_OnChanged"
+                                      Margin="0,0,0,6"/>
+                            <CheckBox x:Name="WindowsPrivacySetupCheckBox"
+                                      Content="Use privacy-focused setup defaults"
+                                      Foreground="{StaticResource TextBrush}"
+                                      IsEnabled="{Binding CanChangeInputs}"
+                                      Checked="WindowsSetupOption_OnChanged"
+                                      Unchecked="WindowsSetupOption_OnChanged"
+                                      Margin="0,0,0,6"/>
+                            <TextBlock Text="These choices may change privacy or security settings. No password is stored on the USB."
+                                       Foreground="{StaticResource StatusWarningTextBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding WindowsSetupSummary}"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,6"/>
                         </StackPanel>
 
                         <Button Content="Verify"
@@ -182,18 +206,10 @@
                                 FontWeight="SemiBold"
                                 Margin="0,12,0,8"/>
 
-                        <Button Content="Prepare media"
-                                Click="PrepareMedia_OnClick"
-                                IsEnabled="{Binding CanPrepareMedia}"
-                                Height="48"
-                                FontSize="16"
-                                FontWeight="SemiBold"
-                                ToolTip="Download and verify installer files only when requested."
-                                Margin="0,0,0,8"/>
-
-                        <Button Content="Cancel current operation"
+                        <Button Content="{Binding CancelActionLabel}"
                                 Click="CancelPreparation_OnClick"
                                 IsEnabled="{Binding CanCancel}"
+                                Visibility="{Binding CancelButtonVisibility}"
                                 Height="42"
                                 ToolTip="Cancel verification or media download. USB disk writing cannot be interrupted safely."
                                 Margin="0,0,0,10"/>
@@ -211,7 +227,7 @@
                                        FontWeight="SemiBold"/>
                         </Border>
 
-                        <TextBlock Text="USB drive · only needed for writing"
+                        <TextBlock Text="USB drive · select before creating media"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}"/>
                         <ComboBox x:Name="UsbCombo"
@@ -227,17 +243,37 @@
                                    TextWrapping="Wrap"
                                    Margin="0,4,0,10"/>
 
-                        <Button Content="Write to disk"
-                                Click="WriteToDisk_OnClick"
-                                IsEnabled="{Binding CanWriteToDisk}"
-                                ToolTip="{Binding WriteToDiskToolTip}"
-                                ToolTipService.ShowOnDisabled="True"
+                        <Button Content="{x:Static app:UiStrings.CreateInstallationUsb}"
+                                Click="CreateInstallationUsb_OnClick"
+                                IsEnabled="{Binding CanCreateInstallationUsb}"
                                 Height="48"
                                 FontSize="16"
                                 FontWeight="SemiBold"
                                 Margin="0,4,0,8"/>
 
-                        <TextBlock Text="Write to disk uses only media explicitly downloaded by Prepare media. USB erasure requires an identity check and exact typed confirmation. Cancel is not offered once destructive writing begins."
+                        <Expander Header="Advanced options"
+                                  Foreground="{StaticResource TextBrush}"
+                                  Background="{StaticResource CardBrush}"
+                                  Margin="0,0,0,10">
+                            <StackPanel Margin="8,8,8,12">
+                                <CheckBox x:Name="AdvancedEraseConfirmationCheckBox"
+                                          Content="Require typing the disk confirmation phrase"
+                                          Foreground="{StaticResource TextBrush}"
+                                          IsEnabled="{Binding CanChangeInputs}"
+                                          Margin="0,0,0,12"/>
+                                <Button Content="Prepare media only"
+                                        Click="PrepareMedia_OnClick"
+                                        IsEnabled="{Binding CanPrepareMedia}"
+                                        Margin="0,0,0,8"/>
+                                <Button Content="Write prepared media to USB"
+                                        Click="WriteToDisk_OnClick"
+                                        IsEnabled="{Binding CanWriteToDisk}"
+                                        ToolTip="{Binding WriteToDiskToolTip}"
+                                        Margin="0,0,0,8"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <TextBlock Text="Verify never downloads an installer ISO. Creating USB asks for confirmation before erasing the selected drive. Advanced options can require a typed confirmation. Cancellation is not available after destructive writing begins."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"/>
 

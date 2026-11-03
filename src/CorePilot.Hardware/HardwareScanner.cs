@@ -24,6 +24,15 @@ public sealed class HardwareScanner
         devices.AddRange(QueryDevices("Network", "SELECT Name, PNPDeviceID FROM Win32_NetworkAdapter WHERE PhysicalAdapter=True AND NetEnabled=True"));
         devices.AddRange(QueryDevices("Audio", "SELECT Name, PNPDeviceID FROM Win32_SoundDevice"));
         devices.AddRange(QueryDevices("USB", "SELECT Name, PNPDeviceID FROM Win32_USBController"));
+        try
+        {
+            devices.AddRange(QueryDevices("Storage", "SELECT Name, PNPDeviceID FROM Win32_SCSIController"));
+            devices.AddRange(QueryDevices("Storage", "SELECT Name, PNPDeviceID FROM Win32_IDEController"));
+        }
+        catch (ManagementException)
+        {
+            // Optional controller inventory must never prevent basic Verify.
+        }
 
         return new HardwareReport(
             Environment.MachineName,

@@ -208,16 +208,26 @@ public sealed class WindowsInstallerUsbWriter
         var writtenExtended =
             resultRoot.TryGetProperty("extendedHardwareCompatibility", out var extendedNode) &&
             extendedNode.ValueKind == JsonValueKind.True;
+        var writtenCzech =
+            resultRoot.TryGetProperty("czechRegionalSettings", out var czechNode) &&
+            czechNode.ValueKind == JsonValueKind.True;
+        var writtenPrivacy =
+            resultRoot.TryGetProperty("privacyFocusedSetup", out var privacyNode) &&
+            privacyNode.ValueKind == JsonValueKind.True;
         var customizationSha256 =
             resultRoot.TryGetProperty("customizationSha256", out var customizationNode)
                 ? customizationNode.GetString() ?? ""
                 : "";
 
-        if (writtenExtended != options.ExtendedHardwareCompatibility)
+        if (writtenExtended != options.ExtendedHardwareCompatibility ||
+            writtenCzech != options.CzechRegionalSettings ||
+            writtenPrivacy != options.PrivacyFocusedSetup)
             throw new InvalidOperationException(
                 "Windows USB writer result does not match the media mode prepared by Verify.");
 
-        if (options.ExtendedHardwareCompatibility &&
+        if ((options.ExtendedHardwareCompatibility ||
+             options.CzechRegionalSettings ||
+             options.PrivacyFocusedSetup) &&
             !IsSha256(customizationSha256))
             throw new InvalidOperationException(
                 "Windows compatibility customization was requested but its written SHA-256 was not returned.");
@@ -307,7 +317,9 @@ param(
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
     [Parameter(Mandatory=$true)][string]$DriveLetter,
-    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility
+    [Parameter(Mandatory=$true)][int]$ExtendedHardwareCompatibility,
+    [Parameter(Mandatory=$true)][int]$CzechRegionalSettings,
+    [Parameter(Mandatory=$true)][int]$PrivacyFocusedSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -455,6 +467,7 @@ try {
     }
 
     $customizationSha256 = ""
+    $autoUnattend = ""
     if ($ExtendedHardwareCompatibility -eq 1) {
         $autoUnattend = @'
 <?xml version="1.0" encoding="utf-8"?>
@@ -475,6 +488,64 @@ try {
   </settings>
 </unattend>
 '@
+    }
+
+    if ($CzechRegionalSettings -eq 1 -or $PrivacyFocusedSetup -eq 1) {
+        if ([string]::IsNullOrWhiteSpace($autoUnattend)) {
+            $autoUnattend = '<unattend xmlns="urn:schemas-microsoft-com:unattend" />'
+        }
+
+        [xml]$xml = $autoUnattend
+        $ns = $xml.DocumentElement.NamespaceURI
+
+        function Add-UnattendChild($parent, [string]$name, [string]$value) {
+            $child = $xml.CreateElement($name, $ns)
+            $child.InnerText = $value
+            $parent.AppendChild($child) | Out-Null
+            return $child
+        }
+
+        function Add-UnattendComponent([string]$pass, [string]$componentName) {
+            $settings = $xml.CreateElement('settings', $ns)
+            $settings.SetAttribute('pass', $pass)
+            $component = $xml.CreateElement('component', $ns)
+            $component.SetAttribute('name', $componentName)
+            $component.SetAttribute('processorArchitecture', 'amd64')
+            $component.SetAttribute('publicKeyToken', '31bf3856ad364e35')
+            $component.SetAttribute('language', 'neutral')
+            $component.SetAttribute('versionScope', 'nonSxS')
+            $settings.AppendChild($component) | Out-Null
+            $xml.DocumentElement.AppendChild($settings) | Out-Null
+            return $component
+        }
+
+        if ($CzechRegionalSettings -eq 1) {
+            # Preserve the ISO's actual display language; only set supported
+            # region/keyboard defaults. An English ISO may lack Czech UI files.
+            $component = Add-UnattendComponent 'windowsPE' 'Microsoft-Windows-International-Core-WinPE'
+            Add-UnattendChild $component 'InputLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'SystemLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'UserLocale' 'cs-CZ' | Out-Null
+
+            $component = Add-UnattendComponent 'oobeSystem' 'Microsoft-Windows-International-Core'
+            Add-UnattendChild $component 'InputLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'SystemLocale' 'cs-CZ' | Out-Null
+            Add-UnattendChild $component 'UserLocale' 'cs-CZ' | Out-Null
+        }
+
+        if ($PrivacyFocusedSetup -eq 1) {
+            # Only the documented setup defaults; do not add a local password,
+            # bypass account creation, or silently change security services.
+            $component = Add-UnattendComponent 'oobeSystem' 'Microsoft-Windows-Shell-Setup'
+            $oobe = $xml.CreateElement('OOBE', $ns)
+            $component.AppendChild($oobe) | Out-Null
+            Add-UnattendChild $oobe 'ProtectYourPC' '3' | Out-Null
+        }
+
+        $autoUnattend = $xml.OuterXml
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($autoUnattend)) {
         $autoPath = Join-Path $destinationRoot "autounattend.xml"
         [IO.File]::WriteAllText(
             $autoPath,
@@ -507,6 +578,8 @@ try {
         splitInstallWim = $splitInstallWim
         verifiedBootFiles = $verified
         extendedHardwareCompatibility = ($ExtendedHardwareCompatibility -eq 1)
+        czechRegionalSettings = ($CzechRegionalSettings -eq 1)
+        privacyFocusedSetup = ($PrivacyFocusedSetup -eq 1)
         customizationSha256 = $customizationSha256
     } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
@@ -567,7 +640,11 @@ finally {
             "-DriveLetter",
             driveLetter.ToString(),
             "-ExtendedHardwareCompatibility",
-            (options.ExtendedHardwareCompatibility ? "1" : "0")
+            (options.ExtendedHardwareCompatibility ? "1" : "0"),
+            "-CzechRegionalSettings",
+            (options.CzechRegionalSettings ? "1" : "0"),
+            "-PrivacyFocusedSetup",
+            (options.PrivacyFocusedSetup ? "1" : "0")
         })
         {
             start.ArgumentList.Add(argument);

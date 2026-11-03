@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +11,10 @@ namespace CorePilot.Windows;
 
 public sealed class WindowsIsoPreparationService
 {
+    private sealed record PartialIsoState(
+        string? ETag,
+        DateTimeOffset? LastModified,
+        long TotalBytes);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -139,11 +145,20 @@ public sealed class WindowsIsoPreparationService
         }
 
         progress?.Report($"Downloading official Microsoft ISO: {fileName}…");
-        await DownloadLargeIsoAsync(
-            isoUrl,
-            isoPath,
-            progress,
-            cancellationToken);
+        try
+        {
+            await DownloadLargeIsoAsync(isoUrl, isoPath, progress, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (
+            ex.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Gone or HttpStatusCode.Unauthorized)
+        {
+            progress?.Report("The download link expired. Getting a new one…");
+            isoUrl = await ResolveIsoUrlWithFidoAsync(scriptPath, target, cancellationToken);
+            ValidateMicrosoftIsoUri(isoUrl);
+            if (!Path.GetFileName(isoUrl.AbsolutePath).Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The refreshed download link points to a different image.");
+            await DownloadLargeIsoAsync(isoUrl, isoPath, progress, cancellationToken);
+        }
 
         var sha256 = await ComputeSha256Async(isoPath, cancellationToken);
         var info = new FileInfo(isoPath);
@@ -269,85 +284,166 @@ public sealed class WindowsIsoPreparationService
         CancellationToken cancellationToken)
     {
         const long maxIsoBytes = 12L * 1024L * 1024L * 1024L;
-        var temp = destination + ".download";
+        var partialPath = destination + ".part";
+        var statePath = partialPath + ".json";
 
-        try
+        // Only a complete verified-size response may become the final ISO.
+        if (File.Exists(partialPath) && File.Exists(statePath))
         {
-            using var response = await _http.GetAsync(
-                uri,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
-
-            response.EnsureSuccessStatusCode();
-
-            var finalUri = response.RequestMessage?.RequestUri
-                ?? throw new InvalidOperationException(
-                    "Windows ISO download did not expose a final URI.");
-
-            ValidateMicrosoftIsoUri(finalUri);
-
-            var expectedLength = response.Content.Headers.ContentLength;
-            if (expectedLength is > maxIsoBytes)
-                throw new InvalidDataException(
-                    "Windows ISO is unexpectedly large.");
-
-            await using var input =
-                await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var output = new FileStream(
-                temp,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                1024 * 1024,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-            var buffer = new byte[1024 * 1024];
-            long total = 0;
-            var lastReportedPercent = -1;
-
-            while (true)
+            PartialIsoState? state = null;
+            try
             {
-                var read = await input.ReadAsync(
-                    buffer.AsMemory(0, buffer.Length),
-                    cancellationToken);
+                state = JsonSerializer.Deserialize<PartialIsoState>(
+                    await File.ReadAllTextAsync(statePath, cancellationToken));
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                // Unreadable metadata means we cannot safely reuse old bytes.
+            }
 
-                if (read == 0)
-                    break;
-
-                total += read;
-                if (total > maxIsoBytes)
-                    throw new InvalidDataException(
-                        "Windows ISO exceeded the maximum accepted size.");
-
-                await output.WriteAsync(
-                    buffer.AsMemory(0, read),
-                    cancellationToken);
-
-                if (expectedLength is > 0)
+            var existingBytes = new FileInfo(partialPath).Length;
+            if (state is not null &&
+                existingBytes > 0 &&
+                existingBytes < state.TotalBytes &&
+                state.TotalBytes <= maxIsoBytes &&
+                (IsStrongETag(state.ETag) || state.LastModified is not null))
+            {
+                // Retry transient disconnects up to three times. An invalid
+                // range or changed object triggers a fresh download immediately.
+                for (var attempt = 1; attempt <= 3; attempt++)
                 {
-                    var percent = (int)Math.Min(
-                        100,
-                        total * 100L / expectedLength.Value);
-
-                    if (percent >= lastReportedPercent + 5)
+                    try
                     {
-                        lastReportedPercent = percent;
-                        progress?.Report(
-                            $"Downloading Windows ISO… {percent}% ({total / 1024d / 1024d / 1024d:0.00} GB)");
+                        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                        request.Headers.Range = new RangeHeaderValue(existingBytes, null);
+                        if (IsStrongETag(state.ETag))
+                            request.Headers.IfRange = new RangeConditionHeaderValue(
+                                EntityTagHeaderValue.Parse(state.ETag!));
+                        else if (state.LastModified is not null)
+                            request.Headers.IfRange = new RangeConditionHeaderValue(state.LastModified.Value);
+
+                        using var response = await _http.SendAsync(
+                            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                        ValidateMicrosoftIsoUri(response.RequestMessage?.RequestUri
+                            ?? throw new InvalidOperationException("Missing download response URL."));
+
+                        var range = response.Content.Headers.ContentRange;
+                        if (response.StatusCode != HttpStatusCode.PartialContent ||
+                            range?.From != existingBytes ||
+                            range.Length != state.TotalBytes ||
+                            (IsStrongETag(state.ETag) &&
+                             response.Headers.ETag?.Tag != state.ETag) ||
+                            (state.LastModified is not null &&
+                             response.Content.Headers.LastModified is DateTimeOffset modified &&
+                             modified != state.LastModified))
+                            break;
+
+                        progress?.Report("Download interrupted. Resuming…");
+                        var actualBytes = await CopyIsoResponseAsync(
+                            response, partialPath, FileMode.Append,
+                            existingBytes, state.TotalBytes, maxIsoBytes,
+                            progress, cancellationToken);
+                        if (actualBytes == state.TotalBytes)
+                        {
+                            File.Move(partialPath, destination, overwrite: true);
+                            File.Delete(statePath);
+                            return;
+                        }
+                        existingBytes = actualBytes;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw; // Keep .part and metadata for the next attempt.
+                    }
+                    catch (Exception ex) when (ex is IOException or HttpRequestException)
+                    {
+                        existingBytes = new FileInfo(partialPath).Length;
+                        if (attempt == 3)
+                            break;
                     }
                 }
             }
-
-            await output.FlushAsync(cancellationToken);
-            output.Flush(flushToDisk: true);
-
-            File.Move(temp, destination, overwrite: true);
         }
-        finally
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (File.Exists(partialPath) || File.Exists(statePath))
+            progress?.Report("Starting the download again…");
+
+        using (var response = await _http.GetAsync(
+                   uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
         {
-            if (File.Exists(temp))
-                File.Delete(temp);
+            ValidateMicrosoftIsoUri(response.RequestMessage?.RequestUri
+                ?? throw new InvalidOperationException("Missing download response URL."));
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength;
+            if (totalBytes is null or <= 0 or > maxIsoBytes)
+                throw new InvalidDataException("Windows ISO download has no safe known size.");
+
+            var state = new PartialIsoState(
+                response.Headers.ETag?.Tag,
+                response.Content.Headers.LastModified,
+                totalBytes.Value);
+            await File.WriteAllTextAsync(
+                statePath, JsonSerializer.Serialize(state), cancellationToken);
+
+            var copied = await CopyIsoResponseAsync(
+                response, partialPath, FileMode.Create, 0,
+                totalBytes.Value, maxIsoBytes, progress, cancellationToken);
+
+            if (copied != totalBytes.Value)
+                throw new IOException("Download interrupted. The partial file was kept for resuming.");
         }
+
+        File.Move(partialPath, destination, overwrite: true);
+        File.Delete(statePath);
+    }
+
+    private static bool IsStrongETag(string? etag) =>
+        !string.IsNullOrWhiteSpace(etag) &&
+        !etag.StartsWith("W/", StringComparison.OrdinalIgnoreCase) &&
+        EntityTagHeaderValue.TryParse(etag, out _);
+
+    private static async Task<long> CopyIsoResponseAsync(
+        HttpResponseMessage response,
+        string partialPath,
+        FileMode mode,
+        long existingBytes,
+        long totalBytes,
+        long maximumBytes,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
+        await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var output = new FileStream(
+            partialPath, mode, FileAccess.Write, FileShare.None,
+            1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+        var buffer = new byte[1024 * 1024];
+        var bytes = existingBytes;
+        var lastReportedPercent = -1;
+        while (true)
+        {
+            var read = await input.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+                break;
+
+            bytes += read;
+            if (bytes > maximumBytes || bytes > totalBytes)
+                throw new InvalidDataException("Windows ISO exceeded the expected download size.");
+
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            var percent = (int)Math.Min(100, bytes * 100L / totalBytes);
+            if (percent >= lastReportedPercent + 5)
+            {
+                lastReportedPercent = percent;
+                progress?.Report($"Downloading Windows ISO… {percent}%");
+            }
+        }
+
+        await output.FlushAsync(cancellationToken);
+        output.Flush(flushToDisk: true);
+        return bytes;
     }
 
     private async Task DownloadSmallTrustedFileAsync(
