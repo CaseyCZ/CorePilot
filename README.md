@@ -28,6 +28,17 @@ The main UI exposes **Verify**, **Create installation USB** and a context-sensit
 
 **macOS notice:** Apple software licenses and supported hardware requirements still apply. OpenCore/Hackintosh support is experimental and at your own risk; CorePilot does not grant permission to install macOS on unsupported equipment.
 
+### Genuine Apple Mac: guided installer creation
+
+For a genuine Apple Mac, the Windows app displays an **English-language installer guide** and keeps physical USB writing **disabled**. A full Apple installation USB must be created on a compatible Mac using Apple's `createinstallmedia` process:
+
+1. On a compatible Mac, get the full macOS installer from Apple.
+2. Connect a **32 GB or larger** USB disk, back up its contents and identify its exact volume. The installer process erases the USB.
+3. Follow [Apple's bootable installer instructions](https://support.apple.com/en-us/101578) on that Mac.
+4. If the target Mac no longer supports the selected macOS natively, verify its model, version and patch requirements in the [OpenCore Legacy Patcher installer guide](https://dortania.github.io/OpenCore-Legacy-Patcher/INSTALLER.html). Do not assume an OCLP patch path is available for every OS and Mac combination.
+
+This is an explicit *guided hand-off*, **not** a claim that CorePilot on Windows can create a complete native Apple installer. It never automatically downloads Apple installers or erases a USB for a genuine Apple target.
+
 ## Download released Windows build
 
 Latest continuously tested build:

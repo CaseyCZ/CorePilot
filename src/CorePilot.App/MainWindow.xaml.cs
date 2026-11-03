@@ -505,6 +505,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "An unverified/cached catalog or stale critical source cannot authorize USB writing.";
             ActivityLog.Warning("Preparation", PlanStatus);
         }
+        else if (module.Id == "macos" &&
+                 _hardwareReport is not null &&
+                 MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
+        {
+            PlanStatus = _compatibilityReport.CanProceed
+                ? "NATIVE MAC · This target is compatible, but the full installer must be created on a Mac. Open the Genuine Apple Mac installer guide. CorePilot will not erase a USB for this path."
+                : "LEGACY MAC · This macOS target needs additional OpenCore Legacy Patcher support. Check the official guide; CorePilot will not write an unverified installer.";
+            ActivityLog.Warning("Preparation", PlanStatus);
+        }
         else if (IsMediaPreparationApplicable)
         {
             PlanStatus = module.Id == "windows" && _selectedWindowsIsoPath is not null
@@ -1492,8 +1501,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SystemCombo.SelectedItem is ISystemModule { Id: "windows" }
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+        NativeMacGuidePanel.Visibility =
+            SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         WindowsIsoChecksumPanel.Visibility =
             _selectedWindowsIsoPath is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OpenAppleInstallerGuide_OnClick(object sender, RoutedEventArgs e) =>
+        OpenInstallerGuide("https://support.apple.com/en-us/101578");
+
+    private void OpenOclpInstallerGuide_OnClick(object sender, RoutedEventArgs e) =>
+        OpenInstallerGuide("https://dortania.github.io/OpenCore-Legacy-Patcher/INSTALLER.html");
+
+    private void OpenInstallerGuide(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            PlanStatus = "Could not open the official installer guide in your browser.";
+            ActivityLog.Error("Installer guide", PlanStatus, ex);
+        }
     }
 
     private void ChooseWindowsIso_OnClick(object sender, RoutedEventArgs e)
@@ -2527,9 +2559,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _targetMode == InstallationTargetMode.ThisComputer &&
             _compatibilityReport?.Findings.Any(x =>
                 x.State is CompatibilityState.Warning or CompatibilityState.Unknown) == true;
+        var genuineApple =
+            system.Id == "macos" &&
+            _hardwareReport is not null &&
+            MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
 
         CompatibilityVerdict =
-            _preparationResult.ReadyToWrite && _preparedIso?.UserSelected == true
+            genuineApple
+                ? _compatibilityReport?.CanProceed == true
+                    ? "NATIVE MAC · CREATE INSTALLER ON A MAC"
+                    : "LEGACY MAC · REVIEW OCLP REQUIREMENTS"
+                : _preparationResult.ReadyToWrite && _preparedIso?.UserSelected == true
                 ? "READY TO WRITE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
                 : _preparationResult.ReadyToWrite && compatibilityWarnings
                 ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
@@ -2539,7 +2579,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ? "VERIFIED · READY TO PREPARE MEDIA"
                 : _preparationResult.Verdict;
 
-        CompatibilityInstallPath = _preparationResult.ReadyToWrite
+        CompatibilityInstallPath = genuineApple
+            ? "CorePilot does not create full native Apple macOS installation media from Windows. Use the Genuine Apple Mac installer guide above. Unsupported Mac models also require an OCLP compatibility review."
+            : _preparationResult.ReadyToWrite
             ? _preparedIso?.UserSelected == true
                 ? $"CorePilot checked the structure and architecture of your {target.DisplayName} installer. Its origin is not verified, even if your checksum matches."
                 : compatibilityWarnings

@@ -198,6 +198,33 @@
                                        TextWrapping="Wrap" Margin="0,0,0,6"/>
                         </StackPanel>
 
+                        <Expander x:Name="NativeMacGuidePanel"
+                                  Header="Genuine Apple Mac installer guide"
+                                  Foreground="{StaticResource TextBrush}"
+                                  Background="{StaticResource CardBrush}"
+                                  Visibility="Collapsed"
+                                  Margin="0,0,0,10">
+                            <StackPanel Margin="8,8,8,12">
+                                <TextBlock Text="A complete native macOS installation USB must be created on a compatible Mac, not by this Windows app."
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource StatusWarningTextBrush}"
+                                           Margin="0,0,0,10"/>
+                                <TextBlock Text="1. Download the full macOS installer from Apple on a compatible Mac."
+                                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <TextBlock Text="2. Connect a 32 GB or larger USB drive. Back up anything on it; creation will erase it."
+                                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <TextBlock Text="3. Follow Apple's createinstallmedia instructions on that Mac, confirming the exact USB volume."
+                                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <TextBlock Text="4. For an unsupported Mac, first check OpenCore Legacy Patcher model and OS support. Do not assume patches are available."
+                                           TextWrapping="Wrap" Margin="0,0,0,10"/>
+                                <Button Content="Open Apple's installer instructions"
+                                        Click="OpenAppleInstallerGuide_OnClick"
+                                        Margin="0,0,0,6"/>
+                                <Button Content="Open OCLP installer instructions"
+                                        Click="OpenOclpInstallerGuide_OnClick"/>
+                            </StackPanel>
+                        </Expander>
+
                         <Button Content="Verify"
                                 Click="Verify_OnClick"
                                 IsEnabled="{Binding CanVerify}"
