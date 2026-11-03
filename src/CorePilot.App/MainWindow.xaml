@@ -38,7 +38,14 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="{Binding ActivityLog.StateText}" FontWeight="Bold"/>
+                        <Border Tag="{Binding ActivityLog.StateTone}"
+                                Style="{StaticResource StatusBadgeStyle}"
+                                Margin="0,0,0,3">
+                            <TextBlock Text="{Binding ActivityLog.StateText}"
+                                       Tag="{Binding ActivityLog.StateTone}"
+                                       Style="{StaticResource StatusTextStyle}"
+                                       FontWeight="Bold"/>
+                        </Border>
                         <TextBlock Text="{Binding ActivityLog.CurrentArea}"
                                    Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
                         <TextBlock Text="{Binding ActivityLog.CurrentStatus}"
@@ -156,15 +163,17 @@
                                 ToolTip="Cancel verification or media download. USB disk writing cannot be interrupted safely."
                                 Margin="0,0,0,10"/>
 
-                        <Border Background="{StaticResource PanelBrush}"
-                                BorderBrush="{StaticResource BorderBrush}"
+                        <Border Tag="{Binding PlanStatusTone}"
+                                Style="{StaticResource StatusPanelStyle}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="12"
                                 Margin="0,0,0,18">
                             <TextBlock Text="{Binding PlanStatus}"
+                                       Tag="{Binding PlanStatusTone}"
+                                       Style="{StaticResource StatusTextStyle}"
                                        TextWrapping="Wrap"
-                                       Foreground="{StaticResource TextBrush}"/>
+                                       FontWeight="SemiBold"/>
                         </Border>
 
                         <TextBlock Text="USB drive · only needed for writing"
@@ -178,8 +187,9 @@
                                   SelectionChanged="UsbCombo_OnSelectionChanged"/>
 
                         <TextBlock Text="{Binding UsbSafetyStatus}"
+                                   Tag="{Binding UsbSafetyStatusTone}"
+                                   Style="{StaticResource StatusTextStyle}"
                                    TextWrapping="Wrap"
-                                   Foreground="{StaticResource MutedBrush}"
                                    Margin="0,4,0,10"/>
 
                         <Button Content="Write to disk"
@@ -230,7 +240,10 @@
 
                             <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding DeepScanStatus}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding DeepScanStatus}"
+                                           Tag="{Binding DeepScanStatusTone}"
+                                           Style="{StaticResource StatusTextStyle}"
+                                           TextWrapping="Wrap"/>
                             </Border>
 
                             <ListView Grid.Row="3" ItemsSource="{Binding HardwareItems}" Background="Transparent"
@@ -269,8 +282,8 @@
                             </StackPanel>
 
                             <Border Grid.Row="2"
-                                    Background="{StaticResource PanelBrush}"
-                                    BorderBrush="{StaticResource BorderBrush}"
+                                    Tag="{Binding CompatibilityVerdictTone}"
+                                    Style="{StaticResource StatusPanelStyle}"
                                     BorderThickness="1"
                                     CornerRadius="10"
                                     Padding="14">
@@ -279,7 +292,8 @@
                                                Foreground="{StaticResource MutedBrush}"
                                                FontWeight="SemiBold"/>
                                     <TextBlock Text="{Binding CompatibilityVerdict}"
-                                               Foreground="{StaticResource TextBrush}"
+                                               Tag="{Binding CompatibilityVerdictTone}"
+                                               Style="{StaticResource StatusTextStyle}"
                                                FontSize="22"
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"
@@ -320,13 +334,19 @@
                                                 Margin="0,0,0,3">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="90"/>
-                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="116"/>
+                                                    <ColumnDefinition Width="108"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding StateText}"
-                                                           Foreground="{StaticResource TextBrush}"
-                                                           FontWeight="Bold"/>
+                                                <Border Tag="{Binding StatusTone}"
+                                                        Style="{StaticResource StatusBadgeStyle}"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding StateText}"
+                                                               Tag="{Binding StatusTone}"
+                                                               Style="{StaticResource StatusTextStyle}"
+                                                               FontSize="11"
+                                                               FontWeight="Bold"/>
+                                                </Border>
                                                 <TextBlock Grid.Column="1" Text="{Binding Category}" Foreground="{StaticResource MutedBrush}"/>
                                                 <StackPanel Grid.Column="2">
                                                     <TextBlock Text="{Binding Problem}"

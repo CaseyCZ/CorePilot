@@ -92,6 +92,15 @@ public sealed record PreparationItem(
         PreparationItemState.Unresolved => "UNRESOLVED",
         _ => "DETECTED"
     };
+
+    public string StatusTone => State switch
+    {
+        PreparationItemState.ResolvedAutomatically or PreparationItemState.SourceResolved =>
+            UiStatusTone.Success,
+        PreparationItemState.ManualActionRequired => UiStatusTone.Warning,
+        PreparationItemState.Unresolved => UiStatusTone.Error,
+        _ => UiStatusTone.Info
+    };
 }
 
 public sealed record InstallationPreparationResult(

@@ -76,6 +76,7 @@ public sealed class ActivityLogService : INotifyPropertyChanged
             _isBusy = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(StateTone));
         }
     }
 
@@ -89,6 +90,7 @@ public sealed class ActivityLogService : INotifyPropertyChanged
             _errorCount = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(StateTone));
         }
     }
 
@@ -98,6 +100,12 @@ public sealed class ActivityLogService : INotifyPropertyChanged
             : ErrorCount > 0
                 ? $"READY · {ErrorCount} error{(ErrorCount == 1 ? "" : "s")}"
                 : "READY";
+
+    public string StateTone => IsBusy
+        ? CorePilot.Core.UiStatusTone.Info
+        : ErrorCount > 0
+            ? CorePilot.Core.UiStatusTone.Error
+            : CorePilot.Core.UiStatusTone.Success;
 
     public ActivityLogService()
     {

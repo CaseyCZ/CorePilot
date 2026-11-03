@@ -134,20 +134,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string DeepScanStatus
     {
         get => _deepScanStatus;
-        private set { _deepScanStatus = value; OnPropertyChanged(); }
+        private set
+        {
+            _deepScanStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DeepScanStatusTone));
+        }
     }
+
+    public string DeepScanStatusTone => UiStatusTone.ForMessage(DeepScanStatus);
 
     public string PlanStatus
     {
         get => _planStatus;
-        private set { _planStatus = value; OnPropertyChanged(); }
+        private set
+        {
+            _planStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PlanStatusTone));
+        }
     }
+
+    public string PlanStatusTone => UiStatusTone.ForMessage(PlanStatus);
 
     public string UsbSafetyStatus
     {
         get => _usbSafetyStatus;
-        private set { _usbSafetyStatus = value; OnPropertyChanged(); }
+        private set
+        {
+            _usbSafetyStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(UsbSafetyStatusTone));
+        }
     }
+
+    public string UsbSafetyStatusTone => UiStatusTone.ForMessage(UsbSafetyStatus);
 
     public string CompatibilitySummary
     {
@@ -158,8 +179,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string CompatibilityVerdict
     {
         get => _compatibilityVerdict;
-        private set { _compatibilityVerdict = value; OnPropertyChanged(); }
+        private set
+        {
+            _compatibilityVerdict = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CompatibilityVerdictTone));
+        }
     }
+
+    public string CompatibilityVerdictTone => UiStatusTone.ForMessage(CompatibilityVerdict);
 
     public string CompatibilityInstallPath
     {

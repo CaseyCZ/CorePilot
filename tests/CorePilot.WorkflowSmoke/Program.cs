@@ -1253,6 +1253,31 @@ var appXaml = await File.ReadAllTextAsync(appXamlPath);
 var mainXaml = await File.ReadAllTextAsync(mainXamlPath);
 var logXaml = await File.ReadAllTextAsync(logXamlPath);
 
+foreach (var (message, tone) in new[]
+{
+    ("READY TO WRITE", UiStatusTone.Success),
+    ("VERIFIED · sources checked", UiStatusTone.Success),
+    ("READY TO WRITE ⚠ compatibility warnings", UiStatusTone.Warning),
+    ("MANUAL ACTION REQUIRED", UiStatusTone.Warning),
+    ("SYSTEM PREPARED · MEDIA WRITER NOT AVAILABLE", UiStatusTone.Warning),
+    ("NOT READY · unresolved items", UiStatusTone.Error),
+    ("Write stopped safely", UiStatusTone.Error),
+    ("Downloading Linux ISO", UiStatusTone.Info),
+    ("NOT PREPARED", UiStatusTone.Neutral)
+})
+{
+    Assert(UiStatusTone.ForMessage(message) == tone,
+        $"wrong semantic UI tone for '{message}' (expected {tone})");
+}
+
+Assert(new PreparationItem(PreparationItemState.ResolvedAutomatically, "test", "test", "test")
+           .StatusTone == UiStatusTone.Success &&
+       new PreparationItem(PreparationItemState.ManualActionRequired, "test", "test", "test")
+           .StatusTone == UiStatusTone.Warning &&
+       new PreparationItem(PreparationItemState.Unresolved, "test", "test", "test")
+           .StatusTone == UiStatusTone.Error,
+    "preparation list items must have semantic READY / attention / blocker colours");
+
 _ = System.Xml.Linq.XDocument.Parse(appXaml);
 _ = System.Xml.Linq.XDocument.Parse(mainXaml);
 _ = System.Xml.Linq.XDocument.Parse(logXaml);
@@ -1303,6 +1328,32 @@ foreach (var requiredMainControl in new[]
 {
     Assert(mainXaml.Contains(requiredMainControl, StringComparison.Ordinal),
         $"Main window is missing workflow control: {requiredMainControl}");
+}
+
+foreach (var requiredToneBinding in new[]
+{
+    "Tag=\"{Binding PlanStatusTone}\"",
+    "Tag=\"{Binding CompatibilityVerdictTone}\"",
+    "Tag=\"{Binding ActivityLog.StateTone}\"",
+    "Tag=\"{Binding StatusTone}\""
+})
+{
+    Assert(mainXaml.Contains(requiredToneBinding, StringComparison.Ordinal),
+        $"Main window is missing semantic status colour binding: {requiredToneBinding}");
+}
+
+foreach (var requiredPaletteResource in new[]
+{
+    "x:Key=\"StatusPanelStyle\"",
+    "x:Key=\"StatusBadgeStyle\"",
+    "x:Key=\"StatusTextStyle\"",
+    "x:Key=\"StatusSuccessTextBrush\"",
+    "x:Key=\"StatusWarningTextBrush\"",
+    "x:Key=\"StatusErrorTextBrush\""
+})
+{
+    Assert(appXaml.Contains(requiredPaletteResource, StringComparison.Ordinal),
+        $"App palette is missing a semantic status resource: {requiredPaletteResource}");
 }
 
 Console.WriteLine("CorePilot explicit dark-theme and main-workflow XAML smoke test OK");
