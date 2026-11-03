@@ -27,7 +27,7 @@
                            FontSize="30"
                            FontWeight="SemiBold"
                            Foreground="{StaticResource TextBrush}"/>
-                <TextBlock Text="Hardware-aware boot media assistant · simple two-step workflow"
+                <TextBlock Text="Hardware-aware boot media assistant · Verify → Prepare → Write"
                            Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <Border Grid.Column="1" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
@@ -82,7 +82,7 @@
                                    FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}"/>
-                        <TextBlock Text="1. Choose whether you are preparing for this computer or another one. Verify scans hardware when needed, searches online for usable solutions and validates the prepared result.  2. Write to disk only copies the already prepared system to USB."
+                        <TextBlock Text="1. Verify checks hardware and sources without downloading an installer ISO.  2. Prepare media downloads and validates the installation files.  3. Write to disk erases the selected USB after confirmation."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,6,0,20"/>
@@ -138,7 +138,23 @@
                                 Height="48"
                                 FontSize="16"
                                 FontWeight="SemiBold"
-                                Margin="0,12,0,10"/>
+                                Margin="0,12,0,8"/>
+
+                        <Button Content="Prepare media"
+                                Click="PrepareMedia_OnClick"
+                                IsEnabled="{Binding CanPrepareMedia}"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                ToolTip="Download and verify installer files only when requested."
+                                Margin="0,0,0,8"/>
+
+                        <Button Content="Cancel current operation"
+                                Click="CancelPreparation_OnClick"
+                                IsEnabled="{Binding CanCancel}"
+                                Height="42"
+                                ToolTip="Cancel verification or media download. USB disk writing cannot be interrupted safely."
+                                Margin="0,0,0,10"/>
 
                         <Border Background="{StaticResource PanelBrush}"
                                 BorderBrush="{StaticResource BorderBrush}"
@@ -176,7 +192,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,4,0,8"/>
 
-                        <TextBlock Text="Write to disk uses the system already prepared by Verify. The selected USB is erased only after a fresh identity check, payload re-validation, verified preflight and an exact typed confirmation phrase."
+                        <TextBlock Text="Write to disk uses only media explicitly downloaded by Prepare media. USB erasure requires an identity check and exact typed confirmation. Cancel is not offered once destructive writing begins."
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}"/>
 
@@ -335,7 +351,7 @@
             </Border>
         </Grid>
 
-        <TextBlock Grid.Row="3" Text="Development build · Verify → Write to disk · Guarded Hackintosh/OpenCore, Windows and Linux USB writing enabled."
+        <TextBlock Grid.Row="3" Text="Development build · Verify → Prepare media → Write to disk · Guarded Hackintosh/OpenCore, Windows and Linux USB writing enabled."
                    Foreground="{StaticResource MutedBrush}" Margin="0,18,0,0"/>
     </Grid>
 </Window>
