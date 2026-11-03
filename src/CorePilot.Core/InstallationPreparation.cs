@@ -74,7 +74,8 @@ public enum PreparationItemState
     ResolvedAutomatically,
     SourceResolved,
     ManualActionRequired,
-    Unresolved
+    Unresolved,
+    UnverifiedOrigin
 }
 
 public sealed record PreparationItem(
@@ -88,6 +89,7 @@ public sealed record PreparationItem(
     {
         PreparationItemState.ResolvedAutomatically => "AUTO",
         PreparationItemState.SourceResolved => "FOUND",
+        PreparationItemState.UnverifiedOrigin => "ORIGIN NOT VERIFIED",
         PreparationItemState.ManualActionRequired => "MANUAL",
         PreparationItemState.Unresolved => "UNRESOLVED",
         _ => "DETECTED"
@@ -97,6 +99,7 @@ public sealed record PreparationItem(
     {
         PreparationItemState.ResolvedAutomatically or PreparationItemState.SourceResolved =>
             UiStatusTone.Success,
+        PreparationItemState.UnverifiedOrigin => UiStatusTone.Warning,
         PreparationItemState.ManualActionRequired => UiStatusTone.Warning,
         PreparationItemState.Unresolved => UiStatusTone.Error,
         _ => UiStatusTone.Info

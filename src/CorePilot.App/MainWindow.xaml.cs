@@ -23,6 +23,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly MacOSCompatibilityAnalyzer _macAnalyzer = new();
     private readonly GenericCompatibilityAnalyzer _genericAnalyzer = new();
     private readonly WindowsIsoPreparationService _windowsIsoPreparation;
+    private readonly WindowsCustomIsoPreparationService _customWindowsIsoPreparation = new();
     private readonly LinuxIsoPreparationService _linuxIsoPreparation = new();
     private readonly WindowsInstallerUsbWriter _windowsUsbWriter = new();
     private readonly LinuxRawUsbWriter _linuxUsbWriter = new();
@@ -69,6 +70,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CancellationTokenSource? _activePreparationCancellation;
     private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
     private bool _windowsCompatibilityMedia;
+    private string? _selectedWindowsIsoPath;
+    private string _windowsImageSourceStatus = "Microsoft download will be used.";
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
@@ -89,6 +92,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<CompatibilityFinding> CompatibilityItems { get; } = [];
     public ObservableCollection<PreparationItem> PreparationItems { get; } = [];
     public ActivityLogService ActivityLog => App.Log;
+
+    public string WindowsImageSourceStatus
+    {
+        get => _windowsImageSourceStatus;
+        private set
+        {
+            _windowsImageSourceStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        }
+    }
+
+    public string WindowsImageSourceStatusTone =>
+        _selectedWindowsIsoPath is null ? UiStatusTone.Neutral : UiStatusTone.Warning;
 
     public bool CanChangeInputs => _activePreparationCancellation is null && !ActivityLog.IsBusy;
     public bool CanCreateSupportBundle => _activePreparationCancellation is null && !ActivityLog.IsBusy;
@@ -469,8 +486,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (IsMediaPreparationApplicable)
         {
-            PlanStatus = $"VERIFIED · {target.DisplayName} compatibility and sources checked. Press Prepare media to download the installer. No ISO has been downloaded.";
-            ActivityLog.Success("Verification", PlanStatus);
+            PlanStatus = module.Id == "windows" && _selectedWindowsIsoPath is not null
+                ? $"READY TO PREPARE ⚠ Compatibility checked. Press Prepare media to inspect your custom {target.DisplayName} ISO. Origin still not verified."
+                : $"VERIFIED · {target.DisplayName} compatibility and sources checked. Press Prepare media to download the installer. No ISO has been downloaded.";
+            if (_selectedWindowsIsoPath is not null && module.Id == "windows")
+                ActivityLog.Warning("Verification", PlanStatus);
+            else
+                ActivityLog.Success("Verification", PlanStatus);
         }
         else if (_preparationResult.ReadyToWrite)
         {
@@ -549,10 +571,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _preparationResult = BuildPreparationResult(module, target);
             ApplyPreparationResultToUi(module, target);
             PlanStatus = _preparationResult.ReadyToWrite
-                ? $"READY TO WRITE · {target.DisplayName} installer verified. Select a USB drive and press Write to disk."
+                ? _preparedIso?.UserSelected == true
+                    ? $"READY TO WRITE ⚠ Custom {target.DisplayName} ISO selected. Origin still not verified. Select a USB drive and press Write to disk."
+                    : $"READY TO WRITE · {target.DisplayName} installer verified. Select a USB drive and press Write to disk."
                 : $"Preparation completed, but {target.DisplayName} is not ready to write. Review Preparation for unresolved items.";
 
-            if (_preparationResult.ReadyToWrite)
+            if (_preparedIso?.UserSelected == true)
+                ActivityLog.Warning("Preparation", PlanStatus);
+            else if (_preparationResult.ReadyToWrite)
                 ActivityLog.Success("Preparation", PlanStatus);
             else
                 ActivityLog.Warning("Preparation", PlanStatus);
@@ -1249,6 +1275,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UpdateTargetModeUi()
     {
+        UpdateWindowsIsoOptionsVisibility();
         var thisComputerSelected =
             _targetMode == InstallationTargetMode.ThisComputer;
 
@@ -1266,6 +1293,89 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SystemCombo.SelectedItem is ISystemModule { Id: "macos" }
                 ? "Other computer · macOS needs the target computer's hardware before CorePilot can safely build a hardware-specific installer."
                 : "Other computer · Windows/Linux media is prepared without using this PC's TPM, CPU, Secure Boot or firmware state as a compatibility gate.";
+    }
+
+    private void UpdateWindowsIsoOptionsVisibility()
+    {
+        if (WindowsIsoOptionsPanel is null)
+            return;
+
+        WindowsIsoOptionsPanel.Visibility =
+            SystemCombo.SelectedItem is ISystemModule { Id: "windows" }
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        WindowsIsoChecksumPanel.Visibility =
+            _selectedWindowsIsoPath is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ChooseWindowsIso_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanChangeInputs)
+            return;
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose an existing Windows ISO",
+            Filter = "ISO image (*.iso)|*.iso",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        _selectedWindowsIsoPath = Path.GetFullPath(dialog.FileName);
+        WindowsIsoChecksumTextBox.Clear();
+        WindowsImageSourceStatus =
+            $"Custom ISO: {Path.GetFileName(_selectedWindowsIsoPath)}. Origin still not verified.";
+        OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        UpdateWindowsIsoOptionsVisibility();
+        InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void UseOfficialWindowsIso_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanChangeInputs)
+            return;
+
+        ResetWindowsIsoSelection();
+        InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void WindowsIsoChecksum_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_selectedWindowsIsoPath is not null && CanChangeInputs)
+            InvalidatePreparedImageAfterSourceChange();
+    }
+
+    private void ResetWindowsIsoSelection()
+    {
+        _selectedWindowsIsoPath = null;
+        if (WindowsIsoChecksumTextBox is not null)
+            WindowsIsoChecksumTextBox.Clear();
+        WindowsImageSourceStatus = "Microsoft download will be used.";
+        OnPropertyChanged(nameof(WindowsImageSourceStatusTone));
+        UpdateWindowsIsoOptionsVisibility();
+    }
+
+    private void InvalidatePreparedImageAfterSourceChange()
+    {
+        if (_preparedIso is not null)
+        {
+            ResetPreparedMedia();
+            if (SystemCombo.SelectedItem is ISystemModule module &&
+                VariantCombo.SelectedItem is SystemVariant target &&
+                _compatibilityReport is not null)
+            {
+                _preparationResult = BuildPreparationResult(module, target);
+                ApplyPreparationResultToUi(module, target);
+            }
+        }
+
+        PlanStatus = _verificationCompleted
+            ? "Installation image choice updated. Press Prepare media to check your selected image."
+            : "Installation image choice updated. Run Verify before preparing media.";
+        RefreshActionAvailability();
     }
 
     private void SetSegmentButtonState(Button button, bool selected)
@@ -1475,6 +1585,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void VariantCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _windowsCompatibilityMedia = false;
+        ResetWindowsIsoSelection();
         UpdateTargetModeUi();
         _verificationCompleted = false;
         CompatibilityItems.Clear();
@@ -1793,7 +1904,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ActivityLog.Progress(
             "Preparation",
-            $"Resolving and preparing the current official {target.DisplayName} installer image…");
+            module.Id == "windows" && _selectedWindowsIsoPath is not null
+                ? "Checking the Windows ISO you selected…"
+                : $"Resolving and preparing the current official {target.DisplayName} installer image…");
 
         var progress = new Progress<string>(message =>
         {
@@ -1805,6 +1918,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _preparedIso = module.Id switch
         {
+            "windows" when _selectedWindowsIsoPath is not null =>
+                await _customWindowsIsoPreparation.PrepareAsync(
+                    target,
+                    _selectedWindowsIsoPath,
+                    WindowsIsoChecksumTextBox.Text,
+                    progress,
+                    cancellationToken),
             "windows" => await _windowsIsoPreparation.PrepareAsync(
                 target,
                 progress,
@@ -1824,6 +1944,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             module.Id == "windows"
                 ? CurrentWindowsMediaOptions
                 : null;
+
+        if (_preparedIso.UserSelected)
+        {
+            WindowsImageSourceStatus = _preparedIso.ExpectedSha256 is null
+                ? "Custom ISO checked. Origin still not verified."
+                : "Checksum matches the value you entered. Origin still not verified.";
+        }
 
         ActivityLog.Info(
             "Installer image",
@@ -1886,6 +2013,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 throw new InvalidOperationException(
                     $"USB target is blocked: {inspected.Summary}");
 
+            if (module.Id == "windows")
+                WindowsInstallerUsbWriter.EnsureImageIsNotOnTargetUsb(_preparedIso, inspected);
+
             var phrase = module.Id == "windows"
                 ? WindowsInstallerUsbWriter.RequiredConfirmationPhrase(
                     inspected,
@@ -1942,10 +2072,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 throw new InvalidOperationException(
                     "Physical writer completed without a verified result.");
 
-            PlanStatus =
-                $"USB READY ✅ {target.DisplayName} · Disk {_lastGenericUsbWrite.TargetDiskIndex} · " +
-                $"verified write transcript {_lastGenericUsbWrite.TranscriptSha256[..16]}….";
-            ActivityLog.Success("Physical write", PlanStatus);
+            PlanStatus = _preparedIso.UserSelected
+                ? $"USB READY ⚠ {target.DisplayName} written to disk {_lastGenericUsbWrite.TargetDiskIndex}. Custom ISO origin still not verified."
+                : $"USB READY ✅ {target.DisplayName} · Disk {_lastGenericUsbWrite.TargetDiskIndex} · " +
+                  $"verified write transcript {_lastGenericUsbWrite.TranscriptSha256[..16]}….";
+            if (_preparedIso.UserSelected)
+                ActivityLog.Warning("Physical write", PlanStatus);
+            else
+                ActivityLog.Success("Physical write", PlanStatus);
         }
         catch (Exception ex)
         {
@@ -1990,12 +2124,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (imagePrepared)
             {
                 genericItems.Add(new(
-                    PreparationItemState.ResolvedAutomatically,
+                    _preparedIso!.UserSelected
+                        ? PreparationItemState.UnverifiedOrigin
+                        : PreparationItemState.ResolvedAutomatically,
                     "Installer image",
-                    _preparedIso!.FileName,
-                    _preparedIso.ExpectedSha256 is null
-                        ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
-                        : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
+                    _preparedIso.FileName,
+                    _preparedIso.UserSelected
+                        ? _preparedIso.ExpectedSha256 is null
+                            ? "You selected this file yourself. We checked its installer structure and recorded its checksum, but its origin is not verified."
+                            : "The checksum matches the value you entered. Origin still not verified."
+                        : _preparedIso.ExpectedSha256 is null
+                            ? $"Official image downloaded and locally SHA-256 locked: {_preparedIso.Sha256}."
+                            : $"Official image downloaded and verified against publisher SHA-256: {_preparedIso.Sha256}.",
                     _preparedIso.SourceUrl));
 
                 if (system.Id == "windows" &&
@@ -2144,20 +2284,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 x.State is CompatibilityState.Warning or CompatibilityState.Unknown) == true;
 
         CompatibilityVerdict =
-            _preparationResult.ReadyToWrite && compatibilityWarnings
+            _preparationResult.ReadyToWrite && _preparedIso?.UserSelected == true
+                ? "READY TO WRITE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
+                : _preparationResult.ReadyToWrite && compatibilityWarnings
                 ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
+                : IsMediaPreparationApplicable && _selectedWindowsIsoPath is not null && system.Id == "windows"
+                    ? "READY TO PREPARE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
                 : IsMediaPreparationApplicable
                     ? "VERIFIED · READY TO PREPARE MEDIA"
                 : _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
-            ? compatibilityWarnings
+            ? _preparedIso?.UserSelected == true
+                ? $"CorePilot checked the structure and architecture of your {target.DisplayName} installer. Its origin is not verified, even if your checksum matches."
+                : compatibilityWarnings
                 ? $"CorePilot prepared and validated writable {target.DisplayName} installer media for {TargetComputerLabel}, but the remaining compatibility warnings are not claimed as solved."
                 : $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : IsMediaPreparationApplicable
-                    ? $"Compatibility and trusted sources were checked for {target.DisplayName}. Click Prepare media to start downloading or building the installer."
+                    ? system.Id == "windows" && _selectedWindowsIsoPath is not null
+                        ? $"Compatibility was checked for {target.DisplayName}. Click Prepare media to inspect your selected ISO without downloading one."
+                        : $"Compatibility and trusted sources were checked for {target.DisplayName}. Click Prepare media to start downloading or building the installer."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
 
         if (system.Id != "macos")

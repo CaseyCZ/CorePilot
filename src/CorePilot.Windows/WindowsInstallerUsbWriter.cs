@@ -14,6 +14,24 @@ public sealed class WindowsInstallerUsbWriter
         PropertyNameCaseInsensitive = true
     };
 
+    public static void EnsureImageIsNotOnTargetUsb(
+        PreparedIsoImage image,
+        UsbTargetSafetyReport target)
+    {
+        if (!image.UserSelected)
+            return;
+
+        var imageRoot = Path.GetPathRoot(image.IsoPath)?.TrimEnd('\\');
+        if (string.IsNullOrEmpty(imageRoot) || imageRoot.Length != 2 || imageRoot[1] != ':')
+            return;
+
+        if (target.Partitions.SelectMany(x => x.Volumes).Any(volume =>
+                volume.DriveLetter.TrimEnd('\\').Equals(
+                    imageRoot, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException(
+                "The selected ISO is stored on the USB you are about to erase. Move it to your computer first.");
+    }
+
     public static string RequiredConfirmationPhrase(
         UsbTargetSafetyReport target,
         PreparedIsoImage image,
@@ -56,6 +74,8 @@ public sealed class WindowsInstallerUsbWriter
             throw new InvalidOperationException(
                 "The selected target is not a safe writable USB disk.");
 
+        EnsureImageIsNotOnTargetUsb(image, freshTarget);
+
         var expectedPhrase = RequiredConfirmationPhrase(
             freshTarget,
             image,
@@ -82,6 +102,11 @@ public sealed class WindowsInstallerUsbWriter
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(
                 "Prepared Windows ISO changed after Verify.");
+
+        if (image.UserSelected && image.ExpectedSha256 is not null &&
+            !actualIsoSha.Equals(image.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException(
+                "The selected ISO no longer matches the checksum you entered.");
 
         var isoLength = new FileInfo(image.IsoPath).Length;
         if (freshTarget.SizeBytes < isoLength + 1024L * 1024L * 1024L)
@@ -278,6 +303,7 @@ param(
     [Parameter(Mandatory=$true)][Int64]$ExpectedSize,
     [Parameter(Mandatory=$true)][string]$ExpectedSerialB64,
     [Parameter(Mandatory=$true)][string]$IsoPathB64,
+    [Parameter(Mandatory=$true)][string]$ExpectedIsoSha256,
     [Parameter(Mandatory=$true)][string]$DiskPartScriptB64,
     [Parameter(Mandatory=$true)][string]$ResultPathB64,
     [Parameter(Mandatory=$true)][string]$DriveLetter,
@@ -340,6 +366,13 @@ if (-not [string]::IsNullOrWhiteSpace($expectedSerial) -and
 
 if (-not (Test-Path -LiteralPath $isoPath)) {
     throw "Prepared Windows ISO disappeared before writing."
+}
+
+# Check the exact bytes again inside the elevated erase boundary. The user
+# may have selected a file outside CorePilot's cache, which can be replaced.
+$actualIsoSha256 = (Get-FileHash -LiteralPath $isoPath -Algorithm SHA256).Hash
+if (-not [string]::Equals($actualIsoSha256, $ExpectedIsoSha256, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The Windows ISO changed after preparation. USB erasure was blocked."
 }
 
 $mounted = $null
@@ -525,6 +558,8 @@ finally {
             B64(target.SerialNumber),
             "-IsoPathB64",
             B64(image.IsoPath),
+            "-ExpectedIsoSha256",
+            image.Sha256,
             "-DiskPartScriptB64",
             B64(diskPartPath),
             "-ResultPathB64",

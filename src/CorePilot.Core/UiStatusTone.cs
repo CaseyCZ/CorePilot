@@ -34,6 +34,7 @@ public static class UiStatusTone
         if (value.Contains('⚠') ||
             value.Contains("WARNING") ||
             value.Contains("REVIEW") ||
+            value.Contains("ORIGIN NOT VERIFIED") ||
             value.Contains("MANUAL") ||
             value.Contains("REQUIRED FIX") ||
             value.Contains("INSPECTION REQUIRED") ||

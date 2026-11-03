@@ -69,7 +69,9 @@ For **Windows 11**, This computer mode evaluates the detected PC first. If TPM 2
 
 In **Other computer** mode, Windows/Linux media preparation intentionally ignores this PC's TPM, CPU, Secure Boot and firmware state. Because the target hardware is unknown, CorePilot prepares standard Windows media and does not claim target-PC compatibility.
 
-Prepare media resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted official ISO, splits `install.wim` when it exceeds FAT32 limits, applies the selected setup compatibility profile when required and re-hashes critical boot files.
+For the official download, Prepare media resolves the selected Windows download path only (Windows 10 does not depend on the Windows 11 page, and vice versa) plus the common GitHub-verified Fido resolver. Alternatively, select **Choose ISO file…** to use a Windows installer ISO already on your computer. CorePilot inspects its boot files, Windows version and x64 architecture, computes SHA-256 and optionally compares it with a checksum you enter. **A user-selected checksum does not prove official origin:** the custom ISO remains amber / **origin not verified**, even when it matches. The original ISO is not copied or modified. It is re-hashed before writing and must not be stored on the USB being erased.
+
+The physical writer rechecks the exact USB identity inside the elevated erase boundary, creates GPT/FAT32 media, copies the mounted ISO, splits `install.wim` when it exceeds FAT32 limits, applies the selected setup compatibility profile when required and re-hashes critical boot files.
 
 **Linux** verification is scoped to the selected distribution only. Prepare media downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
 

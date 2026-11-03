@@ -12,7 +12,8 @@ public sealed record PreparedIsoImage(
     bool IntegrityVerified,
     long SizeBytes,
     string ManifestPath,
-    string Provenance);
+    string Provenance,
+    bool UserSelected = false);
 
 public sealed record GenericUsbWriteResult(
     string SystemId,

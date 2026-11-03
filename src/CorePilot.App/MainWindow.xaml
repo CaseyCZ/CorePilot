@@ -139,6 +139,41 @@
                                    Foreground="{StaticResource MutedBrush}"
                                    Margin="0,0,0,12"/>
 
+                        <StackPanel x:Name="WindowsIsoOptionsPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                            <TextBlock Text="Windows installation image"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="Download from Microsoft, or use an ISO file you already have."
+                                       Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,7"/>
+                            <Button Content="Choose ISO file…"
+                                    Click="ChooseWindowsIso_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0,0,0,6"/>
+                            <Button Content="Use Microsoft download instead"
+                                    Click="UseOfficialWindowsIso_OnClick"
+                                    IsEnabled="{Binding CanChangeInputs}"
+                                    Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding WindowsImageSourceStatus}"
+                                       Tag="{Binding WindowsImageSourceStatusTone}"
+                                       Style="{StaticResource StatusTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <StackPanel x:Name="WindowsIsoChecksumPanel" Visibility="Collapsed">
+                                <TextBlock Text="Expected checksum (optional)"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrush}"/>
+                                <TextBox x:Name="WindowsIsoChecksumTextBox"
+                                         IsEnabled="{Binding CanChangeInputs}"
+                                         TextChanged="WindowsIsoChecksum_OnTextChanged"
+                                         MaxLength="64"
+                                         ToolTip="Paste a SHA-256 checksum from a source you trust."
+                                         Margin="0,4,0,5"/>
+                                <TextBlock Text="A matching checksum does not confirm that the ISO is original."
+                                           Foreground="{StaticResource StatusWarningTextBrush}"
+                                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            </StackPanel>
+                        </StackPanel>
+
                         <Button Content="Verify"
                                 Click="Verify_OnClick"
                                 IsEnabled="{Binding CanVerify}"
