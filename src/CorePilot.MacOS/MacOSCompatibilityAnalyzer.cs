@@ -128,26 +128,40 @@ public sealed class MacOSCompatibilityAnalyzer
                     "The OCLP supported-model table lists MacBookPro14,2 with native graphics support.",
                     "No legacy graphics root patch should be assumed from the model alone; the selected macOS still needs its own patch-readiness checks.",
                     OclpModels));
+            }
 
+            if (hardware.Model.Equals("MacBookPro14,2", StringComparison.OrdinalIgnoreCase) ||
+                hardware.Model.Equals("MacBookPro14,3", StringComparison.OrdinalIgnoreCase))
+            {
                 findings.Add(new(
                     CompatibilityState.ActionRequired,
                     "T1 / Wi-Fi / USB",
                     "Selected macOS needs legacy hardware patch readiness checks",
-                    "MacBookPro14,2 includes legacy components whose patch requirements can change between macOS releases.",
-                    "Before CorePilot enables this installation, verify the current OCLP status for T1, wireless and USB on the selected macOS.",
+                    $"{hardware.Model} includes an Apple T1 chip and legacy components whose patch requirements can change between macOS releases.",
+                    "Check the selected OCLP release for T1, wireless and USB support before preparing an installer.",
                     target.Id == "tahoe-26"
                         ? OclpTahoeTracking
                         : OclpModels));
+
+                findings.Add(new(
+                    CompatibilityState.Warning,
+                    "Data safety",
+                    "Preserve the T1 firmware when installing Sonoma or newer",
+                    "Erasing the entire internal disk in Disk Utility can remove the T1 firmware, affecting Touch Bar and Touch ID.",
+                    "Back up the Mac first. If reinstalling, erase only the macOS volume, not the entire internal disk; follow OCLP's T1 recovery guidance.",
+                    "https://dortania.github.io/OpenCore-Legacy-Patcher/TROUBLESHOOT-HARDWARE.html#no-t1-functionality-after-installing-sonoma-or-newer"));
             }
 
             findings.Add(new(
-                CompatibilityState.Blocked,
+                CompatibilityState.ActionRequired,
                 "macOS",
-                $"{target.DisplayName} is not install-ready in CorePilot on this 2017 MacBook Pro",
-                "Apple lists macOS Ventura as the last natively compatible macOS for the 2017 MacBook Pro generation. The selected target therefore requires a verified legacy-Mac patcher path.",
                 target.Id == "tahoe-26"
-                    ? "Do not treat Tahoe as ready from model support alone. CorePilot keeps writing blocked until the current OCLP Tahoe path and required hardware patches are verified."
-                    : "CorePilot keeps writing blocked until the required OCLP path is implemented and verified for this target.",
+                    ? "Tahoe may be possible with the experimental OCLP 3.0 preview"
+                    : $"{target.DisplayName} requires OpenCore Legacy Patcher",
+                "Ventura is the last macOS version supported natively on this 2017 MacBook Pro. OCLP supports additional versions, but that is not the same as official Apple support or a CorePilot-ready USB writer.",
+                target.Id == "tahoe-26"
+                    ? "Tahoe support is preliminary in the OCLP 3.0 release candidate. Check the current release notes, hardware patches and warnings before installing on a Mac. System instability or data loss are possible. CorePilot for Windows cannot create a full native Mac installer."
+                    : "Check the model-specific OCLP release guidance and create the native macOS installer on a Mac. CorePilot for Windows does not perform this write.",
                 target.Id == "tahoe-26"
                     ? OclpTahoeTracking
                     : OclpModels));

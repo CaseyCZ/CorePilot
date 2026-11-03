@@ -32,6 +32,10 @@ The main UI exposes **Verify**, **Create installation USB** and a context-sensit
 
 For a genuine Apple Mac, the Windows app displays an **English-language installer guide** and keeps physical USB writing **disabled**. A full Apple installation USB must be created on a compatible Mac using Apple's `createinstallmedia` process:
 
+For a **2017 MacBook Pro**, Ventura 13 is the last natively supported macOS. Sonoma and Sequoia can have an OCLP-assisted manual installation path. **Tahoe 26 has preliminary support in the OCLP 3.0 release-candidate series**; CorePilot labels it amber and links to [Dortania's Tahoe progress and warnings](https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1167). An OCLP-supported model does **not** mean a stable installation or that every feature will work. The prerelease may be unstable or cause data loss. It is not a CorePilot USB-write capability.
+
+On T1-equipped 2017 Touch Bar models such as `MacBookPro14,2` or `MacBookPro14,3`, **back up the Mac and do not erase the entire internal disk** when installing Sonoma or newer: [Dortania warns this can remove T1 firmware](https://dortania.github.io/OpenCore-Legacy-Patcher/TROUBLESHOOT-HARDWARE.html#no-t1-functionality-after-installing-sonoma-or-newer). Erase only the intended macOS volume when the official procedure calls for it.
+
 1. On a compatible Mac, get the full macOS installer from Apple.
 2. Connect a **32 GB or larger** USB disk, back up its contents and identify its exact volume. The installer process erases the USB.
 3. Follow [Apple's bootable installer instructions](https://support.apple.com/en-us/101578) on that Mac.

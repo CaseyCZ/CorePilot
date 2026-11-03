@@ -509,9 +509,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                  _hardwareReport is not null &&
                  MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport))
         {
-            PlanStatus = _compatibilityReport.CanProceed
-                ? "NATIVE MAC · This target is compatible, but the full installer must be created on a Mac. Open the Genuine Apple Mac installer guide. CorePilot will not erase a USB for this path."
-                : "LEGACY MAC · This macOS target needs additional OpenCore Legacy Patcher support. Check the official guide; CorePilot will not write an unverified installer.";
+            var needsOclp = _compatibilityReport.Findings.Any(x =>
+                x.Component.Equals("Patcher", StringComparison.OrdinalIgnoreCase));
+            PlanStatus = needsOclp
+                ? target.Id == "tahoe-26"
+                    ? "OCLP PREVIEW ⚠ Tahoe may be possible on this MacBook with experimental OCLP 3.0. Review the official guidance and risks. CorePilot for Windows cannot write this native installer."
+                    : "OCLP REQUIRED ⚠ This macOS version needs OpenCore Legacy Patcher. Review model-specific requirements and create the installer on a Mac."
+                : "NATIVE MAC · This target is compatible, but the full installer must be created on a Mac. Open the Genuine Apple Mac installer guide. CorePilot will not erase a USB for this path.";
             ActivityLog.Warning("Preparation", PlanStatus);
         }
         else if (IsMediaPreparationApplicable)
@@ -2563,12 +2567,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             system.Id == "macos" &&
             _hardwareReport is not null &&
             MacOSCompatibilityAnalyzer.IsGenuineAppleMac(_hardwareReport);
+        var needsOclp = genuineApple &&
+                        _compatibilityReport?.Findings.Any(x =>
+                            x.Component.Equals("Patcher", StringComparison.OrdinalIgnoreCase)) == true;
 
         CompatibilityVerdict =
             genuineApple
-                ? _compatibilityReport?.CanProceed == true
-                    ? "NATIVE MAC · CREATE INSTALLER ON A MAC"
-                    : "LEGACY MAC · REVIEW OCLP REQUIREMENTS"
+                ? needsOclp
+                    ? target.Id == "tahoe-26"
+                        ? "OCLP PREVIEW ⚠ TAHOE — MANUAL INSTALL"
+                        : "OCLP REQUIRED ⚠ MANUAL INSTALL"
+                    : _compatibilityReport?.CanProceed == true
+                        ? "NATIVE MAC · CREATE INSTALLER ON A MAC"
+                        : "LEGACY MAC · REVIEW OCLP REQUIREMENTS"
                 : _preparationResult.ReadyToWrite && _preparedIso?.UserSelected == true
                 ? "READY TO WRITE ⚠ CUSTOM ISO — ORIGIN NOT VERIFIED"
                 : _preparationResult.ReadyToWrite && compatibilityWarnings
@@ -2580,7 +2591,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 : _preparationResult.Verdict;
 
         CompatibilityInstallPath = genuineApple
-            ? "CorePilot does not create full native Apple macOS installation media from Windows. Use the Genuine Apple Mac installer guide above. Unsupported Mac models also require an OCLP compatibility review."
+            ? needsOclp
+                ? "Your Mac is not natively supported for this macOS version. An OCLP installation may be possible, but you must check the current model-specific patches and release warnings. Create the installer on a compatible Mac; CorePilot for Windows will not erase a USB for this path."
+                : "CorePilot does not create full native Apple macOS installation media from Windows. Use the Genuine Apple Mac installer guide above."
             : _preparationResult.ReadyToWrite
             ? _preparedIso?.UserSelected == true
                 ? $"CorePilot checked the structure and architecture of your {target.DisplayName} installer. Its origin is not verified, even if your checksum matches."
