@@ -55,7 +55,7 @@ The current non-destructive pipeline includes hardware discovery, compatibility,
 
 ### Current guarded writer ✅
 
-The simple UI separates **Verify**, **Prepare media**, and **Write to disk**.
+The simple UI uses **Verify**, followed by **Create installation USB** with a separate erase confirmation for Windows/Linux. Hardware-specific macOS preparation still uses the guarded **Advanced options** workflow.
 
 For supported Hackintosh/OpenCore targets, **Verify** checks hardware and resolves compatibility. **Prepare media** then performs the non-destructive payload stages:
 
@@ -93,7 +93,7 @@ The physical writer rechecks the exact USB identity inside the elevated erase bo
 
 **Linux** verification is scoped to the selected distribution only. Prepare media downloads the official ISO and official SHA-256 metadata for that distribution. The physical writer rechecks the target identity, raw-writes the verified image and performs a full SHA-256 read-back over the written image length.
 
-Windows and Linux use **Verify → Prepare media → READY TO WRITE → Write to disk**. Verify does not begin a large download; Prepare media downloads and validates the selected official installer image before USB is selected.
+Windows and Linux use **Verify → select USB → Create installation USB → confirm erase → write**. Verify does not begin a large download; the USB is checked before CorePilot prepares the installer.
 
 ## Support Bundle
 

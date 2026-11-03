@@ -77,7 +77,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
-    private string _planStatus = "Choose a system and version, then Verify. Media downloads begin only after Prepare media.";
+    private string _planStatus = "Choose a system and version, then Verify. Installer downloads begin only after you select USB and click Create installation USB.";
     private string _usbSafetyStatus = "USB is optional during Verify. Connect/select it only when the prepared system is ready to write.";
     private string _compatibilitySummary = "Select a system and press Verify. CorePilot will scan hardware, search for solutions, configure and validate an installation path.";
     private string _compatibilityVerdict = "NOT PREPARED";
@@ -527,7 +527,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? $"READY TO WRITE ⚠ {target.DisplayName} installer media is prepared for {TargetComputerLabel}, but compatibility warnings remain. " +
                   $"{_preparationResult.Summary}. Review Preparation before writing."
                 : $"READY TO WRITE ✅ {target.DisplayName} is prepared for {TargetComputerLabel}. " +
-                  $"{_preparationResult.Summary}. Connect/select USB and press Write to disk.";
+                  $"{_preparationResult.Summary}. Select USB and create the installation media.";
 
             if (compatibilityWarnings)
                 ActivityLog.Warning("Preparation", PlanStatus);
@@ -1515,7 +1515,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         PlanStatus = _verificationCompleted
-            ? "Installation image choice updated. Press Prepare media to check your selected image."
+            ? "Installation image choice updated. Select USB and click Create installation USB."
             : "Installation image choice updated. Run Verify before preparing media.";
         RefreshActionAvailability();
     }
@@ -2489,8 +2489,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
                 : IsMediaPreparationApplicable
                     ? system.Id == "windows" && _selectedWindowsIsoPath is not null
-                        ? $"Compatibility was checked for {target.DisplayName}. Click Prepare media to inspect your selected ISO without downloading one."
-                        : $"Compatibility and trusted sources were checked for {target.DisplayName}. Click Prepare media to start downloading or building the installer."
+                        ? $"Compatibility was checked for {target.DisplayName}. Select USB and click Create installation USB to inspect your ISO."
+                        : system.Id is "windows" or "linux"
+                            ? $"Compatibility and sources were checked for {target.DisplayName}. Select USB and click Create installation USB."
+                            : $"Compatibility and sources were checked for {target.DisplayName}. Use Advanced options to prepare the installer."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
 
         if (system.Id != "macos")
@@ -2583,7 +2585,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             CompatibilityInstallPath =
-                $"Installation path: Verify will prepare the selected official {system.DisplayName} installer image for {TargetComputerLabel} before Write to disk is enabled.";
+                $"Installation path: Verify checks compatibility for {TargetComputerLabel}; Create installation USB prepares the selected {system.DisplayName} image only after a USB is chosen.";
         }
 
         var requirements = new List<string>();
