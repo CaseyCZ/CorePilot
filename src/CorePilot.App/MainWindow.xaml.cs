@@ -66,12 +66,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string? _preparationFailure;
     private OnlineSourceSnapshot? _lastOnlineSourceSnapshot;
     private bool _verificationCompleted;
+    private CancellationTokenSource? _activePreparationCancellation;
     private InstallationTargetMode _targetMode = InstallationTargetMode.ThisComputer;
     private bool _windowsCompatibilityMedia;
 
     private string _scanStatus = "Not scanned";
     private string _deepScanStatus = "Deep scan not run. It downloads the official Hardware-Sniffer-CLI release on first use.";
-    private string _planStatus = "Choose a system and version, then press Verify. USB is only needed after CorePilot reports READY TO WRITE.";
+    private string _planStatus = "Choose a system and version, then Verify. Media downloads begin only after Prepare media.";
     private string _usbSafetyStatus = "USB is optional during Verify. Connect/select it only when the prepared system is ready to write.";
     private string _compatibilitySummary = "Select a system and press Verify. CorePilot will scan hardware, search for solutions, configure and validate an installation path.";
     private string _compatibilityVerdict = "NOT PREPARED";
@@ -89,12 +90,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<PreparationItem> PreparationItems { get; } = [];
     public ActivityLogService ActivityLog => App.Log;
 
-    public bool CanChangeInputs => !ActivityLog.IsBusy;
-    public bool CanCreateSupportBundle => !ActivityLog.IsBusy;
-    public bool CanVerify => !ActivityLog.IsBusy;
+    public bool CanChangeInputs => _activePreparationCancellation is null && !ActivityLog.IsBusy;
+    public bool CanCreateSupportBundle => _activePreparationCancellation is null && !ActivityLog.IsBusy;
+    public bool CanVerify => _activePreparationCancellation is null && !ActivityLog.IsBusy;
+    public bool CanCancel => _activePreparationCancellation is not null;
+    public bool CanPrepareMedia =>
+        _activePreparationCancellation is null &&
+        !ActivityLog.IsBusy &&
+        IsMediaPreparationApplicable;
+    private bool IsMediaPreparationApplicable =>
+        _verificationCompleted &&
+        _compatibilityReport?.CanProceed == true &&
+        _lastOnlineSourceSnapshot?.TrustedForWrite == true &&
+        _preparationResult?.ReadyToWrite != true &&
+        (SystemCombo.SelectedItem is ISystemModule { Id: "windows" or "linux" } ||
+         SystemCombo.SelectedItem is ISystemModule { Id: "macos" } &&
+         _targetMode == InstallationTargetMode.ThisComputer &&
+         _automationProfile is { CanBuildEfi: true, RequiresReview: false } &&
+         _autoResolution?.AutomaticConfigurationReady == true);
     public bool CanWriteToDisk =>
+        _activePreparationCancellation is null &&
         !ActivityLog.IsBusy &&
         _verificationCompleted &&
+        _lastOnlineSourceSnapshot?.TrustedForWrite == true &&
         _preparationResult?.ReadyToWrite == true;
     public string WriteToDiskToolTip =>
         _preparationResult is null
@@ -186,6 +204,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _authorizationTimer.Start();
         Closed += (_, _) =>
         {
+            _activePreparationCancellation?.Cancel();
             _authorizationTimer.Stop();
             _authorizationTimer.Tick -= AuthorizationTimer_OnTick;
             ActivityLog.PropertyChanged -= ActivityLog_OnPropertyChanged;
@@ -201,7 +220,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += async (_, _) =>
         {
             await RefreshDrivesAsync(silentNoUsb: true);
-            PlanStatus = "Choose a system, version and target computer, then press Verify. CorePilot will prepare and validate the selected installation path automatically.";
+            PlanStatus = "Choose a system, version and target computer. Verify checks compatibility; Prepare media downloads the installer only when requested.";
             UsbSafetyStatus = "USB is optional while preparing the system. Connect it when CorePilot reports READY TO WRITE.";
         };
     }
@@ -214,6 +233,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             PlanStatus = "Choose a system and version first.";
             return;
         }
+
+        if (_activePreparationCancellation is not null)
+            return;
+
+        using var cancellation = new CancellationTokenSource();
+        _activePreparationCancellation = cancellation;
+        RefreshActionAvailability();
+
+        try
+        {
+            await VerifySelectionAsync(module, target, cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            _verificationCompleted = false;
+            _preparationResult = null;
+            _preparedIso = null;
+            PlanStatus = "Verification cancelled. Nothing was written to USB.";
+            ActivityLog.Warning("Verification", PlanStatus);
+        }
+        catch (Exception ex)
+        {
+            _verificationCompleted = false;
+            _preparationResult = null;
+            PlanStatus = $"Verification failed: {ex.Message}";
+            ActivityLog.Error("Verification", PlanStatus, ex);
+        }
+        finally
+        {
+            _activePreparationCancellation = null;
+            RefreshActionAvailability();
+        }
+    }
+
+    private async Task VerifySelectionAsync(
+        ISystemModule module,
+        SystemVariant target,
+        CancellationToken cancellationToken)
+    {
 
         _verificationCompleted = false;
         _preparationResult = null;
@@ -247,7 +306,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Refreshing current {module.DisplayName} sources…");
 
             _lastOnlineSourceSnapshot =
-                await _onlineSources.ResolveForTargetAsync(module.Id, target.Id);
+                await _onlineSources.ResolveForTargetAsync(module.Id, target.Id, cancellationToken);
 
             foreach (var source in _lastOnlineSourceSnapshot.Sources)
             {
@@ -272,10 +331,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             var preparationKnowledge = (
                 await Task.WhenAll(
-                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "installation"),
-                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "configuration"),
-                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "remediation"),
-                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "media-writer")))
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "installation", cancellationToken),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "configuration", cancellationToken),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "remediation", cancellationToken),
+                    _onlineSources.GetKnowledgeSourcesAsync(module.Id, "media-writer", cancellationToken)))
                 .SelectMany(x => x)
                 .DistinctBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -288,6 +347,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     string.Join(", ", preparationKnowledge.Select(x => x.Name).Take(12)));
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             ActivityLog.Info(
@@ -299,6 +362,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             PlanStatus = $"Preparing {target.DisplayName} for this computer: scanning hardware and searching for usable installation paths…";
             await ScanHardwareAsync();
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (module.Id == "windows" && target.Id == "windows-11")
                 ApplyAutomaticWindows11CompatibilityRemediation();
@@ -316,12 +380,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             try
             {
                 await TryAutomaticMacResolutionAsync(target);
-
-                if (_autoResolution?.AutomaticConfigurationReady == true &&
-                    _automationProfile is { CanBuildEfi: true, RequiresReview: false })
-                {
-                    await PrepareMacOSPayloadAsync(target);
-                }
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -332,21 +395,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ex);
             }
         }
-        else if (_compatibilityReport?.CanProceed == true)
-        {
-            try
-            {
-                await PrepareGenericIsoAsync(module, target);
-            }
-            catch (Exception ex)
-            {
-                _preparationFailure = ex.Message;
-                ActivityLog.Error(
-                    "Preparation",
-                    $"Automatic {module.DisplayName} media preparation stopped safely: {ex.Message}",
-                    ex);
-            }
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (_compatibilityReport is null)
         {
@@ -359,7 +408,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var relevantCriticalFailures =
             CountRelevantCriticalSourceFailures(module, target);
         var onlineReady =
-            _lastOnlineSourceSnapshot is not null &&
+            _lastOnlineSourceSnapshot?.TrustedForWrite == true &&
             relevantCriticalFailures == 0;
 
         _preparationResult = BuildPreparationResult(module, target);
@@ -386,9 +435,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var failures = relevantCriticalFailures;
             PlanStatus =
-                $"NOT READY · {failures} critical online source(s) could not be refreshed live. " +
-                "CorePilot will not prepare writable media from stale critical data.";
+                $"NOT READY · {failures} required source check(s) did not pass. " +
+                "An unverified/cached catalog or stale critical source cannot authorize USB writing.";
             ActivityLog.Warning("Preparation", PlanStatus);
+        }
+        else if (IsMediaPreparationApplicable)
+        {
+            PlanStatus = $"VERIFIED · {target.DisplayName} compatibility and sources checked. Press Prepare media to download the installer. No ISO has been downloaded.";
+            ActivityLog.Success("Verification", PlanStatus);
         }
         else if (_preparationResult.ReadyToWrite)
         {
@@ -425,11 +479,102 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private void CancelPreparation_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_activePreparationCancellation is null)
+            return;
+
+        _activePreparationCancellation.Cancel();
+        PlanStatus = "Cancelling the current check or download…";
+        ActivityLog.Info("Cancel", "Cancellation requested. Waiting for the current safe operation to stop.");
+        RefreshActionAvailability();
+    }
+
+    private async void PrepareMedia_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanPrepareMedia ||
+            SystemCombo.SelectedItem is not ISystemModule module ||
+            VariantCombo.SelectedItem is not SystemVariant target)
+            return;
+
+        using var cancellation = new CancellationTokenSource();
+        _activePreparationCancellation = cancellation;
+        RefreshActionAvailability();
+
+        try
+        {
+            ActivityLog.Start("Preparation", $"Preparing {target.DisplayName} on explicit user request…");
+            if (module.Id == "macos")
+            {
+                // The macOS staging pipeline currently has non-cancellable external
+                // operations. Keep cancellation effective at its safe boundaries.
+                cancellation.Token.ThrowIfCancellationRequested();
+                await PrepareMacOSPayloadAsync(target);
+            }
+            else
+            {
+                await PrepareGenericIsoAsync(module, target, cancellation.Token);
+            }
+
+            cancellation.Token.ThrowIfCancellationRequested();
+            _preparationFailure = null;
+            _preparationResult = BuildPreparationResult(module, target);
+            ApplyPreparationResultToUi(module, target);
+            PlanStatus = _preparationResult.ReadyToWrite
+                ? $"READY TO WRITE · {target.DisplayName} installer verified. Select a USB drive and press Write to disk."
+                : $"Preparation completed, but {target.DisplayName} is not ready to write. Review Preparation for unresolved items.";
+
+            if (_preparationResult.ReadyToWrite)
+                ActivityLog.Success("Preparation", PlanStatus);
+            else
+                ActivityLog.Warning("Preparation", PlanStatus);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            ResetPreparedMedia();
+            _preparationResult = BuildPreparationResult(module, target);
+            ApplyPreparationResultToUi(module, target);
+            PlanStatus = "Preparation cancelled. The USB drive was not modified.";
+            ActivityLog.Warning("Preparation", PlanStatus);
+        }
+        catch (Exception ex)
+        {
+            ResetPreparedMedia();
+            _preparationFailure = ex.Message;
+            _preparationResult = BuildPreparationResult(module, target);
+            ApplyPreparationResultToUi(module, target);
+            PlanStatus = $"Preparation failed: {ex.Message}";
+            ActivityLog.Error("Preparation", PlanStatus, ex);
+        }
+        finally
+        {
+            _activePreparationCancellation = null;
+            RefreshActionAvailability();
+        }
+    }
+
+    private void ResetPreparedMedia()
+    {
+        _preparedIso = null;
+        _preparedWindowsMediaOptions = null;
+        _lastGenericUsbWrite = null;
+        _opCoreStage = null;
+        _lastEfiBuild = null;
+        _lastRecovery = null;
+        _lastInstallerManifest = null;
+        _lastUsbWritePlan = null;
+        _lastUsbExecutionPreflight = null;
+        _lastUsbTypedConfirmation = null;
+        InvalidateWorkflowAfter(
+            MacOSWorkflowPhase.CompatibilityReady,
+            "Prepared payload invalidated; verification may be reused but USB authorization was revoked.");
+    }
+
     private int CountRelevantCriticalSourceFailures(
         ISystemModule module,
         SystemVariant target)
     {
-        if (_lastOnlineSourceSnapshot is null)
+        if (_lastOnlineSourceSnapshot?.TrustedForWrite != true)
             return 1;
 
         if (module.Id == "macos" &&
@@ -519,9 +664,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _lastOnlineSourceSnapshot =
                 await _onlineSources.ResolveForTargetAsync("macos", variant.Id);
 
-            if (_lastOnlineSourceSnapshot.CriticalFailures != 0)
+            if (!_lastOnlineSourceSnapshot.TrustedForWrite)
                 throw new InvalidOperationException(
-                    $"{_lastOnlineSourceSnapshot.CriticalFailures} critical online source(s) are not live. Physical writing was blocked.");
+                    "A verified live catalog and live critical sources are required. Physical writing was blocked.");
 
             if (_deepScanExport is null ||
                 _opCoreStage is null ||
@@ -559,9 +704,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var finalSourceSnapshot =
                 await _onlineSources.ResolveForTargetAsync("macos", variant.Id);
 
-            if (finalSourceSnapshot.CriticalFailures != 0)
+            if (!finalSourceSnapshot.TrustedForWrite)
                 throw new InvalidOperationException(
-                    $"{finalSourceSnapshot.CriticalFailures} critical online source(s) are no longer live. Physical writing was blocked.");
+                    "The verified live catalog or a critical source is no longer available. Physical writing was blocked.");
 
             var currentOpCoreSimplify = finalSourceSnapshot.Sources.SingleOrDefault(x =>
                 x.Id.Equals(
@@ -761,6 +906,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanChangeInputs));
         OnPropertyChanged(nameof(CanCreateSupportBundle));
         OnPropertyChanged(nameof(CanVerify));
+        OnPropertyChanged(nameof(CanPrepareMedia));
+        OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CanWriteToDisk));
         OnPropertyChanged(nameof(WriteToDiskToolTip));
     }
@@ -1610,7 +1757,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task PrepareGenericIsoAsync(
         ISystemModule module,
-        SystemVariant target)
+        SystemVariant target,
+        CancellationToken cancellationToken)
     {
         if (_compatibilityReport?.CanProceed != true)
             return;
@@ -1621,6 +1769,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var progress = new Progress<string>(message =>
         {
+            if (cancellationToken.IsCancellationRequested)
+                return;
             PlanStatus = message;
             ActivityLog.Progress("Installer image", message);
         });
@@ -1629,10 +1779,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             "windows" => await _windowsIsoPreparation.PrepareAsync(
                 target,
-                progress),
+                progress,
+                cancellationToken),
             "linux" => await _linuxIsoPreparation.PrepareAsync(
                 target,
-                progress),
+                progress,
+                cancellationToken),
             _ => null
         };
 
@@ -1695,9 +1847,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"Re-validating {target.DisplayName} preparation and USB target…");
 
             var live = await _onlineSources.ResolveForTargetAsync(module.Id, target.Id);
-            if (live.CriticalFailures != 0)
+            if (!live.TrustedForWrite)
                 throw new InvalidOperationException(
-                    $"{live.CriticalFailures} critical online source(s) are not live. Writing was blocked.");
+                    "A verified live catalog and live critical sources are required. Writing was blocked.");
 
             var inspected = await _usbSafetyInspector.InspectAsync(usb);
             UsbSafetyStatus = inspected.Summary;
@@ -1826,8 +1978,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         "Windows media mode",
                         _preparedWindowsMediaOptions.ModeText,
                         _preparedWindowsMediaOptions.ExtendedHardwareCompatibility
-                            ? "Verify locked the UEFI/FAT32 Windows 11 compatibility path with the implemented Windows Setup TPM/Secure Boot remediation."
-                            : "Verify locked the standard Windows media path for Write to disk."));
+                            ? "Prepare media locked the UEFI/FAT32 Windows 11 compatibility path with the implemented Windows Setup TPM/Secure Boot remediation."
+                            : "Prepare media locked the standard Windows media path for Write to disk."));
                 }
             }
 
@@ -1966,6 +2118,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompatibilityVerdict =
             _preparationResult.ReadyToWrite && compatibilityWarnings
                 ? "READY TO WRITE · REVIEW COMPATIBILITY WARNINGS"
+                : IsMediaPreparationApplicable
+                    ? "VERIFIED · READY TO PREPARE MEDIA"
                 : _preparationResult.Verdict;
 
         CompatibilityInstallPath = _preparationResult.ReadyToWrite
@@ -1974,6 +2128,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 : $"CorePilot found, configured and validated a writable {target.DisplayName} installation path for {TargetComputerLabel}."
             : _preparationResult.SystemPrepared
                 ? $"CorePilot found and validated an installation path for {target.DisplayName}, but the physical writer for this path is not implemented yet."
+                : IsMediaPreparationApplicable
+                    ? $"Compatibility and trusted sources were checked for {target.DisplayName}. Click Prepare media to start downloading or building the installer."
                 : $"CorePilot searched the currently implemented safe paths for {target.DisplayName}; unresolved or manual items still prevent a validated writable result.";
 
         if (system.Id != "macos")

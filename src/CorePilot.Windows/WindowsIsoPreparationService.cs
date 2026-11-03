@@ -221,13 +221,22 @@ public sealed class WindowsIsoPreparationService
             ?? throw new InvalidOperationException(
                 "Unable to start the verified Windows ISO resolver.");
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        await process.WaitForExitAsync(cancellationToken);
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
+        string stdout;
+        string stderr;
+        try
+        {
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            stdout = await stdoutTask;
+            stderr = await stderrTask;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+            throw;
+        }
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException(

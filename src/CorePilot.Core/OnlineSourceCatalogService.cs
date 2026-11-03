@@ -68,6 +68,10 @@ public sealed record OnlineSourceSnapshot(
     public int CriticalFailures => Sources.Count(x =>
         x.Critical &&
         (!x.Success || !x.Live));
+
+    // Live upstream responses do not make a cached/unverified catalog safe to
+    // use for an operation that can erase a physical disk.
+    public bool TrustedForWrite => CatalogFromRemote && CriticalFailures == 0;
 }
 
 public sealed class OnlineSourceCatalogService

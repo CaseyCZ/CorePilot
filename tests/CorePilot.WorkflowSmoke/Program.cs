@@ -1221,6 +1221,20 @@ try
     Assert(
         offlineSnapshot.CriticalFailures > 0,
         "cached/offline critical sources must not authorize physical writing");
+
+    // Even if all upstream URLs happen to be live, an offline/bundled catalog
+    // is not an execution-trusted source of disk-writing instructions.
+    var unverifiedButReachable = offlineSnapshot with
+    {
+        Sources = Array.Empty<OnlineSourceResolution>()
+    };
+    Assert(
+        unverifiedButReachable.CriticalFailures == 0 &&
+        !unverifiedButReachable.TrustedForWrite,
+        "a cached catalog must not authorize disk writing just because sources respond");
+    Assert(
+        (unverifiedButReachable with { CatalogFromRemote = true }).TrustedForWrite,
+        "a verified remote catalog with no critical failures is eligible for writing");
 }
 finally
 {
@@ -1279,6 +1293,8 @@ foreach (var requiredMainControl in new[]
     "x:Name=\"SystemCombo\"",
     "x:Name=\"VariantCombo\"",
     "Content=\"Verify\"",
+    "Content=\"Prepare media\"",
+    "Content=\"Cancel current operation\"",
     "x:Name=\"UsbCombo\"",
     "Content=\"Write to disk\"",
     "Header=\"Hardware\"",
@@ -1290,6 +1306,29 @@ foreach (var requiredMainControl in new[]
 }
 
 Console.WriteLine("CorePilot explicit dark-theme and main-workflow XAML smoke test OK");
+
+var mainCode = await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "CorePilot.App", "MainWindow.xaml.cs"));
+var verificationStart = mainCode.IndexOf("private async Task VerifySelectionAsync(", StringComparison.Ordinal);
+var mediaPrepareStart = mainCode.IndexOf("private async void PrepareMedia_OnClick(", StringComparison.Ordinal);
+var genericPrepareStart = mainCode.IndexOf("private async Task PrepareGenericIsoAsync(", StringComparison.Ordinal);
+Assert(verificationStart >= 0 && mediaPrepareStart > verificationStart && genericPrepareStart > mediaPrepareStart,
+    "separate verification and media-preparation handlers must be present");
+var verificationSection = mainCode[verificationStart..mediaPrepareStart];
+Assert(!verificationSection.Contains("PrepareGenericIsoAsync(", StringComparison.Ordinal) &&
+       !verificationSection.Contains("PrepareMacOSPayloadAsync(", StringComparison.Ordinal),
+    "Verify must not download full installer media or build a macOS recovery payload");
+var prepareSection = mainCode[mediaPrepareStart..genericPrepareStart];
+Assert(prepareSection.Contains("PrepareGenericIsoAsync(module, target, cancellation.Token)", StringComparison.Ordinal) &&
+       prepareSection.Contains("ResetPreparedMedia();", StringComparison.Ordinal) &&
+       mainCode.Contains("public bool CanCancel", StringComparison.Ordinal),
+    "Prepare media must be cancellable and revoke any incomplete payload");
+
+var windowsIsoCode = await File.ReadAllTextAsync(Path.Combine(
+    repoRoot, "src", "CorePilot.Windows", "WindowsIsoPreparationService.cs"));
+Assert(windowsIsoCode.Contains("process.Kill(entireProcessTree: true)", StringComparison.Ordinal),
+    "cancelling Windows preparation must stop the active Fido resolver process");
+
+Console.WriteLine("CorePilot Verify/Prepare/Cancel separation regression smoke test OK");
 
 static string FindRepoRoot()
 {
