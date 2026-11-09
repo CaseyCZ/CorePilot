@@ -1,13 +1,8 @@
 bin/
 obj/
-artifacts/
-TestResults/
 .vs/
-.idea/
+out/
 *.user
 *.suo
-Thumbs.db
-.DS_Store
-.cache/
-downloads/
-logs/
+*.pdb
+**/__pycache__/
