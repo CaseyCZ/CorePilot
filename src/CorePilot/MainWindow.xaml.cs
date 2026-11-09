@@ -14,6 +14,12 @@ public partial class MainWindow : Window
     private readonly MediaBridge _media = new();
     private readonly DispatcherTimer _mediaTimer = new() { Interval = TimeSpan.FromSeconds(1.5) };
     private readonly DispatcherTimer _systemTimer = new() { Interval = TimeSpan.FromMilliseconds(900) };
+    private readonly DispatcherTimer _hoverTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private readonly DispatcherTimer _leaveTimer = new() { Interval = TimeSpan.FromMilliseconds(530) };
+    private bool _expanded, _hiddenForFullscreen;
+    private string _tab = "media";
+    private const double CompactWidth = 240;
+    private const double CompactHeight = 46;
     private readonly System.Windows.Forms.NotifyIcon _tray = new();
     private ClipboardMonitor? _clipboard;
     private WidgetWindow? _widget;
@@ -26,6 +32,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _mediaTimer.Tick += async (_, _) => await RefreshMediaAsync();
+        _hoverTimer.Tick += (_, _) => { _hoverTimer.Stop(); if (IsMouseOver) ExpandIsland(); };
+        _leaveTimer.Tick += (_, _) => { _leaveTimer.Stop(); if (!IsMouseOver) CollapseIsland(); };
         _systemTimer.Tick += (_, _) =>
         {
             try { RefreshSystem(); }
@@ -39,7 +47,7 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        SetWindowSize(false);
+        SetWindowSize(false, false);
         try
         {
             _clipboard = new ClipboardMonitor(this);
@@ -58,6 +66,8 @@ public partial class MainWindow : Window
         KeysCheck.IsChecked = _settings.ShowKeyNotification;
         DarkCheck.IsChecked = _settings.DarkTheme;
         AnimationsCheck.IsChecked = _settings.Animations;
+        HoverCheck.IsChecked = _settings.HoverToExpand;
+        FullscreenCheck.IsChecked = _settings.HideInFullscreen;
         ApplyTheme();
         try { ConfigureTray(); }
         catch (Exception ex) { StartupDiagnostics.Log("Tray initialization", ex); }
@@ -101,7 +111,9 @@ public partial class MainWindow : Window
             ArtworkPlaceholder.Visibility = snapshot.Artwork is null ? Visibility.Visible : Visibility.Collapsed;
             PlayButton.Content = snapshot.Playing ? "Ⅱ" : "▶";
             TimeElapsed.Text = UiText.Time(snapshot.Position);
-            TimeRemaining.Text = UiText.Time(snapshot.Duration);
+            TimeRemaining.Text = snapshot.Duration.TotalSeconds > 0
+                ? "-" + UiText.Time(snapshot.Duration > snapshot.Position ? snapshot.Duration - snapshot.Position : TimeSpan.Zero)
+                : "—:—";
             SeekSlider.IsEnabled = snapshot.Available && snapshot.Duration.TotalSeconds > 0;
             SeekSlider.Maximum = Math.Max(1, snapshot.Duration.TotalSeconds);
             if (!SeekSlider.IsMouseCaptureWithin)
@@ -109,8 +121,8 @@ public partial class MainWindow : Window
             if (_widget is not null)
             {
                 _widget.Update(snapshot);
-                if (snapshot.Available && !_widget.IsVisible) _widget.Show();
-                else if (!snapshot.Available && _widget.IsVisible) _widget.Hide();
+                if (_hiddenForFullscreen || !snapshot.Available) { if (_widget.IsVisible) _widget.Hide(); }
+                else if (!_widget.IsVisible) _widget.Show();
             }
         }
         catch (Exception ex)
@@ -128,6 +140,8 @@ public partial class MainWindow : Window
     {
         if (_disposed) return;
         ClockText.Text = DateTime.Now.ToString("H:mm");
+        UpdateFullscreenVisibility();
+        if (_hiddenForFullscreen) return;
         if (DateTime.UtcNow >= _statusUntil) StatusText.Visibility = Visibility.Collapsed;
         bool caps = KeyboardStatus.CapsLock, num = KeyboardStatus.NumLock;
         if (_settings.ShowKeyNotification)
@@ -157,37 +171,124 @@ public partial class MainWindow : Window
         StatusText.Visibility = Visibility.Visible;
         _statusUntil = DateTime.UtcNow.AddSeconds(2.4);
     }
-    private void SetWindowSize(bool expanded)
+    private void Island_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        Width = expanded ? 760 : 326; Height = expanded ? 475 : 58;
-        Left = (SystemParameters.PrimaryScreenWidth - Width) / 2; Top = 0;
+        _leaveTimer.Stop();
+        if (!_expanded && _settings.HoverToExpand) { _hoverTimer.Stop(); _hoverTimer.Start(); }
+    }
+    private void Island_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _hoverTimer.Stop();
+        if (_expanded) { _leaveTimer.Stop(); _leaveTimer.Start(); }
+    }
+    private void Island_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape) { CollapseIsland(); e.Handled = true; }
+    }
+    private double CenterLeft(double width)
+    {
+        var screen = System.Windows.Forms.Screen.PrimaryScreen;
+        if (screen is null) return (SystemParameters.PrimaryScreenWidth - width) / 2;
+        var deviceCenter = new Point(screen.Bounds.Left + screen.Bounds.Width / 2.0, 0);
+        var source = PresentationSource.FromVisual(this);
+        var composition = source?.CompositionTarget;
+        double centerX = composition is null
+            ? SystemParameters.PrimaryScreenWidth / 2.0
+            : composition.TransformFromDevice.Transform(deviceCenter).X;
+        return centerX - width / 2.0;
+    }
+    private void AnimateWindow(double width, double height, bool animate)
+    {
+        var desiredLeft = CenterLeft(width);
+        if (!animate || !_settings.Animations)
+        {
+            BeginAnimation(WidthProperty, null); BeginAnimation(HeightProperty, null);
+            BeginAnimation(LeftProperty, null);
+            Width = width; Height = height; Left = desiredLeft; Top = 0;
+            return;
+        }
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(350);
+        BeginAnimation(WidthProperty, new DoubleAnimation(width, duration) { EasingFunction = easing });
+        BeginAnimation(HeightProperty, new DoubleAnimation(height, duration) { EasingFunction = easing });
+        BeginAnimation(LeftProperty, new DoubleAnimation(desiredLeft, duration) { EasingFunction = easing });
+    }
+    private void SetWindowSize(bool expanded, bool animate = true)
+    {
+        double width = expanded ? (_tab == "media" ? 470 : 535) : CompactWidth;
+        double height = expanded ? (_tab == "media" ? 246 : _tab == "clipboard" ? 340 : 366) : CompactHeight;
+        AnimateWindow(width, height, animate);
     }
     private void ExpandIsland()
     {
-        if (_disposed) return;
-        SetWindowSize(true); ExpandedPanel.Visibility = Visibility.Visible;
+        if (_disposed || _hiddenForFullscreen) return;
+        _hoverTimer.Stop(); _leaveTimer.Stop();
+        _expanded = true;
+        CompactHeader.Visibility = Visibility.Collapsed;
+        ExpandedHeader.Visibility = Visibility.Visible;
+        ExpandedBody.Visibility = Visibility.Visible;
+        ShowTab(_tab);
+        ExpandedBody.BeginAnimation(OpacityProperty, null);
         if (_settings.Animations)
         {
-            ExpandedPanel.Opacity = 0;
-            ExpandedPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(180))));
-        } else ExpandedPanel.Opacity = 1;
-        Activate();
+            ExpandedBody.Opacity = 0;
+            ExpandedBody.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(210))
+                { BeginTime = TimeSpan.FromMilliseconds(90) });
+        }
+        else ExpandedBody.Opacity = 1;
     }
-    private void CollapseIsland() { ExpandedPanel.Visibility = Visibility.Collapsed; SetWindowSize(false); }
+    private void CollapseIsland()
+    {
+        _hoverTimer.Stop(); _leaveTimer.Stop();
+        if (!_expanded) return;
+        _expanded = false;
+        CompactHeader.Visibility = Visibility.Visible;
+        ExpandedHeader.Visibility = Visibility.Collapsed;
+        SetWindowSize(false);
+        ExpandedBody.BeginAnimation(OpacityProperty, null);
+        if (_settings.Animations)
+        {
+            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(130));
+            fade.Completed += (_, _) => { if (!_expanded) ExpandedBody.Visibility = Visibility.Collapsed; };
+            ExpandedBody.BeginAnimation(OpacityProperty, fade);
+        }
+        else { ExpandedBody.Opacity = 0; ExpandedBody.Visibility = Visibility.Collapsed; }
+    }
     private void ToggleIsland_Click(object sender, RoutedEventArgs e)
     {
-        if (ExpandedPanel.Visibility == Visibility.Visible) CollapseIsland(); else ExpandIsland();
+        if (_expanded) CollapseIsland(); else ExpandIsland();
     }
     private void Collapse_Click(object sender, RoutedEventArgs e) => CollapseIsland();
     private void ShowTab(string tab)
     {
+        _tab = tab;
         MediaSection.Visibility = tab == "media" ? Visibility.Visible : Visibility.Collapsed;
         ClipboardSection.Visibility = tab == "clipboard" ? Visibility.Visible : Visibility.Collapsed;
         SettingsSection.Visibility = tab == "settings" ? Visibility.Visible : Visibility.Collapsed;
+        SectionTitle.Text = tab == "media" ? "  ·  Hudba" : tab == "clipboard" ? "  ·  Schránka" : "  ·  Nastavení";
+        if (_expanded) SetWindowSize(true);
     }
     private void MediaTab_Click(object sender, RoutedEventArgs e) => ShowTab("media");
     private void ClipboardTab_Click(object sender, RoutedEventArgs e) => ShowTab("clipboard");
     private void SettingsTab_Click(object sender, RoutedEventArgs e) => ShowTab("settings");
+    private void UpdateFullscreenVisibility()
+    {
+        if (!_settings.HideInFullscreen && !_hiddenForFullscreen) return;
+        bool fullscreen = _settings.HideInFullscreen && FullscreenWatcher.IsFullscreenApplicationForeground();
+        if (fullscreen == _hiddenForFullscreen) return;
+        _hiddenForFullscreen = fullscreen;
+        if (fullscreen)
+        {
+            CollapseIsland(); Hide();
+            if (_widget?.IsVisible == true) _widget.Hide();
+        }
+        else
+        {
+            ShowActivated = false; Show(); SetWindowSize(false, false);
+            if (_widget is not null && _currentMedia.Available && !_widget.IsVisible) _widget.Show();
+        }
+    }
     private async void Play_Click(object sender, RoutedEventArgs e) {
         try { await _media.ToggleAsync(); await RefreshMediaAsync(); }
         catch { ShowStatus("Přehrávač příkaz nepodporuje"); }
@@ -239,6 +340,8 @@ public partial class MainWindow : Window
         _settings.ShowKeyNotification = KeysCheck.IsChecked == true;
         _settings.DarkTheme = DarkCheck.IsChecked == true;
         _settings.Animations = AnimationsCheck.IsChecked == true;
+        _settings.HoverToExpand = HoverCheck.IsChecked == true;
+        _settings.HideInFullscreen = FullscreenCheck.IsChecked == true;
         _clipboard?.SetEnabled(_settings.ClipboardEnabled);
         if (!_settings.ClipboardEnabled) _clipboard?.Clear();
         ApplyTheme();
@@ -256,6 +359,8 @@ public partial class MainWindow : Window
     private void ApplyTheme()
     {
         bool dark = _settings.DarkTheme;
+        ChangeBrush("IslandBrush", dark ? "#F5080A11" : "#F6F7FAFF");
+        ChangeBrush("IslandBorderBrush", dark ? "#516B7D" : "#B7C2D0");
         ChangeBrush("PanelBrush", dark ? "#EF131A2A" : "#F3F7FBFF");
         ChangeBrush("PrimaryBrush", dark ? "#F5F8FF" : "#172136");
         ChangeBrush("SecondaryBrush", dark ? "#A6B4CC" : "#596B81");
@@ -277,7 +382,7 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         _disposed = true;
-        _mediaTimer.Stop(); _systemTimer.Stop();
+        _mediaTimer.Stop(); _systemTimer.Stop(); _hoverTimer.Stop(); _leaveTimer.Stop();
         _clipboard?.Dispose(); _widget?.Close(); _widget = null;
         _tray.Visible = false;
         _tray.ContextMenuStrip?.Dispose();
