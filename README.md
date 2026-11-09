@@ -10,6 +10,10 @@ A compact Dynamic Island-inspired companion for **Windows 10 and Windows 11**. A
 
 </div>
 
+![CorePilot product design concept](docs/product-concept.svg)
+
+*Design concept — not a screenshot of the current preview build.*
+
 ## One island, fewer distractions
 
 - **Now Playing:** artwork, track, artist, playback, seeking where supported

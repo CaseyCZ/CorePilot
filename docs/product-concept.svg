@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="CorePilot dark desktop concept with top island, media player, volume and taskbar widget">
+<defs>
+<linearGradient id="desk" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#061329"/><stop offset=".53" stop-color="#1843a5"/><stop offset="1" stop-color="#101a4a"/></linearGradient>
+<linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#192d50" stop-opacity=".95"/><stop offset="1" stop-color="#142039" stop-opacity=".93"/></linearGradient>
+<linearGradient id="art" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#dcb3d7"/><stop offset=".65" stop-color="#e68a99"/><stop offset="1" stop-color="#524790"/></linearGradient>
+<filter id="blur"><feGaussianBlur stdDeviation="45"/></filter>
+<filter id="shadow" x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000916" flood-opacity=".6"/></filter>
+</defs>
+<rect width="1280" height="720" fill="url(#desk)"/>
+<path d="M0 540Q180 440 400 555T800 500T1280 315V720H0Z" fill="#2d73ed" opacity=".5" filter="url(#blur)"/>
+<path d="M0 660Q340 385 550 580T1000 465T1280 555V720H0Z" fill="#8e64e4" opacity=".47"/>
+<path d="M0 640Q260 525 500 640T990 510T1280 570" fill="none" stroke="#56d5ff" stroke-width="7" opacity=".55" filter="url(#blur)"/>
+<rect x="444" y="-7" width="392" height="73" rx="38" fill="#040609" stroke="#56708c"/>
+<circle cx="499" cy="33" r="18" stroke="#22e68a" stroke-width="3" fill="#071c16"/>
+<path d="m502 19-12 17h11l-5 12 15-21h-11z" fill="#22e68a"/>
+<text x="640" y="43" text-anchor="middle" font-family="Segoe UI,Arial" font-size="27" font-weight="700" fill="#fff">9:33</text>
+<g fill="#fff"><rect x="755" y="28" width="4" height="15" rx="2"/><rect x="764" y="21" width="4" height="22" rx="2"/><rect x="773" y="26" width="4" height="17" rx="2"/><rect x="782" y="32" width="4" height="11" rx="2"/></g>
+<rect x="360" y="72" width="560" height="254" rx="28" fill="url(#panel)" stroke="#6d89b4" filter="url(#shadow)"/>
+<rect x="392" y="101" width="94" height="94" rx="16" fill="url(#art)"/>
+<path d="M392 159Q431 125 486 164V195H392Z" fill="#655b86"/><path d="M392 182Q439 151 486 175V195H392Z" fill="#263656"/>
+<text x="513" y="137" font-family="Segoe UI,Arial" font-size="24" font-weight="650" fill="#fff">Now playing</text>
+<text x="513" y="163" font-family="Segoe UI,Arial" font-size="16" fill="#b5c9e4">Your favorite artist</text>
+<text x="608" y="245" text-anchor="middle" font-family="Segoe UI,Arial" font-size="27" fill="white">❮❮</text>
+<circle cx="685" cy="234" r="27" fill="#425574"/><path d="M677 220v29l25-15z" fill="white"/>
+<text x="762" y="245" text-anchor="middle" font-family="Segoe UI,Arial" font-size="27" fill="white">❯❯</text>
+<rect x="415" y="283" width="450" height="5" rx="3" fill="#4d627e"/><rect x="415" y="283" width="178" height="5" rx="3" fill="#e4f5ff"/><circle cx="593" cy="285.5" r="8" fill="#fff"/>
+<text x="393" y="293" fill="#dce6f5" font-family="Segoe UI,Arial" font-size="12">1:35</text><text x="874" y="293" fill="#dce6f5" font-family="Segoe UI,Arial" font-size="12">3:28</text>
+<rect x="935" y="115" width="235" height="67" rx="22" fill="#1c355b" stroke="#637ca4" filter="url(#shadow)"/>
+<text x="965" y="158" font-size="26" fill="white">◖))</text><rect x="1035" y="145" width="100" height="7" rx="4" fill="#66799b"/><rect x="1035" y="145" width="66" height="7" rx="4" fill="#dcecf7"/>
+<rect y="661" width="1280" height="59" fill="#0d1b37" fill-opacity=".87" stroke="#4a6588"/>
+<rect x="790" y="671" width="267" height="42" rx="21" fill="#1b3155" stroke="#627ea4"/>
+<rect x="800" y="679" width="32" height="28" rx="6" fill="url(#art)"/>
+<text x="846" y="688" font-family="Segoe UI,Arial" font-weight="600" font-size="12" fill="white">Now playing</text><text x="846" y="701" font-family="Segoe UI,Arial" font-size="10" fill="#b9c8db">CorePilot</text><text x="1035" y="696" fill="white" font-size="17" text-anchor="middle">Ⅱ</text>
+<g fill="#8decc5"><rect x="25" y="679" width="15" height="15"/><rect x="43" y="679" width="15" height="15"/><rect x="25" y="697" width="15" height="15"/><rect x="43" y="697" width="15" height="15"/></g>
+<text x="84" y="700" font-family="Segoe UI,Arial" font-size="15" fill="#cbd9ef">CorePilot desktop concept</text>
+</svg>
