@@ -188,7 +188,7 @@ public partial class MainWindow : Window
     }
     private void RestoreClipboard_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: ClipboardEntry entry }) {
+        if (sender is System.Windows.Controls.Button { Tag: ClipboardEntry entry }) {
             _clipboard?.Restore(entry);
             ShowStatus("Zkopírováno");
         }
@@ -212,8 +212,8 @@ public partial class MainWindow : Window
     }
     private static void ChangeBrush(string key, string color)
     {
-        if (Application.Current.Resources[key] is SolidColorBrush brush)
-            brush.Color = (Color)ColorConverter.ConvertFromString(color);
+        if (System.Windows.Application.Current.Resources[key] is SolidColorBrush brush)
+            brush.Color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color);
     }
     private void ApplyTheme()
     {

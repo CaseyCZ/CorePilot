@@ -38,15 +38,15 @@ public sealed class ClipboardMonitor : IDisposable
     {
         try {
             ClipboardEntry? entry = null;
-            if (Clipboard.ContainsImage()) {
-                BitmapSource? image = Clipboard.GetImage();
+            if (System.Windows.Clipboard.ContainsImage()) {
+                BitmapSource? image = System.Windows.Clipboard.GetImage();
                 if (image is not null && image.PixelWidth > 0 && image.PixelHeight > 0
                     && (long)image.PixelWidth * image.PixelHeight <= 4_000_000) {
                     image.Freeze();
                     entry = new ClipboardEntry($"Obrázek {image.PixelWidth} × {image.PixelHeight}", null, image, DateTime.Now);
                 }
-            } else if (Clipboard.ContainsText()) {
-                string value = Clipboard.GetText();
+            } else if (System.Windows.Clipboard.ContainsText()) {
+                string value = System.Windows.Clipboard.GetText();
                 if (!string.IsNullOrWhiteSpace(value) && value.Length <= 100_000) {
                     string title = value.Replace('\r', ' ').Replace('\n', ' ');
                     if (title.Length > 78) title = title[..78] + "…";
@@ -66,7 +66,7 @@ public sealed class ClipboardMonitor : IDisposable
     }
     public void Restore(ClipboardEntry entry)
     {
-        try { if (entry.IsImage) Clipboard.SetImage(entry.Picture!); else if (entry.Text is not null) Clipboard.SetText(entry.Text); }
+        try { if (entry.IsImage) System.Windows.Clipboard.SetImage(entry.Picture!); else if (entry.Text is not null) System.Windows.Clipboard.SetText(entry.Text); }
         catch (ExternalException) { }
     }
     public void Clear() => Entries.Clear();
