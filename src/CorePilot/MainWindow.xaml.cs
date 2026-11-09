@@ -189,7 +189,7 @@ public partial class MainWindow : Window
     {
         var screen = System.Windows.Forms.Screen.PrimaryScreen;
         if (screen is null) return (SystemParameters.PrimaryScreenWidth - width) / 2;
-        var deviceCenter = new Point(screen.Bounds.Left + screen.Bounds.Width / 2.0, 0);
+        var deviceCenter = new System.Windows.Point(screen.Bounds.Left + screen.Bounds.Width / 2.0, 0);
         var source = PresentationSource.FromVisual(this);
         var composition = source?.CompositionTarget;
         double centerX = composition is null
