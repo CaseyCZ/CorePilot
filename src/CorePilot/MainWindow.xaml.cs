@@ -18,7 +18,7 @@ public partial class MainWindow : Window
     private ClipboardMonitor? _clipboard;
     private WidgetWindow? _widget;
     private MediaSnapshot _currentMedia = MediaSnapshot.Empty;
-    private bool _mediaRefreshing, _updatingVolume, _ready, _disposed, _lastCaps, _lastNum, _lastMuted;
+    private bool _mediaRefreshing, _mediaErrorReported, _updatingVolume, _ready, _disposed, _lastCaps, _lastNum, _lastMuted;
     private int _lastVolume = -1;
     private DateTime _statusUntil;
 
@@ -26,15 +26,31 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _mediaTimer.Tick += async (_, _) => await RefreshMediaAsync();
-        _systemTimer.Tick += (_, _) => RefreshSystem();
+        _systemTimer.Tick += (_, _) =>
+        {
+            try { RefreshSystem(); }
+            catch (Exception ex)
+            {
+                StartupDiagnostics.Log("System status update", ex);
+                _systemTimer.Stop();
+            }
+        };
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         SetWindowSize(false);
-        _clipboard = new ClipboardMonitor(this);
-        _clipboard.SetEnabled(_settings.ClipboardEnabled);
-        ClipboardList.ItemsSource = _clipboard.Entries;
+        try
+        {
+            _clipboard = new ClipboardMonitor(this);
+            _clipboard.SetEnabled(_settings.ClipboardEnabled);
+            ClipboardList.ItemsSource = _clipboard.Entries;
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.Log("Optional clipboard monitor", ex);
+            ClipboardCheck.IsEnabled = false;
+        }
         _lastCaps = KeyboardStatus.CapsLock; _lastNum = KeyboardStatus.NumLock;
         ClipboardCheck.IsChecked = _settings.ClipboardEnabled;
         WidgetCheck.IsChecked = _settings.TaskbarWidget;
@@ -42,7 +58,16 @@ public partial class MainWindow : Window
         KeysCheck.IsChecked = _settings.ShowKeyNotification;
         DarkCheck.IsChecked = _settings.DarkTheme;
         AnimationsCheck.IsChecked = _settings.Animations;
-        ApplyTheme(); ConfigureTray(); ApplyWidget();
+        ApplyTheme();
+        try { ConfigureTray(); }
+        catch (Exception ex) { StartupDiagnostics.Log("Tray initialization", ex); }
+        try { ApplyWidget(); }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.Log("Optional mini player", ex);
+            _widget = null;
+            WidgetCheck.IsEnabled = false;
+        }
         ClockText.Text = DateTime.Now.ToString("H:mm");
         _ready = true; _mediaTimer.Start(); _systemTimer.Start();
         await RefreshMediaAsync();
@@ -86,6 +111,14 @@ public partial class MainWindow : Window
                 _widget.Update(snapshot);
                 if (snapshot.Available && !_widget.IsVisible) _widget.Show();
                 else if (!snapshot.Available && _widget.IsVisible) _widget.Hide();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!_mediaErrorReported)
+            {
+                StartupDiagnostics.Log("Media session refresh", ex);
+                _mediaErrorReported = true;
             }
         }
         finally { _mediaRefreshing = false; }
@@ -208,12 +241,17 @@ public partial class MainWindow : Window
         _settings.Animations = AnimationsCheck.IsChecked == true;
         _clipboard?.SetEnabled(_settings.ClipboardEnabled);
         if (!_settings.ClipboardEnabled) _clipboard?.Clear();
-        ApplyTheme(); ApplyWidget(); _settings.Save();
+        ApplyTheme();
+        try { ApplyWidget(); }
+        catch (Exception ex) { StartupDiagnostics.Log("Mini player settings", ex); WidgetCheck.IsEnabled = false; }
+        _settings.Save();
     }
     private static void ChangeBrush(string key, string color)
     {
-        if (System.Windows.Application.Current.Resources[key] is SolidColorBrush brush)
-            brush.Color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color);
+        // WPF may freeze brushes defined in application resources.
+        // Replacing the resource avoids an InvalidOperationException on startup.
+        System.Windows.Application.Current.Resources[key] =
+            new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
     }
     private void ApplyTheme()
     {

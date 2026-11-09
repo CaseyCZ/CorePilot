@@ -1,5 +1,7 @@
 # CorePilot — Your desktop, one beautiful island
 
+**Version 1.0.1:** Fixes a startup crash on some Windows systems and validates the installed application before publishing.
+
 A modern desktop companion for **Windows 10 and Windows 11**.
 
 - **Now Playing:** cover art, track information, play/pause, previous/next and supported seeking

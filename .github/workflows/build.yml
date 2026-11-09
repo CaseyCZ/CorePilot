@@ -45,6 +45,10 @@ jobs:
           -p:PublishTrimmed=false
           --output out/win-x64
 
+      - name: Test application startup on Windows
+        shell: pwsh
+        run: .\\scripts\\smoke-startup.ps1 -Executable 'out/win-x64/CorePilot.exe' -HoldSeconds 10
+
       - name: Install Inno Setup compiler
         shell: pwsh
         run: |
@@ -64,6 +68,23 @@ jobs:
           $setup = Get-Item 'out\release\CorePilot-Setup.exe' -ErrorAction Stop
           if ($setup.Length -lt 1048576) { throw 'The generated installer is unexpectedly small.' }
           Write-Host "Installer: $($setup.Name), $([math]::Round($setup.Length / 1MB, 1)) MB"
+
+      - name: Test installed app startup on Windows
+        shell: pwsh
+        run: |
+          $setup = Resolve-Path 'out/release/CorePilot-Setup.exe'
+          $installed = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "Installer failed with $($installed.ExitCode)." }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs/CorePilot/CorePilot.exe'
+          .\\scripts\\smoke-startup.ps1 -Executable $exe -HoldSeconds 10
+
+      - name: Save startup crash log if testing fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CorePilot-startup-diagnostics
+          path: ${{ runner.temp }}/CorePilot-startup.log
+          if-no-files-found: ignore
 
       - name: Upload installer for test builds
         uses: actions/upload-artifact@v4
