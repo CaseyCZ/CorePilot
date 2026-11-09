@@ -5,7 +5,7 @@ using System.Windows.Threading;
 
 namespace CorePilot;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     public App()
     {
@@ -28,7 +28,7 @@ public partial class App : Application
         args.Handled = true;
         try
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 "CorePilot narazil na chybu. Podrobnosti najdeš v %LOCALAPPDATA%\\CorePilot\\logs\\startup.log.",
                 "CorePilot", MessageBoxButton.OK, MessageBoxImage.Error);
         }
