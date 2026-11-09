@@ -35,12 +35,19 @@ public sealed class MediaBridge
             var key = $"{session.SourceAppUserModelId}|{details.Title}|{details.Artist}";
             if (_artworkKey != key) { _artworkKey = key; _artwork = await DecodeArtworkAsync(details.Thumbnail); }
             return new MediaSnapshot(
-                string.IsNullOrWhiteSpace(details.Title) ? "Neznámá skladba" : details.Title,
-                string.IsNullOrWhiteSpace(details.Artist) ? "Neznámý interpret" : details.Artist,
+                CleanMediaText(details.Title, "Neznámá skladba"),
+                CleanMediaText(details.Artist, "Interpret není uveden"),
                 _artwork, playback.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
                 position, duration, true);
         }
         catch { _session = null; _artworkKey = null; _artwork = null; return MediaSnapshot.Empty; }
+    }
+    private static string CleanMediaText(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        var text = new string(value.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (text.Contains('\uFFFD') || string.IsNullOrWhiteSpace(text)) return fallback;
+        return text.Length > 160 ? text[..160] : text;
     }
     private static async Task<BitmapSource?> DecodeArtworkAsync(IRandomAccessStreamReference? thumbnail)
     {

@@ -1,6 +1,6 @@
 # CorePilot — Your desktop, one beautiful island
 
-**Version 1.0.1:** Fixes a startup crash on some Windows systems and validates the installed application before publishing.
+**Version 1.1.0:** A single compact island that grows smoothly on hover, adapts to music, clipboard and settings, and hides during fullscreen applications. Clearer media information and improved user preferences.
 
 A modern desktop companion for **Windows 10 and Windows 11**.
 

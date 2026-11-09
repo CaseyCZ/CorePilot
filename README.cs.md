@@ -18,7 +18,7 @@ Moderní pomocník pro **Windows 10 a 11**, inspirovaný Dynamic Islandem.
 
 ## Méně rušení, více prostoru
 
-CorePilot nenápadně sedí u horního okraje obrazovky. Kliknutím ostrůvek rozbalíš, ovládneš hudbu, otevřeš historii schránky nebo nastavíš vzhled. Pak se zase složí do malé lišty.
+CorePilot nenápadně sedí u horního okraje obrazovky. Najetím myší se ostrůvek plynule rozbalí do hudebního panelu, schránky nebo nastavení. Po odjetí se zase složí; funguje i kliknutí. Pak se zase složí do malé lišty.
 
 ### Všechno po ruce
 
@@ -29,14 +29,14 @@ CorePilot nenápadně sedí u horního okraje obrazovky. Kliknutím ostrůvek ro
 | 📋 **Schránka** | Historie textů a obrázků, opětovné použití a rychlé vymazání. **Ve výchozím stavu vypnutá.** |
 | ⌨️ **Caps Lock / Num Lock** | Přehledné upozornění při změně stavu kláves. |
 | 🎧 **Mini přehrávač** | Volitelný malý přehrávač nad hlavním panelem Windows. |
-| 🎨 **Vzhled** | Světlý a tmavý režim, animace a možnost vypnout nepotřebné funkce. |
+| 🎨 **Vzhled** | Světlý a tmavý režim, plynulé animace, rozbalení po najetí a automatické skrytí při hře na celou obrazovku. |
 
 ## Jak začít
 
 1. [**Stáhni CorePilot-Setup.exe**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe).
 2. Spusť instalační soubor a projdi průvodce.
 3. Otevři **CorePilot** z nabídky Start.
-4. Klikni na ostrůvek nahoře. Aplikaci najdeš také u hodin v oznamovací oblasti.
+4. Najeď myší na ostrůvek nahoře (nebo klikni). Aplikaci najdeš také u hodin v oznamovací oblasti.
 
 **Nemusíš instalovat .NET ani rozbalovat ZIP.** Instalační soubor obsahuje vše potřebné.
 

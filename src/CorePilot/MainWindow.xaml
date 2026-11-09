@@ -1,110 +1,114 @@
 <Window x:Class="CorePilot.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="CorePilot" Width="326" Height="58" WindowStyle="None"
+ Title="CorePilot" Width="240" Height="46" WindowStyle="None"
  AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
  ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual"
- FontFamily="Segoe UI" Loaded="Window_Loaded" Closed="Window_Closed">
- <Grid>
-  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top">
-   <Border x:Name="CompactPill" Width="326" Height="58" Background="#05070C" CornerRadius="0,0,32,32"
-           BorderBrush="#46586D" BorderThickness="1,0,1,1">
-    <Button Background="Transparent" Padding="0" Click="ToggleIsland_Click" ToolTip="Rozbalit / sbalit CorePilot">
-     <Grid Width="306" Height="52">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
-      <Border Grid.Column="0" Width="33" Height="33" CornerRadius="17" Background="#082217"
-              BorderBrush="#15CF83" BorderThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center">
-       <TextBlock Text="ϟ" Foreground="#37F29B" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-      </Border>
-      <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-       <TextBlock x:Name="ClockText" Text="9:33" FontSize="21" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/>
-       <TextBlock x:Name="StatusText" Foreground="#65DAB8" FontSize="10" HorizontalAlignment="Center" Visibility="Collapsed"/>
-      </StackPanel>
-      <TextBlock Grid.Column="2" Text="▂▅▃▆" FontSize="19" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-     </Grid>
-    </Button>
-   </Border>
-   <Border x:Name="ExpandedPanel" Width="716" Margin="0,10,0,0" Padding="21" Background="{DynamicResource PanelBrush}"
-           CornerRadius="27" BorderBrush="#577E9AAD" BorderThickness="1" Visibility="Collapsed">
-    <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="8" Color="#070D23" Opacity="0.48"/></Border.Effect>
-    <StackPanel>
-     <Grid Margin="0,0,0,18">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <StackPanel Orientation="Horizontal">
-       <TextBlock Text="CorePilot" FontWeight="SemiBold" FontSize="18" Margin="0,0,20,0" VerticalAlignment="Center"/>
-       <Button Content="♫  Hudba" Click="MediaTab_Click" Margin="0,0,8,0"/>
-       <Button Content="▤  Schránka" Click="ClipboardTab_Click" Margin="0,0,8,0"/>
-       <Button Content="⚙  Nastavení" Click="SettingsTab_Click"/>
-      </StackPanel>
-      <Button Grid.Column="1" Content="✕" Click="Collapse_Click" ToolTip="Sbalit"/>
-     </Grid>
-     <Grid x:Name="MediaSection" Height="286">
-      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="26"/><RowDefinition Height="Auto"/><RowDefinition Height="26"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+ FontFamily="Segoe UI" Loaded="Window_Loaded" Closed="Window_Closed"
+ MouseEnter="Island_MouseEnter" MouseLeave="Island_MouseLeave"
+ PreviewKeyDown="Island_KeyDown">
+ <Grid ClipToBounds="True">
+  <Border x:Name="IslandShell" Background="{DynamicResource IslandBrush}"
+          BorderBrush="{DynamicResource IslandBorderBrush}" BorderThickness="1,0,1,1"
+          CornerRadius="0,0,27,27" ClipToBounds="True">
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="46"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid x:Name="CompactHeader" Grid.Row="0" Margin="8,0">
+     <Button Background="Transparent" Padding="0" Click="ToggleIsland_Click" ToolTip="Otevřít CorePilot">
+      <Grid Height="43">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/><ColumnDefinition Width="54"/></Grid.ColumnDefinitions>
+       <Grid Grid.Column="0" Width="25" Height="25" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Ellipse Fill="#122A24" Stroke="#1EE0A0" StrokeThickness="1.7"/>
+        <TextBlock Text="ϟ" Foreground="#55FFBC" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+       </Grid>
+       <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock x:Name="ClockText" Text="11:25" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center"/>
+        <TextBlock x:Name="StatusText" FontSize="9" Foreground="#63ECC0" Visibility="Collapsed" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+       </StackPanel>
+       <TextBlock Grid.Column="2" Text="▂▄▆▃" FontSize="15" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Grid>
+     </Button>
+    </Grid>
+    <Grid x:Name="ExpandedHeader" Grid.Row="0" Margin="16,0,13,0" Visibility="Collapsed">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+      <Ellipse Width="7" Height="7" Fill="#1EDB9B" Margin="0,0,9,0" VerticalAlignment="Center"/>
+      <TextBlock Text="CorePilot" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      <TextBlock x:Name="SectionTitle" Text="  ·  Hudba" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center"/>
+     </StackPanel>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button Content="♫" Click="MediaTab_Click" ToolTip="Hudba" Width="34" Height="29" Padding="0" Margin="0,0,5,0"/>
+      <Button Content="▤" Click="ClipboardTab_Click" ToolTip="Historie schránky" Width="34" Height="29" Padding="0" Margin="0,0,5,0"/>
+      <Button Content="⚙" Click="SettingsTab_Click" ToolTip="Nastavení" Width="34" Height="29" Padding="0" Margin="0,0,5,0"/>
+      <Button Content="✕" Click="Collapse_Click" ToolTip="Sbalit" Width="30" Height="29" Padding="0"/>
+     </StackPanel>
+    </Grid>
+    <Grid x:Name="ExpandedBody" Grid.Row="1" Margin="18,5,18,15" Visibility="Collapsed" Opacity="0">
+     <Grid x:Name="MediaSection" Height="166" VerticalAlignment="Top">
+      <Grid.RowDefinitions><RowDefinition Height="77"/><RowDefinition Height="28"/><RowDefinition Height="58"/></Grid.RowDefinitions>
       <Grid Grid.Row="0">
-       <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-       <Border Background="#445673" Width="78" Height="78" CornerRadius="15" HorizontalAlignment="Left" ClipToBounds="True">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Border Width="70" Height="70" CornerRadius="14" Background="#233346" HorizontalAlignment="Left" ClipToBounds="True">
         <Grid>
-         <TextBlock x:Name="ArtworkPlaceholder" Text="♫" Foreground="White" FontSize="33" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-         <Image x:Name="AlbumImage" Width="78" Height="78" Stretch="UniformToFill"/>
+         <TextBlock x:Name="ArtworkPlaceholder" Text="♫" FontSize="31" Foreground="#80E8C0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+         <Image x:Name="AlbumImage" Width="70" Height="70" Stretch="UniformToFill"/>
         </Grid>
        </Border>
        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-        <TextBlock x:Name="TrackTitle" Text="Nic se nepřehrává" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-        <TextBlock x:Name="TrackArtist" Text="Spusť hudbu nebo video" FontSize="14" Foreground="{DynamicResource SecondaryBrush}"
-                   Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+        <TextBlock x:Name="TrackTitle" Text="Nic se nepřehrává" FontSize="17" FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis" MaxWidth="330" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBlock x:Name="TrackArtist" Text="Spusť hudbu nebo video" FontSize="12" Foreground="{DynamicResource SecondaryBrush}"
+                   TextTrimming="CharacterEllipsis" MaxWidth="330" Margin="0,5,0,0"
+                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
-       <Border Grid.Column="2" Background="#1535C79B" Padding="11,6" CornerRadius="12" VerticalAlignment="Top" Margin="12,0,0,0">
-        <TextBlock Text="NOW PLAYING" FontSize="10" Foreground="#76F0C8" FontWeight="Bold"/>
-       </Border>
+      </Grid>
+      <Grid Grid.Row="1">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="43"/><ColumnDefinition Width="*"/><ColumnDefinition Width="43"/></Grid.ColumnDefinitions>
+       <TextBlock x:Name="TimeElapsed" FontSize="10" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" Text="0:00"/>
+       <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="1" IsEnabled="False"
+               VerticalAlignment="Center" PreviewMouseLeftButtonUp="Seek_Released"/>
+       <TextBlock x:Name="TimeRemaining" Grid.Column="2" FontSize="10" Foreground="{DynamicResource SecondaryBrush}"
+                  Text="—:—" TextAlignment="Right" VerticalAlignment="Center"/>
       </Grid>
       <Grid Grid.Row="2">
-       <Grid.ColumnDefinitions><ColumnDefinition Width="1*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
-       <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-        <Button Content="|◀" FontSize="17" Click="Previous_Click" Width="52" Margin="0,0,8,0"/>
-        <Button x:Name="PlayButton" Content="▶" FontSize="20" Background="#496B8F" Click="Play_Click" Width="64" Height="50" Margin="0,0,8,0"/>
-        <Button Content="▶|" FontSize="17" Click="Next_Click" Width="52"/>
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="|◀" FontSize="15" Click="Previous_Click" Width="42" Height="39" Padding="0" Margin="0,0,6,0"/>
+        <Button x:Name="PlayButton" Content="▶" FontSize="18" Foreground="#FFFFFF" Background="#385A7D"
+                Click="Play_Click" Width="50" Height="42" Padding="0" Margin="0,0,6,0"/>
+        <Button Content="▶|" FontSize="15" Click="Next_Click" Width="42" Height="39" Padding="0"/>
        </StackPanel>
-       <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-        <Button x:Name="MuteButton" Content="🔊" Click="Mute_Click" Width="45"/>
-        <Slider x:Name="VolumeSlider" Width="115" Minimum="0" Maximum="100" Value="50" Margin="10,0,0,0"
+       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="MuteButton" Content="🔊" Click="Mute_Click" Padding="0" Width="32" Height="34" Margin="0,0,4,0"/>
+        <Slider x:Name="VolumeSlider" Width="97" Minimum="0" Maximum="100" Value="50"
                 VerticalAlignment="Center" ValueChanged="Volume_ValueChanged"/>
-        <TextBlock x:Name="VolumeLabel" Text="50 %" Width="45" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0" FontSize="12"/>
+        <TextBlock x:Name="VolumeLabel" Text="50 %" FontSize="10" Width="37" TextAlignment="Right"
+                   VerticalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}" Margin="5,0,0,0"/>
        </StackPanel>
       </Grid>
-      <Grid Grid.Row="4">
-       <Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="*"/><ColumnDefinition Width="45"/></Grid.ColumnDefinitions>
-       <TextBlock x:Name="TimeElapsed" Text="0:00" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}"/>
-       <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="1" IsEnabled="False" VerticalAlignment="Center"
-               PreviewMouseLeftButtonUp="Seek_Released"/>
-       <TextBlock x:Name="TimeRemaining" Text="0:00" Grid.Column="2" FontSize="12" TextAlignment="Right"
-                  VerticalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}"/>
-      </Grid>
-      <TextBlock Grid.Row="4" Margin="0,55,0,0" FontSize="11" Foreground="{DynamicResource SecondaryBrush}"
-                 Text="Přehrávání ovládá Windows Media Session. Posun skladby závisí na přehrávači."/>
      </Grid>
-
-     <Grid x:Name="ClipboardSection" Height="286" Visibility="Collapsed">
+     <Grid x:Name="ClipboardSection" Height="267" Visibility="Collapsed">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Grid Grid.Row="0" Margin="0,0,0,12">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <StackPanel>
-        <TextBlock Text="Historie schránky" FontSize="21" FontWeight="SemiBold"/>
-        <TextBlock Text="Lokálně, jen v paměti. Zapni v nastavení." FontSize="12" Foreground="{DynamicResource SecondaryBrush}"/>
+        <TextBlock Text="Historie schránky" FontSize="16" FontWeight="SemiBold"/>
+        <TextBlock Text="Lokální historie, pouze při zapnutí." FontSize="11" Foreground="{DynamicResource SecondaryBrush}"/>
        </StackPanel>
-       <Button Grid.Column="1" Content="Vymazat historii" Click="ClearClipboard_Click"/>
+       <Button Grid.Column="1" Content="Vymazat" Click="ClearClipboard_Click" VerticalAlignment="Center"/>
       </Grid>
       <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
        <ItemsControl x:Name="ClipboardList">
         <ItemsControl.ItemTemplate>
          <DataTemplate>
-          <Border Background="{DynamicResource ControlBrush}" CornerRadius="12" Padding="10" Margin="0,0,0,8">
+          <Border Background="{DynamicResource ControlBrush}" CornerRadius="12" Padding="10" Margin="0,0,0,7">
            <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
-             <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxWidth="520"/>
-             <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource SecondaryBrush}"/>
+             <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxWidth="355"/>
+             <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource SecondaryBrush}"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="Použít" Tag="{Binding}" Click="RestoreClipboard_Click"/>
+            <Button Grid.Column="1" Content="Použít" Tag="{Binding}" Click="RestoreClipboard_Click" Margin="8,0,0,0"/>
            </Grid>
           </Border>
          </DataTemplate>
@@ -112,21 +116,25 @@
        </ItemsControl>
       </ScrollViewer>
      </Grid>
-     <Grid x:Name="SettingsSection" Height="286" Visibility="Collapsed">
-      <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
-       <TextBlock Text="Nastavení" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,10"/>
-       <CheckBox x:Name="ClipboardCheck" Content="Ukládat historii schránky (jen do paměti)" Click="Settings_Changed"/>
-       <CheckBox x:Name="WidgetCheck" Content="Zobrazit přehrávač nad hlavním panelem" Click="Settings_Changed"/>
-       <CheckBox x:Name="VolumeCheck" Content="Upozornění na změnu hlasitosti" Click="Settings_Changed"/>
-       <CheckBox x:Name="KeysCheck" Content="Upozornění Caps Lock / Num Lock" Click="Settings_Changed"/>
-       <CheckBox x:Name="DarkCheck" Content="Tmavý vzhled" Click="Settings_Changed"/>
-       <CheckBox x:Name="AnimationsCheck" Content="Plynulé animace" Click="Settings_Changed"/>
-       <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SecondaryBrush}"
-                  Text="CorePilot neukládá obsah schránky na disk. Pozor: kopírovaný obsah může obsahovat hesla nebo jiné citlivé údaje."/>
-      </StackPanel></ScrollViewer>
+     <Grid x:Name="SettingsSection" Height="292" Visibility="Collapsed">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+       <StackPanel>
+        <TextBlock Text="Nastavení ostrůvku" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <CheckBox x:Name="HoverCheck" Content="Rozbalit při najetí myší" Click="Settings_Changed"/>
+        <CheckBox x:Name="FullscreenCheck" Content="Skrýt při aplikaci na celou obrazovku" Click="Settings_Changed"/>
+        <CheckBox x:Name="ClipboardCheck" Content="Historie schránky (jen v paměti)" Click="Settings_Changed"/>
+        <CheckBox x:Name="WidgetCheck" Content="Mini přehrávač nad hlavním panelem" Click="Settings_Changed"/>
+        <CheckBox x:Name="VolumeCheck" Content="Oznámení hlasitosti" Click="Settings_Changed"/>
+        <CheckBox x:Name="KeysCheck" Content="Oznámení Caps Lock a Num Lock" Click="Settings_Changed"/>
+        <CheckBox x:Name="DarkCheck" Content="Tmavý vzhled" Click="Settings_Changed"/>
+        <CheckBox x:Name="AnimationsCheck" Content="Plynulé animace" Click="Settings_Changed"/>
+        <TextBlock Text="Obsah schránky se neodesílá nikam na server. Při vypnutí historie se vymaže."
+                   FontSize="10" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,9,0,0"/>
+       </StackPanel>
+      </ScrollViewer>
      </Grid>
-    </StackPanel>
-   </Border>
-  </StackPanel>
+    </Grid>
+   </Grid>
+  </Border>
  </Grid>
 </Window>

@@ -18,7 +18,7 @@ A lightweight desktop companion inspired by Dynamic Island, designed for **Windo
 
 ## Make room for what matters
 
-CorePilot lives discreetly at the top of your desktop. Click the island to reveal your music, clipboard and preferences. When you're done, it folds back into a small, unobtrusive bar.
+CorePilot lives discreetly at the top of your desktop. Hover over the island to reveal your music, clipboard and preferences. It smoothly grows from the same compact shape, and closes again when you move away. Clicking also works. When you're done, it folds back into a small, unobtrusive bar.
 
 ### Everything you need, right where you need it
 
@@ -33,11 +33,11 @@ CorePilot lives discreetly at the top of your desktop. Click the island to revea
 
 ## Beautifully simple
 
-**One click.** Open or close your island.
+**One fluid island.** Hover or click to expand; move away to collapse. The island adjusts its size for music, clipboard and settings.
 
 **One place.** Music, clipboard and settings share a calm, familiar interface.
 
-**Your choice.** Disable features you don't use. The mini player only appears when a media session is available.
+**Your choice.** Turn off hover opening, hide the island during fullscreen apps, or disable features you don't use. The mini player only appears when a media session is available.
 
 **Made for Windows.** Runs on **Windows 10 (version 2004 or newer)** and **Windows 11**, on 64-bit PCs.
 
