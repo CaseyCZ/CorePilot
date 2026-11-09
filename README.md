@@ -2,70 +2,80 @@
 
 # CorePilot
 
-### A smarter place for everything happening on your Windows desktop.
+### Your desktop. One beautiful island.
 
-**Music · Volume · Clipboard · Lock keys · Personalization**
+**Music · Volume · Clipboard · Lock keys · Your style**
 
-A compact Dynamic Island-inspired companion for **Windows 10 and Windows 11**. A tiny floating island stays out of the way and expands when you want to control music or your desktop.
+A lightweight desktop companion inspired by Dynamic Island, designed for **Windows 10 & 11**.
+
+[**Download CorePilot for Windows**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe) · [**What's new**](https://github.com/CaseyCZ/CorePilot/releases/latest) · [**Čeština**](README.cs.md)
 
 </div>
 
-![CorePilot product design concept](docs/product-concept.svg)
+![CorePilot — Dynamic Island and media controls](docs/product-concept.svg)
 
-*Design concept — not a screenshot of the current preview build.*
+*Preview of the design. Some visual details may differ in the installed application.*
 
-## One island, fewer distractions
+## Make room for what matters
 
-- **Now Playing:** artwork, track, artist, playback, seeking where supported
-- **Volume:** master volume, mute, brief status when the level changes
-- **Clipboard:** opt-in local history for text and pictures; tap to copy again or clear
-- **Caps Lock / Num Lock:** understated status indications
-- **Mini player:** optional floating media widget near the taskbar
-- **Appearance:** dark/light mode, animations and per-feature preferences
+CorePilot lives discreetly at the top of your desktop. Click the island to reveal your music, clipboard and preferences. When you're done, it folds back into a small, unobtrusive bar.
 
-Everything can be configured from the same application. The island sits at the top of the primary monitor and expands when clicked.
+### Everything you need, right where you need it
 
-## Compatibility & current status
+| | |
+|---|---|
+| 🎵 **Now Playing** | See album artwork, song and artist. Play, pause, skip tracks and seek in supported media apps. |
+| 🔊 **Volume** | Adjust the system volume, mute sound and get a subtle volume change indicator. |
+| 📋 **Clipboard history** | Save recent text and images locally, reuse them in a click or clear everything. **Off by default.** |
+| ⌨️ **Lock keys** | Know instantly when Caps Lock or Num Lock changes. |
+| 🎧 **Mini player** | Keep a compact player floating just above the Windows taskbar. Turn it off whenever you like. |
+| 🎨 **Personalize** | Choose light or dark appearance, enable or disable animations and customize individual features. |
 
-**Source preview — early development; Windows runtime verification pending.** Targets Windows 10 2004+ and Windows 11 on x64 hardware. Designed with C# / .NET 10 and WPF.
+## Beautifully simple
 
-The mini player floats **above** the taskbar rather than embedding inside it. True Windows 11 Mica and Acrylic backgrounds, suppression of native Windows volume flyouts, multi-monitor positioning and the final installer are **not implemented**. Unsupported media players may not provide transport/seek features.
+**One click.** Open or close your island.
 
-## Build from source
+**One place.** Music, clipboard and settings share a calm, familiar interface.
 
-Install the **.NET 10 SDK** on Windows 10 or 11, then run:
+**Your choice.** Disable features you don't use. The mini player only appears when a media session is available.
 
-```powershell
-dotnet restore CorePilot.slnx
-dotnet build CorePilot.slnx -c Release
-dotnet run --project tests/CorePilot.Tests/CorePilot.Tests.csproj -c Release
-dotnet run --project src/CorePilot/CorePilot.csproj -c Release
-```
+**Made for Windows.** Runs on **Windows 10 (version 2004 or newer)** and **Windows 11**, on 64-bit PCs.
 
-Publish a standalone Windows x64 executable:
+## Get started
 
-```powershell
-dotnet publish src/CorePilot/CorePilot.csproj -c Release -r win-x64 --self-contained true -o out/win-x64
-```
+1. [**Download CorePilot-Setup.exe**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe).
+2. Run the installer and follow the setup wizard.
+3. Open **CorePilot** from the Start menu. Look for the small island at the top of the screen.
+4. Click the island to open music, clipboard or settings. You can also access CorePilot from the system tray.
 
-GitHub Actions builds and smoke-tests the application on Windows, then uploads a downloadable build artifact.
+**No separate .NET installation required.** The Windows installer includes everything needed to run CorePilot.
 
-## Privacy
+> **Windows security notice:** The installer is currently not digitally signed. Windows SmartScreen may show a warning. Only download it from the official GitHub release, and check that the publisher and repository are the ones you expect.
 
-Clipboard tracking is **off by default**, retains at most 20 recent entries (up to five images) **in memory only**, and is cleared on exit or when monitoring is disabled. Clipboard contents are not sent to any server. The settings file only stores your preferences in `%LocalAppData%\CorePilot\settings.json`.
+## Your privacy comes first
 
-Some clipboard data can be sensitive; Windows cannot reliably mark all passwords and secrets. Only enable history if you understand this risk.
+Clipboard history is optional and **disabled by default**. When you turn it on, copied text and pictures stay in the application's memory and are cleared when CorePilot closes or you disable the feature. Nothing is uploaded to a server. Your local settings are saved on your computer.
 
-## Inspiration
+Avoid enabling clipboard history on shared PCs or while handling passwords and other sensitive information.
 
-CorePilot is an original implementation inspired by the interaction patterns of [Nusa](https://github.com/rama2555/nusa) and the Fluent style of [FluentFlyout](https://github.com/unchihugo/FluentFlyout). Their proprietary code/assets are not included. Reusing FluentFlyout's GPL-covered code in the future would require compliance with its license.
+## Good to know
 
-The original USB installer project formerly hosted in this repository has been superseded. Older downloadable releases, if still visible on GitHub, belong to that **old product**, not this desktop companion.
+- Playback controls and seeking depend on what your music or video app supports.
+- The optional mini player **floats above** the taskbar; it is not embedded inside Windows' taskbar.
+- Windows may still display its built-in volume indicator alongside CorePilot.
+- The preview image represents the intended design; system effects and appearance can vary between Windows 10 and 11.
+- The download supports **Windows x64**. It is not a Mac or Linux application.
 
-## Quality
+## Say hello
 
-See [testing notes](docs/TESTING.md) for verified and pending checks. Contributions and bug reports are welcome.
+Have an idea or found a problem? [Tell us on GitHub Issues](https://github.com/CaseyCZ/CorePilot/issues).
 
----
+CorePilot is free and open source under the [MIT license](LICENSE).
 
-**CorePilot** — less clutter, more control.
+<div align="center">
+
+**CorePilot — Less clutter. More control.**
+
+[**Get CorePilot**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe)
+
+</div>

@@ -5,8 +5,14 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>CorePilot</AssemblyName><RootNamespace>CorePilot</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CorePilot</AssemblyName>
+    <RootNamespace>CorePilot</RootNamespace>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets/CorePilot.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../CorePilot.Core/CorePilot.Core.csproj"/></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CorePilot.Core/CorePilot.Core.csproj" />
+  </ItemGroup>
 </Project>
