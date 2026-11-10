@@ -17,6 +17,9 @@ public partial class WidgetWindow : Window
     {
         WidgetTitle.Text = media.Title; WidgetArtist.Text = media.Artist;
         WidgetArt.Source = media.Artwork; WidgetPlay.Content = media.Playing ? "Ⅱ" : "▶";
+        WidgetProgress.Value = media.Duration.TotalSeconds > 0
+            ? Math.Clamp(media.Position.TotalSeconds / media.Duration.TotalSeconds * 100, 0, 100)
+            : 0;
     }
     private void ShowIsland_Click(object sender, RoutedEventArgs e) => _showIsland();
     private async void Play_Click(object sender, RoutedEventArgs e)
