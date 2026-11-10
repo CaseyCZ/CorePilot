@@ -2,6 +2,8 @@
   <Application.Resources>
     <SolidColorBrush x:Key="IslandBrush" Color="#F5080A11"/>
     <SolidColorBrush x:Key="IslandBorderBrush" Color="#516B7D"/>
+    <SolidColorBrush x:Key="GlassBrush" Color="#E21A2844"/>
+    <SolidColorBrush x:Key="GlassStrokeBrush" Color="#8B98B4E2"/>
     <SolidColorBrush x:Key="PanelBrush" Color="#EF131A2A"/>
     <SolidColorBrush x:Key="PrimaryBrush" Color="#F5F8FF"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="#A6B4CC"/>

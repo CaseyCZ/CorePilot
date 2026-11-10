@@ -18,8 +18,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _leaveTimer = new() { Interval = TimeSpan.FromMilliseconds(530) };
     private bool _expanded, _hiddenForFullscreen;
     private string _tab = "media";
-    private const double CompactWidth = 240;
-    private const double CompactHeight = 46;
+    private const double CompactWidth = 332;
+    private const double CompactHeight = 80;
     private readonly System.Windows.Forms.NotifyIcon _tray = new();
     private ClipboardMonitor? _clipboard;
     private WidgetWindow? _widget;
@@ -79,6 +79,7 @@ public partial class MainWindow : Window
             WidgetCheck.IsEnabled = false;
         }
         ClockText.Text = DateTime.Now.ToString("H:mm");
+        FlyoutStatusText.Text = KeyboardStatus.CapsLock ? "Caps Lock zapnut" : "Caps Lock vypnut";
         _ready = true; _mediaTimer.Start(); _systemTimer.Start();
         await RefreshMediaAsync();
     }
@@ -162,12 +163,15 @@ public partial class MainWindow : Window
                 VolumeSlider.Value = percent;
                 VolumeLabel.Text = $"{percent} %";
                 MuteButton.Content = muted ? "🔇" : "🔊";
+                FlyoutVolumeBar.Value = muted ? 0 : percent;
+                FlyoutVolumeText.Text = muted ? "0" : percent.ToString();
             } finally { _updatingVolume = false; }
         }
     }
     private void ShowStatus(string message)
     {
         StatusText.Text = message;
+        FlyoutStatusText.Text = message;
         StatusText.Visibility = Visibility.Visible;
         _statusUntil = DateTime.UtcNow.AddSeconds(2.4);
     }
@@ -215,8 +219,10 @@ public partial class MainWindow : Window
     }
     private void SetWindowSize(bool expanded, bool animate = true)
     {
-        double width = expanded ? (_tab == "media" ? 470 : 535) : CompactWidth;
-        double height = expanded ? (_tab == "media" ? 246 : _tab == "clipboard" ? 340 : 366) : CompactHeight;
+        double width = expanded ? Math.Min(1210, Math.Max(CompactWidth, SystemParameters.PrimaryScreenWidth - 18)) : CompactWidth;
+        double cardHeight = _tab == "media" ? 284 : _tab == "clipboard" ? 377 : 430;
+        GlassPanel.Height = cardHeight;
+        double height = expanded ? 80 + cardHeight + 38 : CompactHeight;
         AnimateWindow(width, height, animate);
     }
     private void ExpandIsland()
@@ -361,6 +367,8 @@ public partial class MainWindow : Window
         bool dark = _settings.DarkTheme;
         ChangeBrush("IslandBrush", dark ? "#F5080A11" : "#F6F7FAFF");
         ChangeBrush("IslandBorderBrush", dark ? "#516B7D" : "#B7C2D0");
+        ChangeBrush("GlassBrush", dark ? "#E21A2844" : "#F1E9F2FC");
+        ChangeBrush("GlassStrokeBrush", dark ? "#8B98B4E2" : "#C08DAAD0");
         ChangeBrush("PanelBrush", dark ? "#EF131A2A" : "#F3F7FBFF");
         ChangeBrush("PrimaryBrush", dark ? "#F5F8FF" : "#172136");
         ChangeBrush("SecondaryBrush", dark ? "#A6B4CC" : "#596B81");

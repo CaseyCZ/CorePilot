@@ -1,6 +1,6 @@
 # CorePilot — Your desktop, one beautiful island
 
-**Version 1.1.0:** A single compact island that grows smoothly on hover, adapts to music, clipboard and settings, and hides during fullscreen applications. Clearer media information and improved user preferences.
+**Version 1.2.0:** A redesigned premium black notch, large dark-glass music panel, refined cover art and playback controls, contextual key and volume flyouts, and a matching mini player. Designed for Windows 10 and Windows 11.
 
 A modern desktop companion for **Windows 10 and Windows 11**.
 
