@@ -12,6 +12,8 @@ using CorePilot.Models;
 using CorePilot.ViewModels;
 using CorePilot.Views;
 
+using CorePilot.Services;
+
 namespace CorePilot;
 
 public partial class MainWindow : Window
