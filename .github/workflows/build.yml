@@ -99,7 +99,7 @@ jobs:
             & gh release delete latest --yes --cleanup-tag
             if ($LASTEXITCODE -ne 0) { throw 'Cannot delete old release.' }
           }
-          & gh release create latest 'out/release/CorePilot-Setup.exe' --target $env:GITHUB_SHA --title 'CorePilot 2.1 for Windows' --notes-file RELEASE_NOTES.md --latest
+          & gh release create latest 'out/release/CorePilot-Setup.exe' --target $env:GITHUB_SHA --title 'CorePilot 2.2 for Windows' --notes-file RELEASE_NOTES.md --latest
           if ($LASTEXITCODE -ne 0) { throw 'Could not publish installer release.' }
           $release = & gh release view latest --json assets | ConvertFrom-Json
           $files = @($release.assets | ForEach-Object { $_.name })
