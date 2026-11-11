@@ -1,22 +1,20 @@
-# CorePilot — Your desktop, one beautiful island
+# CorePilot 2.0 — A living island for Windows
 
-**Version 1.2.0:** A redesigned premium black notch, large dark-glass music panel, refined cover art and playback controls, contextual key and volume flyouts, and a matching mini player. Designed for Windows 10 and Windows 11.
+A new generation of CorePilot based on the MIT-licensed **NusaLite** engine.
 
-A modern desktop companion for **Windows 10 and Windows 11**.
+- **Music:** album artwork, artist, play/pause, previous/next, progress and volume
+- **Clipboard:** optional memory-only history of text and images
+- **Keyboard:** Caps Lock and Num Lock on-screen indicators
+- **Mini player:** optional floating controls above the Windows taskbar
+- **Additional tools:** lyrics, focus timer, battery status and file shelf
+- **Windows 10 and 11**, x64, with a standalone installer
 
-- **Now Playing:** cover art, track information, play/pause, previous/next and supported seeking
-- **Volume:** system volume control, mute and on-screen feedback
-- **Clipboard:** optional local history of recent text and images
-- **Lock keys:** Caps Lock and Num Lock status
-- **Mini player:** optional floating media controls near the taskbar
-- **Appearance:** light/dark mode, animations and individual feature switches
+Download **CorePilot-Setup.exe** and follow the setup wizard. No .NET installation needed.
 
-## Install
+**Privacy:** clipboard history is off by default. Optional lyrics and album artwork may use third-party services.
 
-Download **CorePilot-Setup.exe** below and follow the setup wizard. No separate .NET runtime is needed.
+**Note:** The installer is not digitally signed. Visual behavior across different displays and DPI settings still needs hands-on verification.
 
-**Compatibility:** Windows 10 (2004+) and Windows 11, x64.
+CorePilot is based on [NusaLite by Pidzzzz](https://github.com/Pidzzzz/nusa-lite), MIT-licensed with attribution included in the installer. It is not the original closed-source Nusa application.
 
-**Please note:** The installer is not digitally signed yet, so Windows SmartScreen may display a warning. Some playback actions depend on your media player. The mini player floats above the taskbar, and native Windows volume notifications may still be visible.
-
-[More about CorePilot](https://github.com/CaseyCZ/CorePilot#readme) · [Support / Feedback](https://github.com/CaseyCZ/CorePilot/issues)
+[CorePilot](https://github.com/CaseyCZ/CorePilot) · [Feedback](https://github.com/CaseyCZ/CorePilot/issues)

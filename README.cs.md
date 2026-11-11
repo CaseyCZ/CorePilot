@@ -2,72 +2,35 @@
 
 # CorePilot
 
-### Celá plocha. Jeden elegantní ostrůvek.
+### Celý svět Windows v jednom ostrůvku.
 
-**Hudba · Hlasitost · Schránka · Klávesy · Vlastní vzhled**
+Elegantní Dynamic Island pro **Windows 10 a 11**.
 
-Moderní pomocník pro **Windows 10 a 11**, inspirovaný Dynamic Islandem.
-
-[**Stáhnout CorePilot pro Windows**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe) · [**Aktuální vydání**](https://github.com/CaseyCZ/CorePilot/releases/latest) · [**English**](README.md)
+[**Aktuální vydání**](https://github.com/CaseyCZ/CorePilot/releases/latest) · [**English**](README.md) · [**Nápady a chyby**](https://github.com/CaseyCZ/CorePilot/issues)
 
 </div>
 
-![CorePilot — Dynamic Island a ovládání hudby](docs/product-concept.svg)
+## Není potřeba otevírat další okna
 
-*Ukázka zamýšleného vzhledu. Některé detaily se mohou v nainstalované aplikaci lišit.*
+CorePilot se nenápadně drží horního okraje obrazovky. Najeď na něj myší a rozbalí se. Ukáže právě přehrávanou hudbu, nabídne ovládání hlasitosti a další praktické funkce.
 
-## Méně rušení, více prostoru
+- **Hudba:** obal alba, interpret, pozastavení, přepínání a posun skladby.
+- **Živý ostrůvek:** přirozené animace, rozbalování a skrytí při hrách.
+- **Stav počítače:** zvuk a baterie přehledně na jednom místě.
+- **Schránka:** volitelná historie textů a obrázků pouze v paměti, ve výchozím stavu vypnutá.
+- **Klávesy:** indikace Caps Lock a Num Lock.
+- **Mini přehrávač:** volitelný panel nad hlavním panelem Windows.
+- **Volitelné funkce:** texty písní, časovač soustředění a odkládání souborů.
+- **Vzhled a ovládání:** vlastní nastavení, motivy a zkratky.
 
-CorePilot nenápadně sedí u horního okraje obrazovky. Najetím myší se ostrůvek plynule rozbalí do hudebního panelu, schránky nebo nastavení. Po odjetí se zase složí; funguje i kliknutí. Pak se zase složí do malé lišty.
+**Kompatibilita:** Windows 10 od verze 2004 a Windows 11, 64 bitů.
 
-### Všechno po ruce
+## Instalace
 
-| | |
-|---|---|
-| 🎵 **Hudba** | Obal alba, název skladby, interpret, přehrát/pauza, předchozí/další a posun u podporovaných přehrávačů. |
-| 🔊 **Hlasitost** | Změna hlasitosti, ztlumení a nenápadná indikace změny. |
-| 📋 **Schránka** | Historie textů a obrázků, opětovné použití a rychlé vymazání. **Ve výchozím stavu vypnutá.** |
-| ⌨️ **Caps Lock / Num Lock** | Přehledné upozornění při změně stavu kláves. |
-| 🎧 **Mini přehrávač** | Volitelný malý přehrávač nad hlavním panelem Windows. |
-| 🎨 **Vzhled** | Světlý a tmavý režim, plynulé animace, rozbalení po najetí a automatické skrytí při hře na celou obrazovku. |
+[Zobrazit poslední vydání CorePilotu](https://github.com/CaseyCZ/CorePilot/releases/latest).
 
-## Jak začít
+Stáhni **CorePilot-Setup.exe** a spusť instalačního průvodce. .NET není potřeba instalovat zvlášť. Instalátor zatím není digitálně podepsaný, takže Windows mohou zobrazit bezpečnostní upozornění.
 
-1. [**Stáhni CorePilot-Setup.exe**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe).
-2. Spusť instalační soubor a projdi průvodce.
-3. Otevři **CorePilot** z nabídky Start.
-4. Najeď myší na ostrůvek nahoře (nebo klikni). Aplikaci najdeš také u hodin v oznamovací oblasti.
+**Soukromí:** Historie schránky je dobrovolná a vypnutá, dokud ji nezapneš. Uchovává nejvýše 12 položek v paměti a po vypnutí nebo ukončení CorePilotu se smaže. Mini přehrávač plave nad hlavním panelem; není jeho přímou součástí.
 
-**Nemusíš instalovat .NET ani rozbalovat ZIP.** Instalační soubor obsahuje vše potřebné.
-
-**Kompatibilita:** Windows 10 od verze 2004 a Windows 11, 64bitový procesor.
-
-> **Upozornění Windows:** Instalační soubor zatím není digitálně podepsaný. Windows SmartScreen proto může zobrazit varování. Stahuj pouze z oficiálního vydání na GitHubu.
-
-## Soukromí
-
-Historie schránky je **dobrovolná a vypnutá**, dokud ji sám nezapneš. Obsah schránky zůstává pouze v paměti CorePilotu a při vypnutí funkce nebo ukončení aplikace se smaže. Nic se neposílá na server. Nastavení se ukládá jen na tvém počítači.
-
-Na sdíleném počítači nebo při práci s hesly je bezpečnější historii schránky nepoužívat.
-
-## Co je dobré vědět
-
-- Ovládání hudby a posun skladby závisí na podpoře konkrétního přehrávače.
-- Mini přehrávač se zobrazuje **nad hlavním panelem**, ne přímo uvnitř.
-- Windows může vedle CorePilotu zobrazit také svoje systémové okno hlasitosti.
-- Obrázek je návrh vzhledu. Některé efekty se mohou lišit podle Windows.
-- Aplikace je určená pro Windows 10/11 x64.
-
-## Nápady a pomoc
-
-Našel jsi chybu nebo chceš něco doplnit? [Napiš nám na GitHub Issues](https://github.com/CaseyCZ/CorePilot/issues).
-
-CorePilot je zdarma a s otevřeným zdrojovým kódem pod [licencí MIT](LICENSE).
-
-<div align="center">
-
-**CorePilot — Méně zmatku. Více kontroly.**
-
-[**Stáhnout CorePilot**](https://github.com/CaseyCZ/CorePilot/releases/latest/download/CorePilot-Setup.exe)
-
-</div>
+CorePilot je otevřený projekt s licencí MIT, založený na [NusaLite od Pidzzzz](https://github.com/Pidzzzz/nusa-lite). Viz [licence](LICENSE) a [poděkování](NOTICE.md). Nejde o původní uzavřenou aplikaci Nusa.

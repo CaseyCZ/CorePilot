@@ -1,8 +1,9 @@
 bin/
 obj/
 .vs/
-out/
 *.user
 *.suo
-*.pdb
-**/__pycache__/
+*.userosscache
+*.sln.docstates
+TestResults/
+*.log

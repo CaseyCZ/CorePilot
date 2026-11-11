@@ -1,5 +1,5 @@
 #define AppName "CorePilot"
-#define AppVersion "1.2.0"
+#define AppVersion "2.0.0"
 #define AppPublisher "CaseyCZ"
 
 [Setup]
@@ -14,7 +14,7 @@ DefaultGroupName=CorePilot
 DisableProgramGroupPage=yes
 OutputDir=..\out\release
 OutputBaseFilename=CorePilot-Setup
-SetupIconFile=..\src\CorePilot\Assets\CorePilot.ico
+SetupIconFile=..\Assets\CorePilot.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -36,6 +36,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\out\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\NOTICE.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\CorePilot"; Filename: "{app}\CorePilot.exe"

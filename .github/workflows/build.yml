@@ -1,7 +1,7 @@
 name: CorePilot - Windows installer
 on:
   push:
-    branches: [main]
+    branches: [main, 'migration/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: corepilot-installer-${{ github.ref }}
+  group: corepilot-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -27,88 +27,76 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: dotnet build CorePilot.slnx -c Release --nologo
+        run: dotnet build CorePilot.csproj -c Release --nologo
 
-      - name: Run logic tests
-        shell: pwsh
-        run: dotnet run --project tests/CorePilot.Tests/CorePilot.Tests.csproj -c Release --no-build
-
-      - name: Publish self-contained Windows app
+      - name: Publish Windows x64 app
         shell: pwsh
         run: >
-          dotnet publish src/CorePilot/CorePilot.csproj
-          -c Release
-          -r win-x64
+          dotnet publish CorePilot.csproj -c Release -r win-x64
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:PublishTrimmed=false
           --output out/win-x64
 
-      - name: Test application startup on Windows
+      - name: Test app startup
         shell: pwsh
-        run: .\\scripts\\smoke-startup.ps1 -Executable 'out/win-x64/CorePilot.exe' -HoldSeconds 10
+        run: ./scripts/smoke-startup.ps1 -Executable 'out/win-x64/CorePilot.exe' -HoldSeconds 12
 
-      - name: Install Inno Setup compiler
+      - name: Ensure installer compiler
         shell: pwsh
         run: |
-          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          $programFiles = [Environment]::GetFolderPath('ProgramFilesX86')
+          $compiler = Join-Path $programFiles 'Inno Setup 6\ISCC.exe'
           if (!(Test-Path $compiler)) {
             choco install innosetup --yes --no-progress --limit-output
             if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
           }
-          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler was not found.' }
+          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler missing.' }
 
       - name: Build CorePilot-Setup.exe
         shell: pwsh
         run: |
-          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          $programFiles = [Environment]::GetFolderPath('ProgramFilesX86')
+          $compiler = Join-Path $programFiles 'Inno Setup 6\ISCC.exe'
           & $compiler 'installer\CorePilot.iss'
-          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
           $setup = Get-Item 'out\release\CorePilot-Setup.exe' -ErrorAction Stop
-          if ($setup.Length -lt 1048576) { throw 'The generated installer is unexpectedly small.' }
-          Write-Host "Installer: $($setup.Name), $([math]::Round($setup.Length / 1MB, 1)) MB"
+          if ($setup.Length -lt 1048576) { throw 'Installer output is unusually small.' }
 
-      - name: Test installed app startup on Windows
+      - name: Install and test CorePilot
         shell: pwsh
         run: |
-          $setup = Resolve-Path 'out/release/CorePilot-Setup.exe'
-          $installed = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($installed.ExitCode -ne 0) { throw "Installer failed with $($installed.ExitCode)." }
-          $exe = Join-Path $env:LOCALAPPDATA 'Programs/CorePilot/CorePilot.exe'
-          .\\scripts\\smoke-startup.ps1 -Executable $exe -HoldSeconds 10
+          $setup = (Resolve-Path 'out/release/CorePilot-Setup.exe').Path
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer failed with exit code $($install.ExitCode)." }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\CorePilot'
+          ./scripts/smoke-startup.ps1 -Executable (Join-Path $dir 'CorePilot.exe') -HoldSeconds 12
+          if (!(Test-Path (Join-Path $dir 'LICENSE')) -or !(Test-Path (Join-Path $dir 'NOTICE.md'))) {
+            throw 'MIT license and attribution files must be installed.'
+          }
 
-      - name: Save startup crash log if testing fails
-        if: failure()
+      - name: Upload tested installer
         uses: actions/upload-artifact@v4
         with:
-          name: CorePilot-startup-diagnostics
-          path: ${{ runner.temp }}/CorePilot-startup.log
-          if-no-files-found: ignore
-
-      - name: Upload installer for test builds
-        uses: actions/upload-artifact@v4
-        with:
-          name: CorePilot-Setup
+          name: CorePilot-Setup-tested
           path: out/release/CorePilot-Setup.exe
           if-no-files-found: error
 
-      - name: Publish one current installer in GitHub Releases
+      - name: Publish only current installer
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          # Keep one public release and one downloadable installer asset.
           & gh release view latest --json tagName 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) {
             & gh release delete latest --yes --cleanup-tag
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot remove the previous release.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot delete old release.' }
           }
-          & gh release create latest 'out/release/CorePilot-Setup.exe' --target $env:GITHUB_SHA --title 'CorePilot for Windows' --notes-file 'RELEASE_NOTES.md' --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish the new installer release.' }
+          & gh release create latest 'out/release/CorePilot-Setup.exe' --target $env:GITHUB_SHA --title 'CorePilot 2.0 for Windows' --notes-file RELEASE_NOTES.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish installer release.' }
           $release = & gh release view latest --json assets | ConvertFrom-Json
-          $names = @($release.assets | ForEach-Object { $_.name })
-          if ($names.Count -ne 1 -or $names[0] -ne 'CorePilot-Setup.exe') { throw "Unexpected release assets: $($names -join ', ')" }
-          Write-Host 'Release verified: one CorePilot-Setup.exe asset.'
+          $files = @($release.assets | ForEach-Object { $_.name })
+          if ($files.Count -ne 1 -or $files[0] -ne 'CorePilot-Setup.exe') { throw "Unexpected assets: $($files -join ', ')" }
