@@ -280,6 +280,7 @@ public partial class MainWindow
         IslandView.Hub => new IslandSpec(410, 88, 18, 0),
         IslandView.Lyrics => new IslandSpec(360, 108, 20, 0),
         IslandView.Peek => new IslandSpec(362, 68, 16, 0),
+        IslandView.Clipboard => new IslandSpec(554, 252, 24, 0),
         _ => new IslandSpec(554, 158, 22, 0)
     };
 

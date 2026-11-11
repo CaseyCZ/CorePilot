@@ -9,6 +9,7 @@ public enum IslandView
     Focus,
     Water,
     Shelf,
+    Clipboard,
     Peek
 }
 

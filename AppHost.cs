@@ -45,11 +45,13 @@ public sealed class AppHost : IDisposable
             _tray.GlobalHotkeysToggled += enabled => _window?.SetGlobalHotkeysEnabled(enabled);
             _tray.ExitRequested += () => Application.Current.Shutdown();
             _tray.SettingsRequested += ShowSettings;
+            _tray.ClipboardToggled += enabled => _window?.SetClipboardEnabled(enabled);
 
             _viewModel.NotifyRequested += (title, message) => _tray?.ShowNotification(title, message);
             _viewModel.PinRequested += pinned => _tray?.SetPinned(pinned);
 
             _window = new MainWindow(_viewModel);
+            _window.SetClipboardEnabled(_settings.Current.ClipboardEnabled);
             _window.Show();
             _window.SetClickGuard(_settings.Current.ClickGuardEnabled);
 

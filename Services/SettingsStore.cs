@@ -40,6 +40,10 @@ public sealed class AppSettings
     public bool EnableGlobalHotkeys { get; set; } = true;
 
     public bool AutoLyricsOnPlay { get; set; } = true;
+    // Clipboard is opt-in: no content is persisted to settings.json.
+    public bool ClipboardEnabled { get; set; } = false;
+    public bool ShowLockKeyNotifications { get; set; } = true;
+    public bool TaskbarWidget { get; set; } = false;
 
     public bool LyricLocked { get; set; }
 

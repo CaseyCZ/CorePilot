@@ -22,7 +22,8 @@ public partial class MainWindow : Window
         IslandView.Lyrics,
         IslandView.Focus,
         IslandView.Water,
-        IslandView.Shelf
+        IslandView.Shelf,
+        IslandView.Clipboard
     };
 
     private readonly MainViewModel _viewModel;
@@ -126,6 +127,9 @@ public partial class MainWindow : Window
             UnregisterHotkeys();
             _hwndSource?.RemoveHook(HwndHook);
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            StopClipboardListener();
+            StopLockKeyWatcher();
+            _clipboardHistory.Dispose();
         };
     }
 
@@ -261,6 +265,8 @@ public partial class MainWindow : Window
 
         _hwndSource = HwndSource.FromHwnd(_hwnd);
         _hwndSource?.AddHook(HwndHook);
+        StartClipboardListener();
+        StartLockKeyWatcher();
 
         _browserForeground = WindowStyler.IsForegroundBrowser(_hwnd) ?? false;
         UpdateClickThrough();
@@ -346,6 +352,7 @@ public partial class MainWindow : Window
             IslandView.Focus => new FocusView(),
             IslandView.Water => new WaterView(),
             IslandView.Shelf => new ShelfView(),
+            IslandView.Clipboard => new ClipboardView(_clipboardHistory),
             _ => new PeekView()
         };
 

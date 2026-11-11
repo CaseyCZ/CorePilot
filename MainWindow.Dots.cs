@@ -72,6 +72,7 @@ public partial class MainWindow
         IslandView.Focus => (Brush)FindResource("EmberBrush"),
         IslandView.Water => (Brush)FindResource("AquaBrush"),
         IslandView.Shelf => (Brush)FindResource("LimeBrush"),
+        IslandView.Clipboard => (Brush)FindResource("MintBrush"),
         _ => (Brush)FindResource("AccentBrush")
     };
 
@@ -123,6 +124,7 @@ public partial class MainWindow
         IslandView.Lyrics => "Lirik",
         IslandView.Focus => "Fokus",
         IslandView.Water => "Air",
+        IslandView.Clipboard => "Schránka",
         _ => "Shelf"
     };
 }

@@ -18,6 +18,7 @@ public sealed class TrayService : IDisposable
     private readonly WinForms.ToolStripMenuItem _clickGuardItem;
     private readonly WinForms.ToolStripMenuItem _hotkeyItem;
     private readonly WinForms.ToolStripMenuItem _startupItem;
+    private readonly WinForms.ToolStripMenuItem _clipboardItem;
     private Stream? _iconStream;
 
     public TrayService(SettingsStore settings, Func<bool> isPinned)
@@ -48,6 +49,7 @@ public sealed class TrayService : IDisposable
         _menu.Items.Add(Item("Fokus", (_, _) => OpenRequested?.Invoke(IslandView.Focus)));
         _menu.Items.Add(Item("Air", (_, _) => OpenRequested?.Invoke(IslandView.Water)));
         _menu.Items.Add(Item("Shelf", (_, _) => OpenRequested?.Invoke(IslandView.Shelf)));
+        _menu.Items.Add(Item("Schránka", (_, _) => OpenRequested?.Invoke(IslandView.Clipboard)));
         _menu.Items.Add(new WinForms.ToolStripSeparator());
 
         _pinItem = Item("Sematkan di layar", (_, _) => PinToggleRequested?.Invoke());
@@ -74,6 +76,9 @@ public sealed class TrayService : IDisposable
         _startupItem.CheckOnClick = false;
         _menu.Items.Add(_startupItem);
 
+        _clipboardItem = Item("Historie schránky (volitelné)", (_, _) => ToggleClipboard());
+        _menu.Items.Add(_clipboardItem);
+
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add(Item("Pengaturan...", (_, _) => SettingsRequested?.Invoke()));
 
@@ -88,6 +93,7 @@ public sealed class TrayService : IDisposable
             _clickGuardItem.Checked = _settings.Current.ClickGuardEnabled;
             _hotkeyItem.Checked = _settings.Current.EnableGlobalHotkeys;
             _startupItem.Checked = Autostart.IsEnabled();
+            _clipboardItem.Checked = _settings.Current.ClipboardEnabled;
         };
 
         _notifyIcon = new WinForms.NotifyIcon
@@ -120,6 +126,7 @@ public sealed class TrayService : IDisposable
     public event Action? ExitRequested;
 
     public event Action? SettingsRequested;
+    public event Action<bool>? ClipboardToggled;
 
     public void SetPinned(bool pinned)
     {
@@ -168,6 +175,15 @@ public sealed class TrayService : IDisposable
         _settings.Save();
         _hotkeyItem.Checked = enabled;
         GlobalHotkeysToggled?.Invoke(enabled);
+    }
+
+    private void ToggleClipboard()
+    {
+        var enabled = !_settings.Current.ClipboardEnabled;
+        _settings.Current.ClipboardEnabled = enabled;
+        _settings.Save();
+        _clipboardItem.Checked = enabled;
+        ClipboardToggled?.Invoke(enabled);
     }
 
     private void ToggleStartup()

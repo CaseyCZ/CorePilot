@@ -11,6 +11,7 @@ public partial class MainWindow
     private const int HotkeyLyricsId = 9004;
     private const int HotkeyFocusId = 9005;
     private const int HotkeyClickGuardId = 9006;
+    private const int HotkeyClipboardId = 9007;
 
     public void SetGlobalHotkeysEnabled(bool enabled)
     {
@@ -40,6 +41,7 @@ public partial class MainWindow
             NativeMethods.RegisterHotKey(_hwnd, HotkeyLyricsId, mod, 0x4C); // Win + Alt + L
             NativeMethods.RegisterHotKey(_hwnd, HotkeyFocusId,  mod, 0x46); // Win + Alt + F
             NativeMethods.RegisterHotKey(_hwnd, HotkeyClickGuardId, mod, 0x47); // Win + Alt + G
+            NativeMethods.RegisterHotKey(_hwnd, HotkeyClipboardId, mod, 0x43); // Win + Alt + C
             _hotkeysRegistered = true;
         }
         catch (Exception ex)
@@ -63,6 +65,7 @@ public partial class MainWindow
             NativeMethods.UnregisterHotKey(_hwnd, HotkeyLyricsId);
             NativeMethods.UnregisterHotKey(_hwnd, HotkeyFocusId);
             NativeMethods.UnregisterHotKey(_hwnd, HotkeyClickGuardId);
+            NativeMethods.UnregisterHotKey(_hwnd, HotkeyClipboardId);
         }
         catch (Exception ex)
         {
@@ -76,6 +79,12 @@ public partial class MainWindow
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == 0x031D) // WM_CLIPBOARDUPDATE: window receives an update, not a global keyboard hook.
+        {
+            if (_viewModel.Settings.Current.ClipboardEnabled)
+                _clipboardHistory.Capture();
+            return IntPtr.Zero;
+        }
         if (msg == NativeMethods.WM_HOTKEY)
         {
             var id = wParam.ToInt32();
@@ -103,6 +112,10 @@ public partial class MainWindow
                     break;
                 case HotkeyClickGuardId:
                     ToggleClickGuard();
+                    handled = true;
+                    break;
+                case HotkeyClipboardId:
+                    OpenView(IslandView.Clipboard);
                     handled = true;
                     break;
             }
