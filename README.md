@@ -25,6 +25,7 @@ CorePilot sits discreetly at the top of the screen and expands when you need it.
 - **Two languages:** switch instantly between **Čeština** and **English** in Settings → General → Application language. Your choice is remembered.
 - **Always-available overview:** when inactive, CorePilot shows a compact summary *inside* your top or bottom Windows taskbar, with time, media and battery.
 - **Easy navigation:** hover to expand, then switch with the small left/right arrows, clickable dots or mouse wheel. After clicking the island, keyboard ← / → works too.
+- **Refined glass style:** dark translucent surfaces, a subtle rim and cool accent colors, with built-in protection against invalid media progress values.
 
 Compatible with **Windows 10 (2004 or later)** and **Windows 11**, x64.
 

@@ -3,17 +3,23 @@
 
     <Color x:Key="VoidColor">#0E0F12</Color>
     <Color x:Key="InkColor">#F4F5F7</Color>
-    <Color x:Key="MistColor">#9AA0AA</Color>
+    <Color x:Key="MistColor">#A9B9CE</Color>
     <Color x:Key="CyanColor">#64D2FF</Color>
     <Color x:Key="IndigoColor">#6A5AE0</Color>
     <Color x:Key="VioletColor">#6D4AFF</Color>
-    <Color x:Key="AmberColor">#CDB4FF</Color>
+    <Color x:Key="AmberColor">#A3E9DB</Color>
     <Color x:Key="RoseColor">#F0A6FF</Color>
     <Color x:Key="CoralColor">#B57BFF</Color>
     <Color x:Key="MintColor">#6FE7D2</Color>
     <Color x:Key="AquaColor">#38D6E8</Color>
     <Color x:Key="LimeColor">#6FE7D2</Color>
-    <Color x:Key="OrchidColor">#7C5CFF</Color>
+    <Color x:Key="OrchidColor">#6F9AFF</Color>
+
+    <LinearGradientBrush x:Key="IslandGlassBrush" StartPoint="0,0" EndPoint="0.9,1">
+        <GradientStop Color="#E8111722" Offset="0"/>
+        <GradientStop Color="#FA060B13" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="IslandRimBrush" Color="#4E7BA7C8"/>
 
     <SolidColorBrush x:Key="VoidBrush" Color="{StaticResource VoidColor}" />
     <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />

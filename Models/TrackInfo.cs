@@ -36,7 +36,9 @@ public sealed record TrackInfo
                 return 0;
             }
 
-            return Math.Clamp(Position.TotalMilliseconds / Duration.TotalMilliseconds, 0, 1);
+            var seconds = Duration.TotalSeconds;
+            if (!double.IsFinite(seconds) || seconds <= 0) return 0;
+            return CorePilot.Infrastructure.FiniteRange.Clamp(Position.TotalSeconds / seconds);
         }
     }
 

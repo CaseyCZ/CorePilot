@@ -75,7 +75,14 @@ public sealed class AppHost : IDisposable
         catch (Exception ex)
         {
             Infrastructure.Log.Write("CorePilot failed to start.", ex);
-            MessageBox.Show(ex.Message, "CorePilot", MessageBoxButton.OK, MessageBoxImage.Error);
+            var deepest = ex;
+            while (deepest.InnerException is not null) deepest = deepest.InnerException;
+            MessageBox.Show(
+                "CorePilot se nepodařilo spustit / CorePilot could not start.\n\n" +
+                deepest.GetType().Name + ": " + deepest.Message +
+                "\n\nZáznam chyby / Error log: " +
+                Path.Combine(Infrastructure.Log.DataFolder, "nusalite.log"),
+                "CorePilot", MessageBoxButton.OK, MessageBoxImage.Error);
             Application.Current.Shutdown();
         }
     }

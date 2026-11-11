@@ -1,15 +1,17 @@
-# CorePilot 2.2 — Overview on the taskbar
+# CorePilot 2.3 — Improved reliability and refined glass appearance
 
-- **Compact taskbar overview:** the inactive island now sits inside a top- or bottom-docked Windows taskbar, showing time, current music and battery status.
-- **No unsolicited expansion:** background media changes, lyric updates and status notifications no longer replace the inactive overview.
-- **Page controls:** clearly visible, unobtrusive left/right arrows at the edges of the expanded island.
-- **Keyboard navigation:** after interacting with the island, use Left / Right to switch between Overview, Lyrics, Music, Focus, Water, Shelf and Clipboard; Escape collapses the view.
-- **Clickable navigation dots:** bigger hit targets that open their corresponding page.
-- **Overview is always first:** the island opens to the main overview; Lyrics is the next page.
-- Preserves Czech and English, media controls, privacy-conscious clipboard history, mini player and Windows 10/11 support.
+## Stability
+- Adds defensive validation for all progress values coming from Windows media sessions and user settings. Undefined or infinite values can no longer reach WPF progress controls.
+- Guards saved opacity settings against invalid values.
+- Improves startup diagnostics, including the underlying exception when a window fails to load.
+- Updates the Windows startup smoke test to **reject error dialog windows** rather than passing just because the process is still running.
+- Includes Windows regression tests that feed NaN, infinities and out-of-range numbers to real WPF progress controls and load the actual media/peek/water views.
 
-The taskbar version is visually overlaid *inside* the taskbar's screen rectangle. It is not injected into Explorer. Taskbar customization and unusual DPI/multi-monitor setups can affect placement; manual UI verification is recommended.
+## Design
+- Adds a restrained dark, translucent gradient and thin glass rim to the main Dynamic Island.
+- Refines the graphite theme with cool mint/blue accents and a matching compact navigation strip.
+- Inspired by V-Notch's clean desktop aesthetic; this is **not** its DirectX 11 Liquid Glass/refraction engine.
 
-**Installer:** CorePilot-Setup.exe for Windows x64. No separate .NET runtime. Installer is currently unsigned.
+CorePilot remains docked in its compact overview within a top/bottom Windows taskbar when inactive. Expanded views, left/right arrows, clickable dots and keyboard navigation are preserved. Czech and English remain available.
 
-Based on the MIT-licensed NusaLite by Pidzzzz; attribution and license are included in the installation.
+Windows 10 and 11, x64. The installer is unsigned. Includes required MIT license and attribution for the NusaLite base.

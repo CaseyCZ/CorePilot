@@ -57,7 +57,7 @@
                       MouseMove="SeekArea_MouseMove"
                       MouseLeftButtonUp="SeekArea_MouseLeftButtonUp">
                     <ProgressBar Style="{StaticResource SlimProgress}" VerticalAlignment="Center"
-                                 Value="{Binding TrackProgress, Mode=OneWay}" />
+                                 Value="{Binding TrackProgress, Mode=OneWay, Converter={StaticResource SafeProgress}}" />
                 </Grid>
                 <DockPanel Margin="0,2,0,0">
                     <TextBlock Text="{Binding PositionText}" Style="{StaticResource TinyText}" FontSize="9.5" />

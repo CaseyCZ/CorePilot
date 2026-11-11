@@ -1,9 +1,11 @@
 <Application x:Class="CorePilot.App"
+             xmlns:infra="clr-namespace:CorePilot.Infrastructure"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
         <ResourceDictionary>
+            <infra:SafeProgressValueConverter x:Key="SafeProgress" />
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/Theme.Graphite.xaml" />
                 <ResourceDictionary Source="Themes/Styles.xaml" />

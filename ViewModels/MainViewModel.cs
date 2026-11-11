@@ -188,7 +188,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string DurationText => _track.Duration > TimeSpan.Zero ? TrackInfo.Format(_track.Duration) : "--:--";
 
-    public double TrackProgress => _track.Progress;
+    public double TrackProgress => FiniteRange.Clamp(_track.Progress);
 
     public string PlayGlyph => IsPlaying ? "pause" : "play";
 
@@ -847,7 +847,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public double PeekProgress
     {
         get => _peekProgress;
-        private set => SetProperty(ref _peekProgress, value);
+        private set => SetProperty(ref _peekProgress, FiniteRange.Clamp(value));
     }
 
     public ImageSource? PeekArtwork

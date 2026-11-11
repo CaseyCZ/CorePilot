@@ -32,7 +32,7 @@
                 <TextBlock Grid.Column="2" Text="{Binding PeekValue}" Style="{StaticResource TitleText}" FontSize="15"
                            Foreground="{DynamicResource AmberBrush}" VerticalAlignment="Center" />
             </Grid>
-            <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Value="{Binding PeekProgress, Mode=OneWay}"
+            <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Value="{Binding PeekProgress, Mode=OneWay, Converter={StaticResource SafeProgress}}"
                          Margin="49,0,0,0" />
         </Grid>
 
@@ -74,7 +74,7 @@
                            Foreground="{DynamicResource MintBrush}" VerticalAlignment="Center" />
             </Grid>
             <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Foreground="{DynamicResource MintBrush}"
-                         Value="{Binding PeekProgress, Mode=OneWay}" Margin="49,0,0,0" />
+                         Value="{Binding PeekProgress, Mode=OneWay, Converter={StaticResource SafeProgress}}" Margin="49,0,0,0" />
         </Grid>
 
         <!-- Media -->
@@ -112,7 +112,7 @@
                                Foreground="{DynamicResource RoseBrush}" HorizontalAlignment="Right" Margin="0,4,0,0" />
                 </StackPanel>
             </Grid>
-            <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Value="{Binding PeekProgress, Mode=OneWay}"
+            <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Value="{Binding PeekProgress, Mode=OneWay, Converter={StaticResource SafeProgress}}"
                          Margin="53,0,0,0" />
         </Grid>
         <Grid Visibility="{Binding PeekIsKeys, Converter={StaticResource BoolVis}}">

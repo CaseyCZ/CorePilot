@@ -83,6 +83,8 @@ public sealed class SettingsStore
                 var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
                 if (loaded is not null)
                 {
+                    loaded.GuardOpacity = CorePilot.Infrastructure.FiniteRange.Clamp(loaded.GuardOpacity, 0.15, 1.0);
+                    loaded.HoverDelayMs = Math.Clamp(loaded.HoverDelayMs, 0, 1000);
                     Current = loaded;
                 }
             }

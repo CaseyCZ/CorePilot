@@ -9,6 +9,16 @@ public sealed class NotchShape : FrameworkElement
         nameof(Fill), typeof(Brush), typeof(NotchShape),
         new FrameworkPropertyMetadata(new SolidColorBrush(Color.FromRgb(5, 6, 12)), FrameworkPropertyMetadataOptions.AffectsRender));
 
+    public static readonly DependencyProperty RimBrushProperty = DependencyProperty.Register(
+        nameof(RimBrush), typeof(Brush), typeof(NotchShape),
+        new FrameworkPropertyMetadata(Brushes.Transparent, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public Brush RimBrush
+    {
+        get => (Brush)GetValue(RimBrushProperty);
+        set => SetValue(RimBrushProperty, value);
+    }
+
     public static readonly DependencyProperty CornerRadiusProperty = DependencyProperty.Register(
         nameof(CornerRadius), typeof(double), typeof(NotchShape),
         new FrameworkPropertyMetadata(18.0, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -72,6 +82,9 @@ public sealed class NotchShape : FrameworkElement
         }
 
         geometry.Freeze();
-        drawingContext.DrawGeometry(Fill, null, geometry);
+        // Subtle glass outline without desktop capture or a GPU renderer.
+        var rim = new Pen(RimBrush, 0.8) { LineJoin = PenLineJoin.Round };
+        rim.Freeze();
+        drawingContext.DrawGeometry(Fill, rim, geometry);
     }
 }

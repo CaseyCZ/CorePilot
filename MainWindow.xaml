@@ -53,7 +53,9 @@
                   MouseLeftButtonDown="Island_MouseLeftButtonDown"
                   MouseLeftButtonUp="Island_MouseLeftButtonUp"
                   MouseWheel="Island_MouseWheel">
-                <controls:NotchShape x:Name="Notch" Fill="{DynamicResource VoidBrush}" CornerRadius="12" EarRadius="0" />
+                <controls:NotchShape x:Name="Notch" Fill="{DynamicResource IslandGlassBrush}"
+                                     RimBrush="{DynamicResource IslandRimBrush}"
+                                     CornerRadius="12" EarRadius="0" />
                 <ContentControl x:Name="ContentHost" HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Focusable="False" IsTabStop="False">
                     <ContentControl.RenderTransform>
@@ -63,21 +65,23 @@
                 <Button x:Name="PreviousPageButton" Panel.ZIndex="10" Content="‹"
                         Visibility="Collapsed" Width="31" Height="44" Margin="4,0,0,0"
                         HorizontalAlignment="Left" VerticalAlignment="Center"
-                        Foreground="#F0F6FF" Background="#B0222B40"
+                        Foreground="#F0F6FF" Background="#A8213047"
                         BorderBrush="#557083A2" BorderThickness="1" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Předchozí obrazovka"
                         Click="PreviousPage_Click" Style="{StaticResource IslandNavArrow}"/>
                 <Button x:Name="NextPageButton" Panel.ZIndex="10" Content="›"
                         Visibility="Collapsed" Width="31" Height="44" Margin="0,0,4,0"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Foreground="#F0F6FF" Background="#B0222B40"
+                        Foreground="#F0F6FF" Background="#A8213047"
                         BorderBrush="#557083A2" BorderThickness="1" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Další obrazovka"
                         Click="NextPage_Click" Style="{StaticResource IslandNavArrow}"/>
             </Grid>
 
-            <Border x:Name="DotsBar" Margin="0,6,0,0" HorizontalAlignment="Center" Background="#99120A22"
-                    CornerRadius="8" Padding="7,4" Opacity="0" IsHitTestVisible="False">
+            <Border x:Name="DotsBar" Margin="0,6,0,0" HorizontalAlignment="Center"
+                    Background="{DynamicResource IslandGlassBrush}"
+                    BorderBrush="{DynamicResource IslandRimBrush}" BorderThickness="0.7"
+                    CornerRadius="12" Padding="5,4" Opacity="0" IsHitTestVisible="False">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="DotsSlide" />
                 </Border.RenderTransform>

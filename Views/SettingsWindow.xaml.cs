@@ -78,10 +78,10 @@ public partial class SettingsWindow : Window
         ClickGuardCheck.IsChecked = s.ClickGuardEnabled;
         AutoClickGuardCheck.IsChecked = s.AutoClickGuard;
 
-        HoverDelaySlider.Value = s.HoverDelayMs;
+        HoverDelaySlider.Value = Math.Clamp(s.HoverDelayMs, 0, 1000);
         HoverDelayValue.Text = $"{s.HoverDelayMs} ms";
 
-        var percent = (int)Math.Round(Math.Clamp(s.GuardOpacity, 0.15, 1.0) * 100);
+        var percent = (int)Math.Round(CorePilot.Infrastructure.FiniteRange.Clamp(s.GuardOpacity, 0.15, 1.0) * 100);
         GuardOpacitySlider.Value = percent;
         GuardOpacityValue.Text = $"{percent} %";
 

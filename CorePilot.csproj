@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\CorePilot.ico</ApplicationIcon>
     <AssemblyName>CorePilot</AssemblyName>
     <RootNamespace>CorePilot</RootNamespace>
-    <Version>2.2.0</Version>
+    <Version>2.3.0</Version>
     <Authors>CaseyCZ (based on Pidzzzz)</Authors>
     <Product>CorePilot</Product>
     <Description>A living island for Windows 10 and 11.</Description>
@@ -25,6 +25,13 @@
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
     <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The regression harness has its own entrypoint and must not be compiled
+         into the production WPF application. -->
+    <Compile Remove="tests\**\*.cs" />
+    <Page Remove="tests\**\*.xaml" />
   </ItemGroup>
 
   <ItemGroup>

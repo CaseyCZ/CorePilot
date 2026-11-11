@@ -51,3 +51,37 @@ public sealed class EmptyToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => Binding.DoNothing;
 }
+
+
+/// <summary>
+/// WPF RangeBase.Value rejects NaN and non-finite numbers. Media sessions,
+/// third-party metadata and saved settings are untrusted numeric inputs.
+/// Normalize them before binding any ProgressBar/Slider to avoid XamlParseException.
+/// </summary>
+public static class FiniteRange
+{
+    public static double Clamp(object? value, double minimum = 0, double maximum = 1)
+    {
+        if (!double.IsFinite(minimum) || !double.IsFinite(maximum) || minimum > maximum)
+            throw new ArgumentOutOfRangeException(nameof(minimum), "Invalid UI range.");
+        double numeric = value switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            long l => l,
+            decimal m => (double)m,
+            _ => minimum
+        };
+        return double.IsFinite(numeric) ? Math.Clamp(numeric, minimum, maximum) : minimum;
+    }
+}
+
+public sealed class SafeProgressValueConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        FiniteRange.Clamp(value);
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
+}

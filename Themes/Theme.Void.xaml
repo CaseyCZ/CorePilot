@@ -15,6 +15,12 @@
     <Color x:Key="LimeColor">#C7F36B</Color>
     <Color x:Key="OrchidColor">#7C5CFF</Color>
 
+    <LinearGradientBrush x:Key="IslandGlassBrush" StartPoint="0,0" EndPoint="0.9,1">
+        <GradientStop Color="#F0060712" Offset="0"/>
+        <GradientStop Color="#FD03050A" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="IslandRimBrush" Color="#537969AC"/>
+
     <SolidColorBrush x:Key="VoidBrush" Color="{StaticResource VoidColor}" />
     <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />
     <SolidColorBrush x:Key="MistBrush" Color="{StaticResource MistColor}" />
