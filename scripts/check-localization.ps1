@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $loc = Get-Content 'Services/LanguageManager.cs' -Raw -Encoding UTF8
 $settings = Get-Content 'Services/SettingsStore.cs' -Raw -Encoding UTF8
 $ui = Get-Content 'Views/SettingsWindow.xaml' -Raw -Encoding UTF8
-$host = Get-Content 'AppHost.cs' -Raw -Encoding UTF8
+$appHostSource = Get-Content 'AppHost.cs' -Raw -Encoding UTF8
 $expected = @('cs', 'en')
 foreach ($code in $expected) {
     if (!$loc.Contains('"' + $code + '"')) { throw "Missing language: $code" }
@@ -10,7 +10,7 @@ foreach ($code in $expected) {
 if (!$settings.Contains('public string Language { get; set; } = "cs"')) {
     throw 'Czech must be the default UI language.'
 }
-if (!$host.Contains('LanguageManager.Current.SetLanguage(_settings.Current.Language)')) {
+if (!$appHostSource.Contains('LanguageManager.Current.SetLanguage(_settings.Current.Language)')) {
     throw 'Saved UI language must be restored on startup.'
 }
 if (!$ui.Contains('x:Name="LanguageCombo"') -or
