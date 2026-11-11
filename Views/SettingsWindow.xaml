@@ -199,24 +199,26 @@
         </Border>
 
         <Grid Grid.Column="1" Margin="26,22,26,22">
-            <StackPanel x:Name="PanelUmum">
-                <TextBlock Text="Umum" Style="{StaticResource SectionTitle}" />
-                <TextBlock Text="Perilaku dasar CorePilot." Style="{StaticResource SectionNote}"
+            <ScrollViewer x:Name="PanelUmum" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+              <StackPanel>
+                <TextBlock Text="Obecné" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="Základní nastavení CorePilotu." Style="{StaticResource SectionNote}"
                            Margin="0,5,0,16" />
 
-                <CheckBox x:Name="StartWithWindowsCheck" Content="Mulai bersama Windows"
+                <CheckBox x:Name="StartWithWindowsCheck" Content="Spouštět s Windows"
                           Style="{StaticResource SettingCheck}"
                           Checked="StartWithWindows_Toggled" Unchecked="StartWithWindows_Toggled" />
 
-                <CheckBox x:Name="HotkeysCheck" Content="Aktifkan shortcut global (Win+Alt+N/P/S/L/F/G)"
+                <CheckBox x:Name="HotkeysCheck" Content="Klávesové zkratky (Win+Alt+N/P/S/L/F/G/C)"
                           Style="{StaticResource SettingCheck}"
                           Checked="Hotkeys_Toggled" Unchecked="Hotkeys_Toggled" />
 
-                <CheckBox x:Name="FullscreenCheck" Content="Sembunyikan saat layar penuh"
+                <CheckBox x:Name="FullscreenCheck" Content="Skrýt při zobrazení na celou obrazovku"
                           Style="{StaticResource SettingCheck}"
                           Checked="Fullscreen_Toggled" Unchecked="Fullscreen_Toggled" />
 
-                <CheckBox x:Name="AutoLyricsCheck" Content="Lirik otomatis saat memutar musik"
+                <CheckBox x:Name="AutoLyricsCheck" Content="Automatické texty při přehrávání hudby"
                           Style="{StaticResource SettingCheck}"
                           Checked="AutoLyrics_Toggled" Unchecked="AutoLyrics_Toggled" />
 
@@ -233,7 +235,7 @@
 
                 <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,4,0,16" />
 
-                <TextBlock Text="Offset lirik" Style="{StaticResource RowLabel}" Margin="0,0,0,8" />
+                <TextBlock Text="Posun textů písní" Style="{StaticResource RowLabel}" Margin="0,0,0,8" />
                 <StackPanel Orientation="Horizontal">
                     <TextBox x:Name="LyricOffsetBox" Style="{StaticResource SettingText}"
                              TextChanged="LyricOffset_TextChanged"
@@ -242,9 +244,10 @@
                     <TextBlock Text="ms" Style="{StaticResource RowLabel}" Margin="8,0,0,0"
                                Foreground="{DynamicResource MistBrush}" />
                 </StackPanel>
-                <TextBlock Text="Rentang -2000..2000 ms. Nilai positif mempercepat tampilnya lirik."
+                <TextBlock Text="Rozsah −2000 až 2000 ms. Kladná hodnota zobrazí text dříve."
                            Style="{StaticResource SectionNote}" Margin="0,6,0,0" />
-            </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
 
             <StackPanel x:Name="PanelNotch" Visibility="Collapsed">
                 <TextBlock Text="Notch &amp; Guard" Style="{StaticResource SectionTitle}" />

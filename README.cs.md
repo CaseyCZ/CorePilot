@@ -17,6 +17,9 @@ CorePilot se nenápadně drží horního okraje obrazovky. Najeď na něj myší
 - **Hudba:** obal alba, interpret, pozastavení, přepínání a posun skladby.
 - **Živý ostrůvek:** přirozené animace, rozbalování a skrytí při hrách.
 - **Stav počítače:** zvuk a baterie přehledně na jednom místě.
+- **Schránka:** volitelná historie textů a obrázků pouze v paměti, ve výchozím stavu vypnutá.
+- **Klávesy:** indikace Caps Lock a Num Lock.
+- **Mini přehrávač:** volitelný panel nad hlavním panelem Windows.
 - **Volitelné funkce:** texty písní, časovač soustředění a odkládání souborů.
 - **Vzhled a ovládání:** vlastní nastavení, motivy a zkratky.
 
@@ -26,6 +29,8 @@ CorePilot se nenápadně drží horního okraje obrazovky. Najeď na něj myší
 
 [Zobrazit poslední vydání CorePilotu](https://github.com/CaseyCZ/CorePilot/releases/latest).
 
-Nová generace založená na NusaLite je zatím ve vývoji. Dosavadní veřejný instalátor zůstává dostupný, než náhrada projde testy na Windows.
+Stáhni **CorePilot-Setup.exe** a spusť instalačního průvodce. .NET není potřeba instalovat zvlášť. Instalátor zatím není digitálně podepsaný, takže Windows mohou zobrazit bezpečnostní upozornění.
+
+**Soukromí:** Historie schránky je dobrovolná a vypnutá, dokud ji nezapneš. Uchovává nejvýše 12 položek v paměti a po vypnutí nebo ukončení CorePilotu se smaže. Mini přehrávač plave nad hlavním panelem; není jeho přímou součástí.
 
 CorePilot je otevřený projekt s licencí MIT, založený na [NusaLite od Pidzzzz](https://github.com/Pidzzzz/nusa-lite). Viz [licence](LICENSE) a [poděkování](NOTICE.md). Nejde o původní uzavřenou aplikaci Nusa.
