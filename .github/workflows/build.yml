@@ -1,9 +1,9 @@
 name: CorePilot - verify Windows preview
 on:
   push:
-    branches: [main]
+    branches: [main, 'migration/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'migration/**']
   workflow_dispatch:
 
 permissions:

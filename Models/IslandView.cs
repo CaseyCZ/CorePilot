@@ -18,5 +18,6 @@ public enum PeekKind
     None,
     Volume,
     Power,
-    Media
+    Media,
+    Keys
 }

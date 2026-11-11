@@ -50,6 +50,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private double _peekProgress;
     private ImageSource? _peekArtwork;
     private PeekKind _peekKind;
+    private string _lockKeyName = string.Empty;
+    private bool _lockKeyEnabled;
 
     private string _lyricPrev = string.Empty;
     private string _lyricCurrent = string.Empty;
@@ -784,6 +786,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(PeekIsVolume));
                 OnPropertyChanged(nameof(PeekIsPower));
                 OnPropertyChanged(nameof(PeekIsMedia));
+                OnPropertyChanged(nameof(PeekIsKeys));
             }
         }
     }
@@ -793,6 +796,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public bool PeekIsPower => PeekKind == PeekKind.Power;
 
     public bool PeekIsMedia => PeekKind == PeekKind.Media;
+    public bool PeekIsKeys => PeekKind == PeekKind.Keys;
+
+    public void ShowLockKeyStatus(string name, bool enabled)
+    {
+        _lockKeyName = name;
+        _lockKeyEnabled = enabled;
+        PeekRequested?.Invoke(PeekKind.Keys);
+    }
 
     public string PeekTitle
     {
@@ -843,6 +854,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 PeekSubtitle = PowerPeekSubtitle;
                 PeekValue = BatteryText;
                 PeekProgress = BatteryProgress;
+                PeekArtwork = null;
+                break;
+            case PeekKind.Keys:
+                PeekTitle = _lockKeyName;
+                PeekSubtitle = _lockKeyEnabled ? "Zapnuto" : "Vypnuto";
+                PeekValue = _lockKeyEnabled ? "ON" : "OFF";
+                PeekProgress = _lockKeyEnabled ? 1 : 0;
                 PeekArtwork = null;
                 break;
             case PeekKind.Media:

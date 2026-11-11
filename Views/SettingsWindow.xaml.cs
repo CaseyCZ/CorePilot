@@ -21,6 +21,8 @@ public partial class SettingsWindow : Window
     private readonly Action<bool>? _fullscreenChanged;
     private readonly Action<bool>? _hotkeysChanged;
     private readonly Action? _guardGhostRefresh;
+    private readonly Action<bool>? _clipboardChanged;
+    private readonly Action<bool>? _miniPlayerChanged;
     private bool _loading = true;
 
     public SettingsWindow(
@@ -29,7 +31,9 @@ public partial class SettingsWindow : Window
         Action<bool>? autoLyricsChanged = null,
         Action<bool>? fullscreenChanged = null,
         Action<bool>? hotkeysChanged = null,
-        Action? guardGhostRefresh = null)
+        Action? guardGhostRefresh = null,
+        Action<bool>? clipboardChanged = null,
+        Action<bool>? miniPlayerChanged = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _clickGuardChanged = clickGuardChanged;
@@ -37,6 +41,8 @@ public partial class SettingsWindow : Window
         _fullscreenChanged = fullscreenChanged;
         _hotkeysChanged = hotkeysChanged;
         _guardGhostRefresh = guardGhostRefresh;
+        _clipboardChanged = clipboardChanged;
+        _miniPlayerChanged = miniPlayerChanged;
 
         InitializeComponent();
 
@@ -63,6 +69,9 @@ public partial class SettingsWindow : Window
         HotkeysCheck.IsChecked = s.EnableGlobalHotkeys;
         FullscreenCheck.IsChecked = s.FullscreenAutoHide;
         AutoLyricsCheck.IsChecked = s.AutoLyricsOnPlay;
+        ClipboardHistoryCheck.IsChecked = s.ClipboardEnabled;
+        KeysCheck.IsChecked = s.ShowLockKeyNotifications;
+        TaskbarWidgetCheck.IsChecked = s.TaskbarWidget;
         LyricOffsetBox.Text = s.LyricOffsetMs.ToString();
 
         ClickGuardCheck.IsChecked = s.ClickGuardEnabled;
@@ -133,6 +142,31 @@ public partial class SettingsWindow : Window
         _settings.Current.FullscreenAutoHide = enabled;
         _settings.Save();
         _fullscreenChanged?.Invoke(enabled);
+    }
+
+    private void Clipboard_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var enabled = ClipboardHistoryCheck.IsChecked == true;
+        _settings.Current.ClipboardEnabled = enabled;
+        _settings.Save();
+        _clipboardChanged?.Invoke(enabled);
+    }
+
+    private void Keys_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Current.ShowLockKeyNotifications = KeysCheck.IsChecked == true;
+        _settings.Save();
+    }
+
+    private void MiniPlayer_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var enabled = TaskbarWidgetCheck.IsChecked == true;
+        _settings.Current.TaskbarWidget = enabled;
+        _settings.Save();
+        _miniPlayerChanged?.Invoke(enabled);
     }
 
     private void AutoLyrics_Toggled(object sender, RoutedEventArgs e)
@@ -444,5 +478,7 @@ public partial class SettingsWindow : Window
         _fullscreenChanged?.Invoke(_settings.Current.FullscreenAutoHide);
         _hotkeysChanged?.Invoke(_settings.Current.EnableGlobalHotkeys);
         _guardGhostRefresh?.Invoke();
+        _clipboardChanged?.Invoke(_settings.Current.ClipboardEnabled);
+        _miniPlayerChanged?.Invoke(_settings.Current.TaskbarWidget);
     }
 }

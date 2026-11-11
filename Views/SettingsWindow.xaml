@@ -220,6 +220,17 @@
                           Style="{StaticResource SettingCheck}"
                           Checked="AutoLyrics_Toggled" Unchecked="AutoLyrics_Toggled" />
 
+                <CheckBox x:Name="ClipboardHistoryCheck"
+                          Content="Historie schránky (texty a obrázky, pouze v paměti)"
+                          Style="{StaticResource SettingCheck}"
+                          Checked="Clipboard_Toggled" Unchecked="Clipboard_Toggled" />
+                <CheckBox x:Name="KeysCheck" Content="Upozornění Caps Lock / Num Lock"
+                          Style="{StaticResource SettingCheck}"
+                          Checked="Keys_Toggled" Unchecked="Keys_Toggled" />
+                <CheckBox x:Name="TaskbarWidgetCheck" Content="Mini přehrávač nad hlavním panelem"
+                          Style="{StaticResource SettingCheck}"
+                          Checked="MiniPlayer_Toggled" Unchecked="MiniPlayer_Toggled" />
+
                 <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,4,0,16" />
 
                 <TextBlock Text="Offset lirik" Style="{StaticResource RowLabel}" Margin="0,0,0,8" />

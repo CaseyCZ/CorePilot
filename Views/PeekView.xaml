@@ -115,5 +115,22 @@
             <ProgressBar Grid.Row="1" Style="{StaticResource SlimProgress}" Value="{Binding PeekProgress, Mode=OneWay}"
                          Margin="53,0,0,0" />
         </Grid>
+        <Grid Visibility="{Binding PeekIsKeys, Converter={StaticResource BoolVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="42"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border Width="38" Height="38" CornerRadius="12" Background="#244B9C82">
+                <TextBlock Text="⌨" Foreground="{DynamicResource MintBrush}" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding PeekTitle}" Style="{StaticResource TitleText}" FontSize="14"/>
+                <TextBlock Text="{Binding PeekSubtitle}" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding PeekValue}" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource MintBrush}" VerticalAlignment="Center"/>
+        </Grid>
     </Grid>
 </UserControl>
