@@ -1,0 +1,46 @@
+<Window x:Class="CorePilot.Views.MiniPlayerWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="CorePilot mini přehrávač" Width="322" Height="76" WindowStyle="None"
+ AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+ ShowInTaskbar="False" ShowActivated="False" Topmost="True"
+ WindowStartupLocation="Manual" Loaded="Window_Loaded">
+ <Border Background="#E8152032" BorderBrush="#735778A0" BorderThickness="1"
+         CornerRadius="24">
+  <Border.Effect>
+   <DropShadowEffect Color="#060D1E" BlurRadius="20" ShadowDepth="7" Opacity="0.56"/>
+  </Border.Effect>
+  <Grid Margin="10,8,10,8">
+   <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="4"/></Grid.RowDefinitions>
+   <Grid Grid.Row="0">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+    <Border Grid.Column="0" Width="46" Height="46" CornerRadius="12" Background="#3C5365" ClipToBounds="True">
+     <Grid>
+      <TextBlock Text="♫" FontSize="24" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+      <Image Source="{Binding Artwork}" Stretch="UniformToFill" Width="46" Height="46"/>
+     </Grid>
+    </Border>
+    <Button Grid.Column="1" Background="Transparent" BorderThickness="0" Padding="5,0"
+            Click="OpenPlayer_Click" HorizontalContentAlignment="Left" Cursor="Hand">
+     <StackPanel VerticalAlignment="Center">
+      <TextBlock Text="{Binding TrackTitle}" Foreground="White" FontSize="12" FontWeight="SemiBold"
+                 TextTrimming="CharacterEllipsis" Width="192"/>
+      <TextBlock Text="{Binding TrackArtist}" Foreground="#AEBFCF" FontSize="10" Width="192"
+                 TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+     </StackPanel>
+    </Button>
+    <Button Grid.Column="2" Background="#35465C" Foreground="White" BorderThickness="0" Padding="0"
+            Width="42" Height="42" Cursor="Hand" Click="TogglePlayback_Click">
+     <Grid>
+      <TextBlock Text="▶" Foreground="White" FontSize="18" VerticalAlignment="Center"
+                 HorizontalAlignment="Center" Visibility="{Binding IsPlaying, Converter={StaticResource InvBoolVis}}"/>
+      <TextBlock Text="Ⅱ" Foreground="White" FontSize="18" VerticalAlignment="Center"
+                 HorizontalAlignment="Center" Visibility="{Binding IsPlaying, Converter={StaticResource BoolVis}}"/>
+     </Grid>
+    </Button>
+   </Grid>
+   <ProgressBar Grid.Row="1" Height="3" Maximum="1" Minimum="0" Value="{Binding TrackProgress}"
+                Foreground="#63E6B8" Background="#20324C" BorderThickness="0" Margin="56,0,49,0"/>
+  </Grid>
+ </Border>
+</Window>

@@ -2,6 +2,7 @@ using System.Windows;
 using CorePilot.Services;
 using CorePilot.ViewModels;
 using CorePilot.Views;
+using System.Windows.Threading;
 
 namespace CorePilot;
 
@@ -19,6 +20,8 @@ public sealed class AppHost : IDisposable
     private MainViewModel? _viewModel;
     private MainWindow? _window;
     private SettingsWindow? _settingsWindow;
+    private MiniPlayerWindow? _miniPlayer;
+    private DispatcherTimer? _miniTimer;
 
     public void Start()
     {
@@ -54,6 +57,17 @@ public sealed class AppHost : IDisposable
             _window.SetClipboardEnabled(_settings.Current.ClipboardEnabled);
             _window.Show();
             _window.SetClickGuard(_settings.Current.ClickGuardEnabled);
+            _miniTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromSeconds(1.3)
+            };
+            _miniTimer.Tick += (_, _) =>
+            {
+                try { SyncMiniPlayer(); }
+                catch (Exception ex) { Infrastructure.Log.Write("Mini player update failed.", ex); }
+            };
+            _miniTimer.Start();
+            SyncMiniPlayer();
 
             _ = _viewModel.InitializeAsync();
         }
@@ -84,10 +98,39 @@ public sealed class AppHost : IDisposable
             autoLyricsChanged: enabled => _window?.SetAutoLyricsEnabled(enabled),
             fullscreenChanged: enabled => _window?.SetFullscreenAutoHide(enabled),
             hotkeysChanged: enabled => _window?.SetGlobalHotkeysEnabled(enabled),
-            guardGhostRefresh: () => _window?.RefreshGuardGhost());
+            guardGhostRefresh: () => _window?.RefreshGuardGhost(),
+            clipboardChanged: enabled => _window?.SetClipboardEnabled(enabled),
+            miniPlayerChanged: _ => SyncMiniPlayer());
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    private void SyncMiniPlayer()
+    {
+        if (_settings is null || _viewModel is null || _window is null) return;
+        if (!_settings.Current.TaskbarWidget)
+        {
+            if (_miniPlayer is not null)
+            {
+                _miniPlayer.Close();
+                _miniPlayer = null;
+            }
+            return;
+        }
+
+        _miniPlayer ??= new MiniPlayerWindow(
+            _viewModel, () => _window.OpenView(Models.IslandView.Player));
+        bool show = _viewModel.HasMedia && _window.IsVisible;
+        if (show && !_miniPlayer.IsVisible)
+        {
+            _miniPlayer.Show();
+            _miniPlayer.Position();
+        }
+        else if (!show && _miniPlayer.IsVisible)
+        {
+            _miniPlayer.Hide();
+        }
     }
 
     public void Wake()
@@ -107,6 +150,8 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
+        _miniTimer?.Stop();
+        _miniPlayer?.Close();
         _tray?.Dispose();
         _viewModel?.Dispose();
     }
