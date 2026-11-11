@@ -16,54 +16,46 @@ public partial class MainWindow
     {
         foreach (var view in Carousel)
         {
+            // A large, transparent hit target around the small visual indicator.
+            var mark = new Border
+            {
+                Width = 6, Height = 6, CornerRadius = new CornerRadius(3),
+                Background = _dotIdleBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
+            };
             var dot = new Border
             {
-                Width = 4,
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
-                Background = _dotIdleBrush,
-                Margin = new Thickness(2, 0, 2, 0),
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center,
-                Tag = view,
-                ToolTip = LabelFor(view)
+                Width = 26, Height = 22, Background = Brushes.Transparent,
+                Cursor = Cursors.Hand, Tag = view, ToolTip = LabelFor(view),
+                Child = mark
             };
-
             dot.MouseLeftButtonDown += (sender, e) =>
             {
-                SwitchTo((IslandView)((Border)sender).Tag);
+                ActivateNavigationKeyboard();
+                _collapseTimer.Stop();
+                SwitchTo((IslandView)((Border)sender).Tag, fast: true, explicitRequest: true);
                 e.Handled = true;
             };
-
             DotsPanel.Children.Add(dot);
             _dots.Add(dot);
         }
+        UpdateDots();
     }
 
     private void UpdateDots()
     {
         foreach (var dot in _dots)
         {
-            var dotView = dot.Tag is IslandView view ? view : IslandView.Idle;
-            var active = dotView == _view;
-            var target = active ? 16.0 : 4.0;
-            var from = dot.ActualWidth > 0 ? dot.ActualWidth : target;
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-            dot.Width = target;
-            dot.Background = active ? AccentFor(dotView) : _dotIdleBrush;
-            dot.BeginAnimation(WidthProperty, new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(180))
-            {
-                EasingFunction = ease,
-                FillBehavior = FillBehavior.Stop
-            });
-            dot.BeginAnimation(OpacityProperty, new DoubleAnimation(
-                dot.Opacity,
-                active ? 1.0 : 0.7,
-                TimeSpan.FromMilliseconds(180))
-            {
-                EasingFunction = ease
-            });
+            var view = dot.Tag is IslandView v ? v : IslandView.Idle;
+            var active = view == _view;
+            if (dot.Child is not Border mark) continue;
+            mark.Width = active ? 16 : 6;
+            mark.CornerRadius = new CornerRadius(4);
+            mark.Background = active ? AccentFor(view) : _dotIdleBrush;
+            mark.BeginAnimation(OpacityProperty, new DoubleAnimation(
+                active ? 1.0 : 0.65, TimeSpan.FromMilliseconds(160)));
         }
     }
 
@@ -121,6 +113,7 @@ public partial class MainWindow
 
     private static string LabelFor(IslandView view) => view switch
     {
+        IslandView.Hub => LanguageManager.T("Overview"),
         IslandView.Player => LanguageManager.T("Pemutar"),
         IslandView.Lyrics => LanguageManager.T("Lirik"),
         IslandView.Focus => LanguageManager.T("Fokus"),

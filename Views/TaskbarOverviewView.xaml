@@ -1,0 +1,30 @@
+<UserControl x:Class="CorePilot.Views.TaskbarOverviewView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:CorePilot.Controls"
+ Width="356" Height="36" IsHitTestVisible="False">
+ <Grid Margin="12,0,12,0" Height="36" VerticalAlignment="Center">
+  <Grid.ColumnDefinitions>
+   <ColumnDefinition Width="56"/><ColumnDefinition Width="1"/>
+   <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+  </Grid.ColumnDefinitions>
+  <TextBlock Text="{Binding ClockText}" FontWeight="Bold" FontSize="13"
+             Foreground="{DynamicResource InkBrush}" HorizontalAlignment="Center"
+             VerticalAlignment="Center"/>
+  <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,8,0,8"/>
+  <StackPanel Grid.Column="2" Margin="10,0,7,0" VerticalAlignment="Center">
+   <TextBlock Text="{Binding TrackTitle}" FontSize="11" FontWeight="SemiBold"
+              Foreground="{DynamicResource InkBrush}" TextTrimming="CharacterEllipsis"
+              MaxWidth="205" Height="16"/>
+   <TextBlock Text="{Binding TrackArtist}" FontSize="9"
+              Foreground="{DynamicResource MistBrush}" TextTrimming="CharacterEllipsis"
+              MaxWidth="205" Height="13"/>
+  </StackPanel>
+  <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+   <controls:EqBars Width="16" Height="12" Margin="0,0,7,0"
+                    Visibility="{Binding IsPlaying, Converter={StaticResource BoolVis}}"/>
+   <TextBlock Text="{Binding BatteryText}" FontSize="10" FontWeight="SemiBold"
+              Foreground="{DynamicResource MintBrush}" VerticalAlignment="Center"/>
+  </StackPanel>
+ </Grid>
+</UserControl>

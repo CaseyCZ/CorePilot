@@ -6,7 +6,8 @@ public partial class MainWindow
 {
     private void OnPeekRequested(PeekKind kind)
     {
-        if (kind == PeekKind.None || _hover || _viewModel.IsPinned || _dragActive)
+        if (kind == PeekKind.None || _view == IslandView.Idle ||
+            _hover || _viewModel.IsPinned || _dragActive)
         {
             return;
         }

@@ -23,6 +23,8 @@ CorePilot se nenápadně drží horního okraje obrazovky. Najeď na něj myší
 - **Volitelné funkce:** texty písní, časovač soustředění a odkládání souborů.
 - **Vzhled a ovládání:** vlastní nastavení, motivy a zkratky.
 - **Dva jazyky:** v Nastavení → Obecné → Jazyk aplikace přepneš mezi **Čeština** a **English**. Volba se uloží a rozhraní se přepne bez restartu.
+- **Přehled na hlavním panelu:** při nečinnosti je CorePilot přímo v horním nebo dolním hlavním panelu Windows. Zobrazuje čas, hudbu a baterii, nikoli velké okno na ploše.
+- **Jednoduché přepínání:** po rozbalení jsou po stranách malé šipky. Fungují i větší klikatelné tečky, kolečko myši a po kliknutí do ostrůvku klávesy ← / →.
 
 **Kompatibilita:** Windows 10 od verze 2004 a Windows 11, 64 bitů.
 

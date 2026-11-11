@@ -1,16 +1,15 @@
-# CorePilot 2.1 — Czech & English
+# CorePilot 2.2 — Overview on the taskbar
 
-CorePilot now supports **Čeština / English** throughout the application. Czech is the default, and language selection is saved for your next launch.
+- **Compact taskbar overview:** the inactive island now sits inside a top- or bottom-docked Windows taskbar, showing time, current music and battery status.
+- **No unsolicited expansion:** background media changes, lyric updates and status notifications no longer replace the inactive overview.
+- **Page controls:** clearly visible, unobtrusive left/right arrows at the edges of the expanded island.
+- **Keyboard navigation:** after interacting with the island, use Left / Right to switch between Overview, Lyrics, Music, Focus, Water, Shelf and Clipboard; Escape collapses the view.
+- **Clickable navigation dots:** bigger hit targets that open their corresponding page.
+- **Overview is always first:** the island opens to the main overview; Lyrics is the next page.
+- Preserves Czech and English, media controls, privacy-conscious clipboard history, mini player and Windows 10/11 support.
 
-- Change language from **Settings → General → Application language** (in Czech: **Nastavení → Obecné → Jazyk aplikace**).
-- The interface updates on selection, including the player, notifications, focus timer, hydration reminders, clipboard, file shelf and tray menu.
-- Language-aware dates and status messages.
-- Retains the NusaLite-based Dynamic Island, media controls, local clipboard history, Caps/Num Lock indicators and mini player.
+The taskbar version is visually overlaid *inside* the taskbar's screen rectangle. It is not injected into Explorer. Taskbar customization and unusual DPI/multi-monitor setups can affect placement; manual UI verification is recommended.
 
-**Install:** Download **CorePilot-Setup.exe** and follow the installer. No separate .NET runtime needed. Works on Windows 10 (2004+) and Windows 11 x64.
+**Installer:** CorePilot-Setup.exe for Windows x64. No separate .NET runtime. Installer is currently unsigned.
 
-The installer is currently unsigned. Optional lyrics and album artwork may contact third-party services. Clipboard history is disabled by default and stays in memory only.
-
-CorePilot is derived from [NusaLite by Pidzzzz](https://github.com/Pidzzzz/nusa-lite) under the MIT license; attribution and license are included.
-
-[Product page](https://github.com/CaseyCZ/CorePilot) · [Report a problem](https://github.com/CaseyCZ/CorePilot/issues)
+Based on the MIT-licensed NusaLite by Pidzzzz; attribution and license are included in the installation.

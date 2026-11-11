@@ -20,8 +20,9 @@ public partial class MainWindow : Window
 {
     private static readonly IslandView[] Carousel =
     {
-        IslandView.Player,
+        IslandView.Hub,
         IslandView.Lyrics,
+        IslandView.Player,
         IslandView.Focus,
         IslandView.Water,
         IslandView.Shelf,
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
     private IslandView _view = IslandView.Idle;
     private IslandView _viewBeforePeek = IslandView.Idle;
     private IslandView _viewBeforeDrag = IslandView.Hub;
+    private bool _keyboardNavigationActive;
     private bool _hover;
     private bool _dwellPending;
     private bool _clickGuard;
@@ -75,6 +77,8 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
+        NextPageButton.ToolTip = LanguageManager.T("NextPage");
 
         _uiFont = TryFindResource("UiFont") as FontFamily ?? new FontFamily("Segoe UI");
         _displayFont = TryFindResource("DisplayFont") as FontFamily ?? _uiFont;
@@ -115,6 +119,8 @@ public partial class MainWindow : Window
             foreach (var dot in _dots)
                 if (dot.Tag is IslandView view)
                     dot.ToolTip = LabelFor(view);
+            PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
+            NextPageButton.ToolTip = LanguageManager.T("NextPage");
         };
 
         IslandHost.SizeChanged += (_, _) => UpdateWindowRegion();
@@ -178,7 +184,7 @@ public partial class MainWindow : Window
         if (_view == IslandView.Idle)
         {
             _viewModel.IsPinned = true;
-            SwitchTo(_viewModel.IsPlaying && _viewModel.HasLyrics ? IslandView.Lyrics : IslandView.Hub, force: true);
+            SwitchTo(IslandView.Hub, force: true);
         }
         else
         {
@@ -198,7 +204,8 @@ public partial class MainWindow : Window
                 SwitchTo(IslandView.Idle);
             }
         }
-        else if (enabled && _viewModel.IsPlaying && _viewModel.HasLyrics)
+        else if (enabled && _viewModel.IsPlaying && _viewModel.HasLyrics &&
+                 (_hover || _viewModel.IsPinned))
         {
             _autoLyricsActive = true;
             SwitchTo(IslandView.Lyrics);
@@ -214,7 +221,13 @@ public partial class MainWindow : Window
 
         if (playing)
         {
-            if (_view is IslandView.Focus or IslandView.Shelf)
+            // Background media updates do not expand the inactive taskbar overview.
+            if (!_hover && !_viewModel.IsPinned)
+            {
+                _autoLyricsActive = false;
+                return;
+            }
+            if (_view is IslandView.Focus or IslandView.Shelf or IslandView.Clipboard)
             {
                 return;
             }
@@ -288,10 +301,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        WindowStyler.PositionTopCenter(
+        WindowStyler.PositionByTaskbar(
             _hwnd,
             ActualWidth > 0 ? ActualWidth : Width,
-            ActualHeight > 0 ? ActualHeight : Height);
+            ActualHeight > 0 ? ActualHeight : Height,
+            _spec.Height, _view == IslandView.Idle);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -302,10 +316,8 @@ public partial class MainWindow : Window
         SetImmediate(ResolveSpec(IslandView.Idle));
         SetDotsVisible(false, fast: true);
 
-        if (_viewModel.IsPinned)
-        {
-            SwitchTo(IslandView.Hub, force: true);
-        }
+        // Start folded on the taskbar even if an older version saved PinOpen.
+        if (_viewModel.IsPinned) _viewModel.IsPinned = false;
 
         UpdateWindowRegion();
     }
@@ -333,7 +345,10 @@ public partial class MainWindow : Window
 
         _view = view;
         UpdateDots();
-        SetDotsVisible(view is not (IslandView.Idle or IslandView.Peek), fast);
+        var expanded = view is not (IslandView.Idle or IslandView.Peek);
+        SetDotsVisible(expanded, fast);
+        PreviousPageButton.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        NextPageButton.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
 
         if (_hwnd != IntPtr.Zero)
         {
@@ -341,6 +356,8 @@ public partial class MainWindow : Window
         }
 
         AnimateTo(ResolveSpec(view), fast);
+        RepositionWindow();
+        if (view == IslandView.Idle) ReleaseKeyboardNavigation();
         UpdateClickThrough();
     }
 
@@ -353,7 +370,7 @@ public partial class MainWindow : Window
 
         UserControl created = view switch
         {
-            IslandView.Idle => new IdleView(),
+            IslandView.Idle => new TaskbarOverviewView(),
             IslandView.Hub => new HubView(),
             IslandView.Player => new PlayerView(),
             IslandView.Lyrics => new LyricsView(),

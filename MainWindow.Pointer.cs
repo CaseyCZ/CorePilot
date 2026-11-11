@@ -72,6 +72,12 @@ public partial class MainWindow
             return true;
         }
 
+        if (_view != IslandView.Idle && _hover &&
+            WindowStyler.IsCursorOverTaskbarHotspot(cursor.X, cursor.Y))
+        {
+            return true;
+        }
+
         return _dotsVisible && DotsBar.ActualWidth > 0 && IsInside(cursor, DotsBar, window, scale, margin);
     }
 
@@ -234,6 +240,7 @@ public partial class MainWindow
             return;
         }
 
+        ActivateNavigationKeyboard();
         _singleClickPending = true;
         _clickTimer.Stop();
         _clickTimer.Start();
@@ -251,11 +258,11 @@ public partial class MainWindow
 
         if (_view == IslandView.Hub)
         {
-            SwitchTo(_viewModel.IsPlaying && _viewModel.HasLyrics ? IslandView.Lyrics : IslandView.Player);
+            SwitchTo(IslandView.Lyrics);
         }
         else if (_view == IslandView.Idle)
         {
-            SwitchTo(_viewModel.IsPlaying && _viewModel.HasLyrics ? IslandView.Lyrics : IslandView.Hub);
+            SwitchTo(IslandView.Hub);
         }
         else if (_view == IslandView.Lyrics)
         {
@@ -265,24 +272,16 @@ public partial class MainWindow
         {
             SwitchTo(_viewModel.HasLyrics ? IslandView.Lyrics : IslandView.Hub);
         }
+
+        // Clicking the compact taskbar overview expands the island after
+        // the single-click timeout. Only THEN can keyboard focus be assigned.
+        if (_keyboardNavigationActive && _view is not (IslandView.Idle or IslandView.Peek))
+            ActivateNavigationKeyboard();
     }
 
     private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        var direction = e.Delta > 0 ? -1 : 1;
-        var index = Array.IndexOf(Carousel, _view);
-
-        IslandView target;
-        if (index < 0)
-        {
-            target = direction > 0 ? Carousel[0] : Carousel[^1];
-        }
-        else
-        {
-            target = Carousel[(index + direction + Carousel.Length) % Carousel.Length];
-        }
-
-        SwitchTo(target);
+        NavigateCarousel(e.Delta > 0 ? -1 : 1);
         e.Handled = true;
     }
 }

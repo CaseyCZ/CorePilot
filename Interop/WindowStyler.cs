@@ -26,29 +26,65 @@ internal static class WindowStyler
         }
     }
 
-    public static void PositionTopCenter(IntPtr hwnd, double widthDips, double heightDips)
+    /// <summary>
+    /// Compact overview lives INSIDE the top/bottom Windows taskbar bounds.
+    /// Expanded controls live in the adjacent desktop working area.
+    /// This is a taskbar overlay, not injection into Explorer.
+    /// </summary>
+    public static void PositionByTaskbar(IntPtr hwnd, double windowWidthDips,
+                                         double windowHeightDips, double islandHeightDips,
+                                         bool compact)
     {
         var screen = Screen.PrimaryScreen;
-        if (screen is null)
-        {
-            return;
-        }
-
+        if (screen is null) return;
+        var bounds = screen.Bounds;
+        var work = screen.WorkingArea;
         var dpi = NativeMethods.GetDpiForWindow(hwnd);
         var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-        var width = Math.Max(1, (int)Math.Round(widthDips * scale));
-        var height = Math.Max(1, (int)Math.Round(heightDips * scale));
+        var width = Math.Max(1, (int)Math.Round(windowWidthDips * scale));
+        var height = Math.Max(1, (int)Math.Round(windowHeightDips * scale));
+        var islandHeight = Math.Max(1, (int)Math.Round(islandHeightDips * scale));
+        var topBand = work.Top - bounds.Top;
+        var bottomBand = bounds.Bottom - work.Bottom;
+        var x = work.Left + (work.Width - width) / 2;
+        int y;
+        if (topBand >= 24 && topBand >= bottomBand)
+            y = compact ? bounds.Top + Math.Max(0, (topBand - islandHeight) / 2) : work.Top;
+        else if (bottomBand >= 24 && bottomBand > topBand)
+            y = compact ? work.Bottom + Math.Max(0, (bottomBand - islandHeight) / 2)
+                        : Math.Max(work.Top, work.Bottom - islandHeight - 26);
+        else
+            y = work.Top;
 
-        var bounds = screen.WorkingArea;
-        var x = bounds.X + (bounds.Width - width) / 2;
-        NativeMethods.SetWindowPos(
-            hwnd,
-            NativeMethods.HwndTopmost,
-            x,
-            bounds.Y,
-            width,
-            height,
+        NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndTopmost, x, y, width, height,
             NativeMethods.SwpNoActivate | NativeMethods.SwpShowWindow | NativeMethods.SwpNoOwnerZOrder);
+    }
+
+    public static bool IsCursorOverTaskbarHotspot(int x, int y)
+    {
+        var screen = Screen.PrimaryScreen;
+        if (screen is null) return false;
+        var bounds = screen.Bounds;
+        var work = screen.WorkingArea;
+        var topBand = work.Top - bounds.Top;
+        var bottomBand = bounds.Bottom - work.Bottom;
+        var cx = work.Left + work.Width / 2;
+        if (Math.Abs(x - cx) > 190) return false;
+        if (topBand >= 24 && topBand >= bottomBand)
+            return y >= bounds.Top && y < work.Top;
+        if (bottomBand >= 24 && bottomBand > topBand)
+            return y >= work.Bottom && y < bounds.Bottom;
+        return false;
+    }
+
+    public static void SetKeyboardNavigation(IntPtr hwnd, bool enabled)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
+        var next = enabled ? style & ~NativeMethods.WsExNoActivate
+                           : style | NativeMethods.WsExNoActivate;
+        if (next != style)
+            NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GwlExStyle, new IntPtr(next));
     }
 
     public static System.Windows.Point GetCursorPositionDips()

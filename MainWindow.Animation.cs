@@ -100,6 +100,7 @@ public partial class MainWindow
 
         _spec = spec;
         ApplyActiveViewLayout(spec);
+        RepositionWindow();
     }
 
     private void ApplyActiveViewLayout(IslandSpec spec)
@@ -118,7 +119,7 @@ public partial class MainWindow
 
     private void ApplyContentScale()
     {
-        var scale = _view == IslandView.Lyrics || !_browserForeground ? 1.0 : CompactUiScale;
+        var scale = _view is IslandView.Lyrics or IslandView.Idle || !_browserForeground ? 1.0 : CompactUiScale;
         ContentHost.LayoutTransform = Math.Abs(scale - 1.0) < 0.001
             ? Transform.Identity
             : new ScaleTransform(scale, scale);
@@ -140,6 +141,7 @@ public partial class MainWindow
 
         _spec = spec;
         ApplyActiveViewLayout(spec);
+        RepositionWindow();
     }
 
     private DoubleAnimation Animate(
@@ -170,7 +172,7 @@ public partial class MainWindow
         }
 
         var spec = view == IslandView.Idle ? BuildIdleSpec() : SpecFor(view);
-        if (!_browserForeground)
+        if (view == IslandView.Idle || !_browserForeground)
         {
             return spec;
         }
@@ -184,10 +186,8 @@ public partial class MainWindow
 
     private IslandSpec BuildIdleSpec()
     {
-        var widest = MeasureTextWidth(_viewModel.IdleLine, _uiFont, 13.5, FontWeights.Medium);
-        var width = Math.Ceiling((widest + 88 + (_viewModel.HasSourceIcon ? 24 : 0)) / 12) * 12;
-        width = Math.Clamp(width, 216, 400);
-        return new IslandSpec(width, 40, 20, 0);
+        // Stable compact version of the main overview, 36px tall for the taskbar.
+        return new IslandSpec(356, 36, 18, 0);
     }
 
     private IslandSpec BuildLyricsSpec(bool compact)
@@ -276,7 +276,7 @@ public partial class MainWindow
 
     private static IslandSpec SpecFor(IslandView view) => view switch
     {
-        IslandView.Idle => new IslandSpec(198, 34, 12, 0),
+        IslandView.Idle => new IslandSpec(356, 36, 18, 0),
         IslandView.Hub => new IslandSpec(410, 88, 18, 0),
         IslandView.Lyrics => new IslandSpec(360, 108, 20, 0),
         IslandView.Peek => new IslandSpec(362, 68, 16, 0),
