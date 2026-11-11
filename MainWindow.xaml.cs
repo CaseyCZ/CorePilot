@@ -1,0 +1,481 @@
+using System.ComponentModel;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using CorePilot.Interop;
+using CorePilot.Models;
+using CorePilot.ViewModels;
+using CorePilot.Views;
+
+namespace CorePilot;
+
+public partial class MainWindow : Window
+{
+    private static readonly IslandView[] Carousel =
+    {
+        IslandView.Player,
+        IslandView.Lyrics,
+        IslandView.Focus,
+        IslandView.Water,
+        IslandView.Shelf
+    };
+
+    private readonly MainViewModel _viewModel;
+    private readonly DispatcherTimer _collapseTimer;
+    private readonly DispatcherTimer _peekTimer;
+    private readonly DispatcherTimer _hoverTimer;
+    private readonly DispatcherTimer _clickTimer;
+    private readonly DispatcherTimer _fullscreenTimer;
+    private readonly DispatcherTimer _ghostTimer;
+    private readonly Dictionary<IslandView, UserControl> _viewCache = new();
+    private readonly List<Border> _dots = new();
+    private readonly SolidColorBrush _dotIdleBrush = new(Color.FromArgb(140, 255, 255, 255));
+    private readonly FontFamily _uiFont;
+    private readonly FontFamily _displayFont;
+
+    private IntPtr _hwnd;
+    private HwndSource? _hwndSource;
+    private bool _hotkeysRegistered;
+    private bool _isFullscreenSuppressed;
+    private bool _autoLyricsActive;
+    private IslandView _view = IslandView.Idle;
+    private IslandView _viewBeforePeek = IslandView.Idle;
+    private IslandView _viewBeforeDrag = IslandView.Hub;
+    private bool _hover;
+    private bool _dwellPending;
+    private bool _clickGuard;
+    private bool _autoGuarded;
+    private bool _ghostFaded;
+    private IslandView _viewBeforeGuard = IslandView.Idle;
+    private DispatcherTimer? _dwellTimer;
+    private bool _peekActive;
+    private bool _dragActive;
+    private bool _dotsVisible;
+    private bool _singleClickPending;
+    private bool _suppressClickUp;
+    private int _transition;
+    private IslandSpec _spec = new(198, 34, 12, 0);
+    private bool _browserForeground;
+    private bool _browserArmed;
+    private long _insideSince;
+    private const double CompactUiScale = 0.86;
+    private const int BrowserArmHoldMs = 140;
+    private const int BrowserHintDwellMs = 420;
+
+    public MainWindow(MainViewModel viewModel)
+    {
+        _viewModel = viewModel;
+        DataContext = viewModel;
+        InitializeComponent();
+
+        _uiFont = TryFindResource("UiFont") as FontFamily ?? new FontFamily("Segoe UI");
+        _displayFont = TryFindResource("DisplayFont") as FontFamily ?? _uiFont;
+
+        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1150) };
+        _collapseTimer.Tick += CollapseTimer_Tick;
+
+        _peekTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2400) };
+        _peekTimer.Tick += PeekTimer_Tick;
+
+        _hoverTimer = new DispatcherTimer(DispatcherPriority.Input)
+        {
+            Interval = TimeSpan.FromMilliseconds(90)
+        };
+        _hoverTimer.Tick += HoverTimer_Tick;
+        _hoverTimer.Start();
+
+        _clickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
+        _clickTimer.Tick += ClickTimer_Tick;
+
+        _fullscreenTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(750)
+        };
+        _fullscreenTimer.Tick += FullscreenTimer_Tick;
+        _fullscreenTimer.Start();
+
+        _ghostTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _ghostTimer.Tick += GhostTimer_Tick;
+
+        _viewModel.PeekRequested += OnPeekRequested;
+        _viewModel.ViewRequested += OnViewRequested;
+        _viewModel.PinRequested += OnPinRequested;
+        _viewModel.AutoLyricsRequested += OnAutoLyricsRequested;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+
+        IslandHost.SizeChanged += (_, _) => UpdateWindowRegion();
+        DotsBar.SizeChanged += (_, _) => UpdateWindowRegion();
+        SourceInitialized += OnSourceInitialized;
+        DpiChanged += (_, _) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            RepositionWindow();
+            UpdateWindowRegion();
+        }));
+        Closed += (_, _) =>
+        {
+            _hoverTimer.Stop();
+            _dwellTimer?.Stop();
+            _clickTimer.Stop();
+            _fullscreenTimer.Stop();
+            _ghostTimer.Stop();
+            UnregisterHotkeys();
+            _hwndSource?.RemoveHook(HwndHook);
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        };
+    }
+
+    public void OpenView(IslandView view)
+    {
+        if (_isFullscreenSuppressed)
+        {
+            _isFullscreenSuppressed = false;
+            Visibility = Visibility.Visible;
+            RepositionWindow();
+            UpdateWindowRegion();
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        _viewModel.IsPinned = true;
+        SwitchTo(view, force: true, explicitRequest: true);
+    }
+
+    public void ToggleIsland()
+    {
+        if (_isFullscreenSuppressed)
+        {
+            _isFullscreenSuppressed = false;
+            Visibility = Visibility.Visible;
+            RepositionWindow();
+            UpdateWindowRegion();
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (_view == IslandView.Idle)
+        {
+            _viewModel.IsPinned = true;
+            SwitchTo(_viewModel.IsPlaying && _viewModel.HasLyrics ? IslandView.Lyrics : IslandView.Hub, force: true);
+        }
+        else
+        {
+            _autoLyricsActive = false;
+            _viewModel.IsPinned = false;
+            SwitchTo(IslandView.Idle, force: true);
+        }
+    }
+
+    public void SetAutoLyricsEnabled(bool enabled)
+    {
+        if (!enabled && _autoLyricsActive)
+        {
+            _autoLyricsActive = false;
+            if (!_viewModel.IsPinned && !_hover)
+            {
+                SwitchTo(IslandView.Idle);
+            }
+        }
+        else if (enabled && _viewModel.IsPlaying && _viewModel.HasLyrics)
+        {
+            _autoLyricsActive = true;
+            SwitchTo(IslandView.Lyrics);
+        }
+    }
+
+    private void OnAutoLyricsRequested(bool playing)
+    {
+        if (!_viewModel.Settings.Current.AutoLyricsOnPlay || _isFullscreenSuppressed)
+        {
+            return;
+        }
+
+        if (playing)
+        {
+            if (_view is IslandView.Focus or IslandView.Shelf)
+            {
+                return;
+            }
+
+            if (!IsVisible)
+            {
+                Show();
+            }
+
+            _autoLyricsActive = true;
+            SwitchTo(IslandView.Lyrics);
+        }
+        else
+        {
+            if (_autoLyricsActive)
+            {
+                _autoLyricsActive = false;
+                if (!_viewModel.IsPinned && !_hover)
+                {
+                    SwitchTo(IslandView.Idle);
+                }
+            }
+        }
+    }
+
+    public void WakeIsland()
+    {
+        if (_isFullscreenSuppressed)
+        {
+            _isFullscreenSuppressed = false;
+            Visibility = Visibility.Visible;
+            RepositionWindow();
+            UpdateWindowRegion();
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (_view == IslandView.Idle)
+        {
+            SwitchTo(IslandView.Hub, force: true);
+        }
+        else
+        {
+            SwitchTo(_view, force: true);
+        }
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        _hwnd = new WindowInteropHelper(this).Handle;
+        WindowStyler.MakeOverlay(_hwnd);
+        RepositionWindow();
+
+        _hwndSource = HwndSource.FromHwnd(_hwnd);
+        _hwndSource?.AddHook(HwndHook);
+
+        _browserForeground = WindowStyler.IsForegroundBrowser(_hwnd) ?? false;
+        UpdateClickThrough();
+        RegisterHotkeys();
+    }
+
+    private void RepositionWindow()
+    {
+        if (_hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        WindowStyler.PositionTopCenter(
+            _hwnd,
+            ActualWidth > 0 ? ActualWidth : Width,
+            ActualHeight > 0 ? ActualHeight : Height);
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RepositionWindow));
+        BuildDots();
+        ContentHost.Content = GetView(IslandView.Idle);
+        SetImmediate(ResolveSpec(IslandView.Idle));
+        SetDotsVisible(false, fast: true);
+
+        if (_viewModel.IsPinned)
+        {
+            SwitchTo(IslandView.Hub, force: true);
+        }
+
+        UpdateWindowRegion();
+    }
+
+    // ----- Views ---------------------------------------------------------
+
+    private void SwitchTo(IslandView view, bool fast = false, bool force = false, bool explicitRequest = false)
+    {
+        if (_clickGuard && !explicitRequest &&
+            view != IslandView.Idle && view != IslandView.Peek)
+        {
+            return;
+        }
+
+        if (_peekActive && view != IslandView.Peek)
+        {
+            _peekActive = false;
+            _peekTimer.Stop();
+        }
+
+        if (!force && _view == view)
+        {
+            return;
+        }
+
+        _view = view;
+        UpdateDots();
+        SetDotsVisible(view is not (IslandView.Idle or IslandView.Peek), fast);
+
+        if (_hwnd != IntPtr.Zero)
+        {
+            _browserForeground = WindowStyler.IsForegroundBrowser(_hwnd) ?? _browserForeground;
+        }
+
+        AnimateTo(ResolveSpec(view), fast);
+        UpdateClickThrough();
+    }
+
+    private UserControl GetView(IslandView view)
+    {
+        if (_viewCache.TryGetValue(view, out var cached))
+        {
+            return cached;
+        }
+
+        UserControl created = view switch
+        {
+            IslandView.Idle => new IdleView(),
+            IslandView.Hub => new HubView(),
+            IslandView.Player => new PlayerView(),
+            IslandView.Lyrics => new LyricsView(),
+            IslandView.Focus => new FocusView(),
+            IslandView.Water => new WaterView(),
+            IslandView.Shelf => new ShelfView(),
+            _ => new PeekView()
+        };
+
+        _viewCache[view] = created;
+        return created;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_clickGuard && _view != IslandView.Idle && _view != IslandView.Peek &&
+            e.PropertyName is nameof(MainViewModel.TrackTitle) or nameof(MainViewModel.TrackArtist)
+                or nameof(MainViewModel.HasMedia) or nameof(MainViewModel.HasLyrics)
+                or nameof(MainViewModel.LyricCurrent) or nameof(MainViewModel.IdleLine))
+        {
+            SwitchTo(IslandView.Idle, force: true);
+            return;
+        }
+
+        if (_view == IslandView.Idle)
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(MainViewModel.IdleLine):
+                case nameof(MainViewModel.TrackTitle):
+                case nameof(MainViewModel.HasMedia):
+                    UpdateIdleLayout();
+                    break;
+            }
+
+            return;
+        }
+
+        if (_view != IslandView.Lyrics)
+        {
+            return;
+        }
+
+        switch (e.PropertyName)
+        {
+            case nameof(MainViewModel.LyricCurrent):
+            case nameof(MainViewModel.LyricPrev):
+            case nameof(MainViewModel.LyricNext):
+            case nameof(MainViewModel.HasLyrics):
+            case nameof(MainViewModel.TrackTitle):
+            case nameof(MainViewModel.TrackArtist):
+                UpdateLyricsLayout();
+                break;
+        }
+    }
+
+    // ----- Peek / pin ----------------------------------------------------
+
+    private void OnPinRequested(bool pinned)
+    {
+        if (pinned)
+        {
+            _collapseTimer.Stop();
+            if (_view is IslandView.Idle or IslandView.Peek)
+            {
+                SwitchTo(IslandView.Hub, force: true);
+            }
+        }
+        else if (!_hover)
+        {
+            _collapseTimer.Stop();
+            _collapseTimer.Start();
+        }
+    }
+
+    private void OnViewRequested(IslandView view)
+    {
+        if (view == IslandView.Idle)
+        {
+            _viewModel.IsPinned = false;
+            SwitchTo(IslandView.Idle, force: true, explicitRequest: true);
+            return;
+        }
+
+        _viewModel.IsPinned = true;
+        SwitchTo(view, force: true, explicitRequest: true);
+    }
+
+    // ----- Window region -------------------------------------------------
+
+    private void UpdateWindowRegion()
+    {
+        if (_hwnd == IntPtr.Zero || !IsLoaded)
+        {
+            return;
+        }
+
+        var scale = NativeMethods.GetDpiForWindow(_hwnd) / 96.0;
+        var origin = IslandHost.TranslatePoint(new Point(0, 0), Root);
+        var width = (int)Math.Ceiling(IslandHost.ActualWidth * scale);
+        var height = (int)Math.Ceiling(IslandHost.ActualHeight * scale);
+        var x = (int)Math.Round(origin.X * scale);
+        var y = (int)Math.Round(origin.Y * scale);
+
+        if (width < 4 || height < 4)
+        {
+            return;
+        }
+
+        var ear = (int)Math.Round(Notch.EarRadius * scale);
+        var radius = (int)Math.Round(Notch.CornerRadius * scale);
+
+        var region = NativeMethods.CreateRoundRectRgn(
+            x + ear, y, x + width - ear + 1, y + height + 1, radius * 2, radius * 2);
+        var topHeight = ear > 0 ? ear : radius;
+        var top = NativeMethods.CreateRectRgn(x, y, x + width + 1, y + topHeight + 1);
+        NativeMethods.CombineRgn(region, region, top, NativeMethods.RgnOr);
+        NativeMethods.DeleteObject(top);
+
+        if (_dotsVisible && DotsBar.ActualWidth > 0)
+        {
+            var dotsOrigin = DotsBar.TranslatePoint(new Point(0, 0), Root);
+            var dotsWidth = (int)Math.Ceiling(DotsBar.ActualWidth * scale);
+            var dotsHeight = (int)Math.Ceiling(DotsBar.ActualHeight * scale);
+            var dotsX = (int)Math.Round(dotsOrigin.X * scale);
+            var dotsY = (int)Math.Round(dotsOrigin.Y * scale);
+
+            var dotsRegion = NativeMethods.CreateRoundRectRgn(
+                dotsX, dotsY, dotsX + dotsWidth + 1, dotsY + dotsHeight + 1, dotsHeight, dotsHeight);
+            NativeMethods.CombineRgn(region, region, dotsRegion, NativeMethods.RgnOr);
+            NativeMethods.DeleteObject(dotsRegion);
+        }
+
+        if (NativeMethods.SetWindowRgn(_hwnd, region, true) == 0)
+        {
+            NativeMethods.DeleteObject(region);
+        }
+    }
+}

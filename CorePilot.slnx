@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="src/CorePilot.Core/CorePilot.Core.csproj" />
-  <Project Path="src/CorePilot/CorePilot.csproj" />
-  <Project Path="tests/CorePilot.Tests/CorePilot.Tests.csproj" />
-</Solution>
