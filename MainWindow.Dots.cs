@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using CorePilot.Models;
+using CorePilot.Services;
 
 namespace CorePilot;
 
@@ -120,11 +121,11 @@ public partial class MainWindow
 
     private static string LabelFor(IslandView view) => view switch
     {
-        IslandView.Player => "Pemutar",
-        IslandView.Lyrics => "Lirik",
-        IslandView.Focus => "Fokus",
-        IslandView.Water => "Air",
-        IslandView.Clipboard => "Schránka",
-        _ => "Shelf"
+        IslandView.Player => LanguageManager.T("Pemutar"),
+        IslandView.Lyrics => LanguageManager.T("Lirik"),
+        IslandView.Focus => LanguageManager.T("Fokus"),
+        IslandView.Water => LanguageManager.T("Air"),
+        IslandView.Clipboard => LanguageManager.T("Schránka"),
+        _ => LanguageManager.T("Shelf")
     };
 }

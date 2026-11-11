@@ -20,11 +20,11 @@ public sealed class LyricsResult
 
     public string Message => Status switch
     {
-        LyricsStatus.Loading => "Mencari liriknya...",
-        LyricsStatus.NotFound => "Liriknya belum ketemu",
-        LyricsStatus.Instrumental => "Lagu instrumental, tanpa lirik",
-        LyricsStatus.NoMedia => "Belum ada lagu yang diputar",
-        LyricsStatus.Error => "Liriknya belum bisa dimuat",
+        LyricsStatus.Loading => LanguageManager.T("Mencari liriknya..."),
+        LyricsStatus.NotFound => LanguageManager.T("Liriknya belum ketemu"),
+        LyricsStatus.Instrumental => LanguageManager.T("Lagu instrumental, tanpa lirik"),
+        LyricsStatus.NoMedia => LanguageManager.T("Belum ada lagu yang diputar"),
+        LyricsStatus.Error => LanguageManager.T("Liriknya belum bisa dimuat"),
         _ => string.Empty
     };
 }

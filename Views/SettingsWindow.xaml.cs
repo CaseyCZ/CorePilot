@@ -65,6 +65,7 @@ public partial class SettingsWindow : Window
     {
         var s = _settings.Current;
 
+        LanguageCombo.SelectedValue = string.Equals(s.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "cs";
         StartWithWindowsCheck.IsChecked = Autostart.IsEnabled();
         HotkeysCheck.IsChecked = s.EnableGlobalHotkeys;
         FullscreenCheck.IsChecked = s.FullscreenAutoHide;
@@ -103,6 +104,15 @@ public partial class SettingsWindow : Window
         PanelNotch.Visibility = selected == 1 ? Visibility.Visible : Visibility.Collapsed;
         PanelFokusAir.Visibility = selected == 2 ? Visibility.Visible : Visibility.Collapsed;
         PanelTentang.Visibility = selected == 3 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void Language_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || LanguageCombo.SelectedValue is not string code) return;
+        code = code == "en" ? "en" : "cs";
+        _settings.Current.Language = code;
+        _settings.Save();
+        LanguageManager.Current.SetLanguage(code);
     }
 
     private void StartWithWindows_Toggled(object sender, RoutedEventArgs e)
@@ -427,8 +437,8 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"Tidak dapat membuka settings.json.\n{ex.Message}",
-                "Pengaturan CorePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"{LanguageManager.T("Tidak dapat membuka settings.json.")}\n{ex.Message}",
+                LanguageManager.T("Pengaturan CorePilot"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -440,8 +450,8 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"Tidak dapat membuka tautan.\n{ex.Message}",
-                "Pengaturan CorePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"{LanguageManager.T("Tidak dapat membuka tautan.")}\n{ex.Message}",
+                LanguageManager.T("Pengaturan CorePilot"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         e.Handled = true;
@@ -450,8 +460,8 @@ public partial class SettingsWindow : Window
     private void ResetDefaults_Click(object sender, RoutedEventArgs e)
     {
         var result = MessageBox.Show(this,
-            "Kembalikan semua pengaturan CorePilot ke nilai bawaan?",
-            "Kembalikan ke bawaan", MessageBoxButton.YesNo, MessageBoxImage.Question,
+            LanguageManager.T("Kembalikan semua pengaturan CorePilot ke nilai bawaan?"),
+            LanguageManager.T("Kembalikan ke bawaan"), MessageBoxButton.YesNo, MessageBoxImage.Question,
             MessageBoxResult.No);
 
         if (result != MessageBoxResult.Yes)
@@ -460,6 +470,7 @@ public partial class SettingsWindow : Window
         }
 
         _settings.ResetToDefaults();
+        LanguageManager.Current.SetLanguage(_settings.Current.Language);
 
         Autostart.SetEnabled(_settings.Current.StartWithWindows);
 

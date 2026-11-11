@@ -1,20 +1,16 @@
-# CorePilot 2.0 — A living island for Windows
+# CorePilot 2.1 — Czech & English
 
-A new generation of CorePilot based on the MIT-licensed **NusaLite** engine.
+CorePilot now supports **Čeština / English** throughout the application. Czech is the default, and language selection is saved for your next launch.
 
-- **Music:** album artwork, artist, play/pause, previous/next, progress and volume
-- **Clipboard:** optional memory-only history of text and images
-- **Keyboard:** Caps Lock and Num Lock on-screen indicators
-- **Mini player:** optional floating controls above the Windows taskbar
-- **Additional tools:** lyrics, focus timer, battery status and file shelf
-- **Windows 10 and 11**, x64, with a standalone installer
+- Change language from **Settings → General → Application language** (in Czech: **Nastavení → Obecné → Jazyk aplikace**).
+- The interface updates on selection, including the player, notifications, focus timer, hydration reminders, clipboard, file shelf and tray menu.
+- Language-aware dates and status messages.
+- Retains the NusaLite-based Dynamic Island, media controls, local clipboard history, Caps/Num Lock indicators and mini player.
 
-Download **CorePilot-Setup.exe** and follow the setup wizard. No .NET installation needed.
+**Install:** Download **CorePilot-Setup.exe** and follow the installer. No separate .NET runtime needed. Works on Windows 10 (2004+) and Windows 11 x64.
 
-**Privacy:** clipboard history is off by default. Optional lyrics and album artwork may use third-party services.
+The installer is currently unsigned. Optional lyrics and album artwork may contact third-party services. Clipboard history is disabled by default and stays in memory only.
 
-**Note:** The installer is not digitally signed. Visual behavior across different displays and DPI settings still needs hands-on verification.
+CorePilot is derived from [NusaLite by Pidzzzz](https://github.com/Pidzzzz/nusa-lite) under the MIT license; attribution and license are included.
 
-CorePilot is based on [NusaLite by Pidzzzz](https://github.com/Pidzzzz/nusa-lite), MIT-licensed with attribution included in the installer. It is not the original closed-source Nusa application.
-
-[CorePilot](https://github.com/CaseyCZ/CorePilot) · [Feedback](https://github.com/CaseyCZ/CorePilot/issues)
+[Product page](https://github.com/CaseyCZ/CorePilot) · [Report a problem](https://github.com/CaseyCZ/CorePilot/issues)

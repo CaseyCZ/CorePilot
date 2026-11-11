@@ -1,7 +1,7 @@
 <Window x:Class="CorePilot.Views.MiniPlayerWindow"
- xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:loc="clr-namespace:CorePilot.Services"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="CorePilot mini přehrávač" Width="322" Height="76" WindowStyle="None"
+ Title="{loc:Tr Key=X044}" Width="322" Height="76" WindowStyle="None"
  AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
  ShowInTaskbar="False" ShowActivated="False" Topmost="True"
  WindowStartupLocation="Manual" Loaded="Window_Loaded">

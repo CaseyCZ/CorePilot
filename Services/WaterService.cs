@@ -43,7 +43,9 @@ public sealed class WaterService : IDisposable
         get
         {
             var left = Math.Max(0, GoalMl - TodayMl);
-            return left == 0 ? "Target tercapai" : $"Kurang {(int)Math.Ceiling(left / 250.0)} gelas lagi";
+            return left == 0
+                ? LanguageManager.T("Target tercapai")
+                : string.Format(LanguageManager.T("RemainingGlasses"), (int)Math.Ceiling(left / 250.0));
         }
     }
 
@@ -154,13 +156,13 @@ public sealed record WaterDay(DateTime Date, int Milliliters, int Goal)
 
     public string Label => Date.DayOfWeek switch
     {
-        DayOfWeek.Monday => "Sen",
-        DayOfWeek.Tuesday => "Sel",
-        DayOfWeek.Wednesday => "Rab",
-        DayOfWeek.Thursday => "Kam",
-        DayOfWeek.Friday => "Jum",
-        DayOfWeek.Saturday => "Sab",
-        _ => "Min"
+        DayOfWeek.Monday => LanguageManager.T("Sen"),
+        DayOfWeek.Tuesday => LanguageManager.T("Sel"),
+        DayOfWeek.Wednesday => LanguageManager.T("Rab"),
+        DayOfWeek.Thursday => LanguageManager.T("Kam"),
+        DayOfWeek.Friday => LanguageManager.T("Jum"),
+        DayOfWeek.Saturday => LanguageManager.T("Sab"),
+        _ => LanguageManager.T("Min")
     };
 
     public string Tooltip => $"{Date:dd MMM}: {Milliliters} ml";

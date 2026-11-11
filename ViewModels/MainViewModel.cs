@@ -115,11 +115,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _powerTimer.Start();
 
         ApplyMedia();
+        LanguageManager.Current.LanguageChanged += OnLanguageChanged;
 
         if (_track.HasTrack)
         {
             _ = LoadLyricsAsync(_track);
         }
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        UpdateClock();
+        RaiseTrackChanged();
+        RaiseLyrics();
+        RaisePomodoro();
+        RaiseWater();
+        RaiseShelf();
+        OnPropertyChanged(nameof(VolumeText));
+        OnPropertyChanged(nameof(BatteryStateText));
+        OnPropertyChanged(nameof(PowerPeekSubtitle));
+        OnPropertyChanged(nameof(ShelfCountText));
+        OnPropertyChanged(nameof(LyricOffsetText));
+        if (PeekKind != PeekKind.None)
+            FillPeek(PeekKind);
     }
 
     public event Action<PeekKind>? PeekRequested;
@@ -148,9 +166,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     // ----- Media ---------------------------------------------------------
 
-    public string TrackTitle => string.IsNullOrWhiteSpace(_track.Title) ? "Belum ada lagu" : _track.Title;
+    public string TrackTitle => string.IsNullOrWhiteSpace(_track.Title) ? LanguageManager.T("Belum ada lagu") : _track.Title;
 
-    public string TrackArtist => _track.HasTrack ? _track.ArtistAlbum : "Putar lagu favoritmu untuk memulai";
+    public string TrackArtist => _track.HasTrack ? _track.ArtistAlbum : LanguageManager.T("Putar lagu favoritmu untuk memulai");
 
     public string TrackSource => _track.HasTrack ? _track.SourceName : "CorePilot";
 
@@ -294,7 +312,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!_track.HasTrack)
             {
-                return "Siap menemanimu";
+                return LanguageManager.T("Siap menemanimu");
             }
 
             return string.IsNullOrWhiteSpace(_lyricCurrent) ? TrackTitle : _lyricCurrent;
@@ -310,7 +328,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get
         {
             var value = _settings.Current.LyricOffsetMs / 1000.0;
-            return value == 0 ? "Offset 0s" : $"Offset {value:+0.0;-0.0}s";
+            return value == 0
+                ? LanguageManager.T("OffsetZero")
+                : $"{LanguageManager.T("Offset")} {value:+0.0;-0.0} s";
         }
     }
 
@@ -454,20 +474,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var hour = now.Hour;
         if (hour >= 5 && hour < 11)
         {
-            return "Selamat pagi";
+            return LanguageManager.T("Selamat pagi");
         }
 
         if (hour >= 11 && hour < 15)
         {
-            return "Selamat siang";
+            return LanguageManager.T("Selamat siang");
         }
 
         if (hour >= 15 && hour < 19)
         {
-            return "Selamat sore";
+            return LanguageManager.T("Selamat sore");
         }
 
-        return "Selamat malam";
+        return LanguageManager.T("Selamat malam");
     }
 
     // ----- Volume & power ------------------------------------------------
@@ -497,7 +517,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string VolumeText => _isMuted ? "Bisu" : $"{VolumeValue}%";
+    public string VolumeText => _isMuted ? LanguageManager.T("Bisu") : $"{VolumeValue}%";
 
     public bool IsMuted
     {
@@ -560,11 +580,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public double BatteryProgress => _lastPower.Percent <= 0 ? 0 : _lastPower.Percent / 100.0;
 
-    public string BatteryStateText => _lastPower.IsPlugged ? "Mengisi daya" : "Baterai";
+    public string BatteryStateText => _lastPower.IsPlugged ? LanguageManager.T("Mengisi daya") : LanguageManager.T("Baterai");
 
     public string PowerPeekSubtitle => _lastPower.IsPlugged
-        ? (_lastPower.Percent >= 98 ? "Baterai penuh" : "Sedang mengisi daya")
-        : "Menggunakan baterai";
+        ? (_lastPower.Percent >= 98 ? LanguageManager.T("Baterai penuh") : LanguageManager.T("Sedang mengisi daya"))
+        : LanguageManager.T("Menggunakan baterai");
 
     private void PollPower()
     {
@@ -637,10 +657,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void OnPomodoroCompleted(PomodoroPhase completed)
     {
-        var title = completed == PomodoroPhase.Focus ? "Fokus selesai" : "Istirahat selesai";
+        var title = completed == PomodoroPhase.Focus ? LanguageManager.T("Fokus selesai") : LanguageManager.T("Istirahat selesai");
         var message = completed == PomodoroPhase.Focus
-            ? "Waktunya istirahat sejenak."
-            : "Siap untuk sesi fokus berikutnya.";
+            ? LanguageManager.T("Waktunya istirahat sejenak.")
+            : LanguageManager.T("Siap untuk sesi fokus berikutnya.");
         NotifyRequested?.Invoke(title, message);
     }
 
@@ -665,7 +685,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get
         {
             var minutes = _settings.Current.WaterReminderMinutes;
-            return $"Pengingat tiap {minutes} menit";
+            return $"{LanguageManager.T("WaterEvery")} {minutes} {LanguageManager.T("minut")}";
         }
     }
 
@@ -686,7 +706,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     private void OnWaterReminder()
-        => NotifyRequested?.Invoke("Waktunya minum", $"Sudah {_water.TodayMl} ml hari ini. {_water.RemainingText}.");
+        => NotifyRequested?.Invoke(LanguageManager.T("Waktunya minum"),
+            string.Format(LanguageManager.T("WaterNotification"), _water.TodayMl, _water.RemainingText));
 
     // ----- Shelf ---------------------------------------------------------
 
@@ -699,9 +720,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var count = _shelf.Items.Count;
             return count switch
             {
-                0 => "Masih kosong",
-                1 => "1 berkas",
-                _ => $"{count} berkas"
+                0 => LanguageManager.T("Masih kosong"),
+                1 => LanguageManager.T("1 berkas"),
+                _ => $"{count} {LanguageManager.T("PluralFiles")}"
             };
         }
     }
@@ -843,8 +864,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         switch (kind)
         {
             case PeekKind.Volume:
-                PeekTitle = _isMuted ? "Bisu" : "Volume";
-                PeekSubtitle = _isMuted ? "Suara sedang dimatikan" : $"Level suara {_volumeValue}%";
+                PeekTitle = _isMuted ? LanguageManager.T("Bisu") : LanguageManager.T("Volume");
+                PeekSubtitle = _isMuted ? LanguageManager.T("Suara sedang dimatikan") : $"{LanguageManager.T("VolumeLevel")} {_volumeValue}%";
                 PeekValue = _isMuted ? "0%" : $"{_volumeValue}%";
                 PeekProgress = _isMuted ? 0 : _volumeValue / 100.0;
                 PeekArtwork = null;
@@ -858,7 +879,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case PeekKind.Keys:
                 PeekTitle = _lockKeyName;
-                PeekSubtitle = _lockKeyEnabled ? "Zapnuto" : "Vypnuto";
+                PeekSubtitle = _lockKeyEnabled ? LanguageManager.T("Zapnuto") : LanguageManager.T("Vypnuto");
                 PeekValue = _lockKeyEnabled ? "ON" : "OFF";
                 PeekProgress = _lockKeyEnabled ? 1 : 0;
                 PeekArtwork = null;
@@ -910,6 +931,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        LanguageManager.Current.LanguageChanged -= OnLanguageChanged;
         _clockTimer.Stop();
         _volumeTimer.Stop();
         _powerTimer.Stop();

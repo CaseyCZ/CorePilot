@@ -1,5 +1,5 @@
 <UserControl x:Class="CorePilot.Views.IdleView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:loc="clr-namespace:CorePilot.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:CorePilot.Controls"
              IsHitTestVisible="False">
@@ -61,14 +61,14 @@
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
                     Visibility="{Binding ShowAltHint, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVis}}">
-            <TextBlock Text="Tahan" FontFamily="{StaticResource UiFont}" FontSize="10"
+            <TextBlock Text="{loc:Tr Key=X062}" FontFamily="{StaticResource UiFont}" FontSize="10"
                        Foreground="{DynamicResource MistBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
             <Border Background="#26CDB4FF" BorderBrush="#40CDB4FF" BorderThickness="1"
                     CornerRadius="4,3,4,3" Padding="4,0" VerticalAlignment="Center">
-                <TextBlock Text="Alt" FontFamily="{StaticResource UiFont}" FontSize="8.5"
+                <TextBlock Text="{loc:Tr Key=X063}" FontFamily="{StaticResource UiFont}" FontSize="8.5"
                            Foreground="{DynamicResource InkBrush}" />
             </Border>
-            <TextBlock Text="untuk membuka" FontFamily="{StaticResource UiFont}" FontSize="10"
+            <TextBlock Text="{loc:Tr Key=X064}" FontFamily="{StaticResource UiFont}" FontSize="10"
                        Foreground="{DynamicResource MistBrush}" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 

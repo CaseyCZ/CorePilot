@@ -1,5 +1,5 @@
 <UserControl x:Class="CorePilot.Views.WaterView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:loc="clr-namespace:CorePilot.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:CorePilot.Controls"
              xmlns:infra="clr-namespace:CorePilot.Infrastructure"
@@ -30,7 +30,7 @@
         </Grid>
 
         <StackPanel Grid.Column="1" Margin="20,0,16,0" VerticalAlignment="Top">
-            <TextBlock Text="Air hari ini" Style="{StaticResource TitleText}" FontSize="15"
+            <TextBlock Text="{loc:Tr Key=X053}" Style="{StaticResource TitleText}" FontSize="15"
                        Typography.Capitals="SmallCaps" />
             <TextBlock Text="{Binding WaterAmount}" Style="{StaticResource BigText}" FontSize="19" Margin="0,2,0,0" />
             <TextBlock Text="{Binding WaterRemaining}" Style="{StaticResource CaptionText}" FontSize="10"
@@ -47,14 +47,14 @@
                     </StackPanel>
                 </Button>
                 <Button Style="{StaticResource PillButton}" Height="26" Padding="10,0" FontSize="10"
-                        Margin="7,0,0,0" Click="Reset_Click" Content="Ulangi" />
+                        Margin="7,0,0,0" Click="Reset_Click" Content="{loc:Tr Key=X054}" />
             </StackPanel>
             <TextBlock Text="{Binding WaterReminderText}" Style="{StaticResource TinyText}" FontSize="8.5"
                        Margin="1,5,0,0" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="0,4,0,0">
-            <TextBlock Text="7 hari terakhir" Style="{StaticResource TinyText}" FontSize="9"
+            <TextBlock Text="{loc:Tr Key=X055}" Style="{StaticResource TinyText}" FontSize="9"
                        Typography.Capitals="SmallCaps"
                        HorizontalAlignment="Right" Margin="0,0,2,7" />
             <ItemsControl ItemsSource="{Binding WaterDays}" HorizontalAlignment="Right">

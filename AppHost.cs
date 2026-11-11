@@ -28,6 +28,7 @@ public sealed class AppHost : IDisposable
         try
         {
             _settings = new SettingsStore();
+            LanguageManager.Current.SetLanguage(_settings.Current.Language);
             ThemeService.Apply(_settings.Current.Theme);
             _media = new MediaService();
             _lyrics = new LyricsService();

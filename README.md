@@ -22,6 +22,7 @@ CorePilot sits discreetly at the top of the screen and expands when you need it.
 - **Mini player:** an optional floating media controller just above the Windows taskbar.
 - **More when you need it:** optional lyrics, focus timer and temporary file shelf.
 - **Personalize:** themes, shortcuts and behavior settings.
+- **Two languages:** switch instantly between **Čeština** and **English** in Settings → General → Application language. Your choice is remembered.
 
 Compatible with **Windows 10 (2004 or later)** and **Windows 11**, x64.
 

@@ -22,6 +22,7 @@ CorePilot se nenápadně drží horního okraje obrazovky. Najeď na něj myší
 - **Mini přehrávač:** volitelný panel nad hlavním panelem Windows.
 - **Volitelné funkce:** texty písní, časovač soustředění a odkládání souborů.
 - **Vzhled a ovládání:** vlastní nastavení, motivy a zkratky.
+- **Dva jazyky:** v Nastavení → Obecné → Jazyk aplikace přepneš mezi **Čeština** a **English**. Volba se uloží a rozhraní se přepne bez restartu.
 
 **Kompatibilita:** Windows 10 od verze 2004 a Windows 11, 64 bitů.
 

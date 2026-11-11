@@ -108,6 +108,12 @@ public partial class MainWindow : Window
         _viewModel.PinRequested += OnPinRequested;
         _viewModel.AutoLyricsRequested += OnAutoLyricsRequested;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        LanguageManager.Current.LanguageChanged += (_, _) =>
+        {
+            foreach (var dot in _dots)
+                if (dot.Tag is IslandView view)
+                    dot.ToolTip = LabelFor(view);
+        };
 
         IslandHost.SizeChanged += (_, _) => UpdateWindowRegion();
         DotsBar.SizeChanged += (_, _) => UpdateWindowRegion();

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
 using CorePilot.Models;
+using CorePilot.Services;
 using CorePilot.ViewModels;
 
 namespace CorePilot.Views;
@@ -39,13 +40,13 @@ public partial class ShelfView : UserControl
             BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 255, 255))
         };
 
-        var open = new MenuItem { Header = "Buka" };
+        var open = new MenuItem { Header = LanguageManager.T("Buka") };
         open.Click += (_, _) => Vm.OpenShelfItem(item);
 
-        var reveal = new MenuItem { Header = "Tampilkan di Explorer" };
+        var reveal = new MenuItem { Header = LanguageManager.T("Tampilkan di Explorer") };
         reveal.Click += (_, _) => Vm.RevealShelfItem(item);
 
-        var remove = new MenuItem { Header = "Hapus dari shelf" };
+        var remove = new MenuItem { Header = LanguageManager.T("Hapus dari shelf") };
         remove.Click += (_, _) => Vm.RemoveShelfItem(item);
 
         menu.Items.Add(open);
@@ -73,9 +74,9 @@ public partial class ShelfView : UserControl
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Tambahkan ke shelf",
+            Title = LanguageManager.T("Tambahkan ke shelf"),
             Multiselect = true,
-            Filter = "Semua file|*.*"
+            Filter = LanguageManager.T("Semua file|*.*")
         };
 
         if (dialog.ShowDialog() == true)

@@ -104,6 +104,7 @@ public sealed class TrayService : IDisposable
             ContextMenuStrip = _menu
         };
         _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(IslandView.Player);
+        LanguageManager.Current.LanguageChanged += UpdateMenuLanguage;
 
         if (_settings.Current.StartWithWindows)
         {
@@ -197,8 +198,9 @@ public sealed class TrayService : IDisposable
 
     private static WinForms.ToolStripMenuItem Item(string text, EventHandler onClick)
     {
-        var item = new WinForms.ToolStripMenuItem(text)
+        var item = new WinForms.ToolStripMenuItem(LanguageManager.T(text))
         {
+            Tag = text,
             ForeColor = Drawing.Color.FromArgb(236, 239, 247),
             Padding = new WinForms.Padding(4, 3, 4, 3)
         };
@@ -206,8 +208,15 @@ public sealed class TrayService : IDisposable
         return item;
     }
 
+    private void UpdateMenuLanguage(object? sender, EventArgs args)
+    {
+        foreach (WinForms.ToolStripItem item in _menu.Items)
+            if (item.Tag is string key) item.Text = LanguageManager.T(key);
+    }
+
     public void Dispose()
     {
+        LanguageManager.Current.LanguageChanged -= UpdateMenuLanguage;
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
         _menu.Dispose();

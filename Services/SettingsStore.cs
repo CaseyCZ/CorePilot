@@ -48,6 +48,7 @@ public sealed class AppSettings
     public bool LyricLocked { get; set; }
 
     public string Theme { get; set; } = "Graphite";
+    public string Language { get; set; } = "cs";
 }
 
 public sealed class SettingsStore

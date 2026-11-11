@@ -52,7 +52,7 @@ public sealed class PomodoroService : IDisposable
 
     public int SessionsCompleted { get; private set; }
 
-    public string PhaseLabel => Phase == PomodoroPhase.Focus ? "Fokus" : "Istirahat";
+    public string PhaseLabel => Phase == PomodoroPhase.Focus ? LanguageManager.T("Fokus") : LanguageManager.T("Istirahat");
 
     public string TimeText
     {
@@ -77,12 +77,12 @@ public sealed class PomodoroService : IDisposable
     }
 
     public string SessionsText => SessionsCompleted == 0
-        ? "Belum ada sesi selesai"
-        : $"{SessionsCompleted} sesi selesai";
+        ? LanguageManager.T("Belum ada sesi selesai")
+        : $"{SessionsCompleted} {LanguageManager.T("CompletedSessions")}";
 
-    public string StartLabel => IsRunning ? "Jeda" : "Mulai";
+    public string StartLabel => IsRunning ? LanguageManager.T("Jeda") : LanguageManager.T("Mulai");
 
-    public string DurationText => $"{(int)Math.Round(_durationSeconds / 60)} menit";
+    public string DurationText => $"{(int)Math.Round(_durationSeconds / 60)} {LanguageManager.T("minut")}";
 
     public void Toggle()
     {

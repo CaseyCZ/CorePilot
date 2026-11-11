@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using CorePilot.Services;
 
 namespace CorePilot.Models;
 
@@ -45,7 +46,7 @@ public sealed record TrackInfo
         {
             if (string.IsNullOrWhiteSpace(Artist))
             {
-                return string.IsNullOrWhiteSpace(Album) ? "Unknown artist" : Album;
+                return string.IsNullOrWhiteSpace(Album) ? LanguageManager.T("Unknown artist") : Album;
             }
 
             return string.IsNullOrWhiteSpace(Album) ? Artist : $"{Artist} - {Album}";

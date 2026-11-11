@@ -186,7 +186,7 @@ public sealed class ShelfService
         }
 
         var sizeText = isDirectory
-            ? "Folder"
+            ? LanguageManager.T("Folder")
             : FormatSize(new FileInfo(path).Length);
 
         ImageSource? thumb = null;

@@ -41,7 +41,7 @@ public sealed class ClipboardHistoryService : IDisposable
                 {
                     if (image.CanFreeze) image.Freeze();
                     entry = new ClipboardHistoryItem(
-                        "Obrázek", $"{image.PixelWidth} × {image.PixelHeight} px", null, image);
+                        LanguageManager.T("Image"), $"{image.PixelWidth} × {image.PixelHeight} px", null, image);
                 }
             }
             else if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
@@ -51,7 +51,8 @@ public sealed class ClipboardHistoryService : IDisposable
                 {
                     var line = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
                     var preview = line.Length > 75 ? line[..75] + "…" : line;
-                    entry = new ClipboardHistoryItem(preview, $"{text.Length} znaků", text, null);
+                    entry = new ClipboardHistoryItem(preview,
+                        $"{text.Length} {LanguageManager.T("Characters")}", text, null);
                 }
             }
             if (entry is null) return;
