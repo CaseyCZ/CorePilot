@@ -39,7 +39,7 @@
      </Grid>
     </Button>
    </Grid>
-   <ProgressBar Grid.Row="1" Height="3" Maximum="1" Minimum="0" Value="{Binding TrackProgress, Converter={StaticResource SafeProgress}}"
+   <ProgressBar Grid.Row="1" Height="3" Maximum="1" Minimum="0" Value="{Binding TrackProgress, Mode=OneWay, Converter={StaticResource SafeProgress}}"
                 Foreground="#63E6B8" Background="#20324C" BorderThickness="0" Margin="56,0,49,0"/>
   </Grid>
  </Border>
