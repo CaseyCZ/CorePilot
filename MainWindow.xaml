@@ -23,24 +23,14 @@
         Drop="Window_Drop">
     <Window.Resources>
         <Style x:Key="IslandNavArrow" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Circle" CornerRadius="15"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Circle" Property="Background" Value="#EE394764"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Circle" Property="Background" Value="#EE526B91"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
+                        <Grid Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -65,15 +55,15 @@
                 <Button x:Name="PreviousPageButton" Panel.ZIndex="10" Content="‹"
                         Visibility="Collapsed" Width="31" Height="44" Margin="4,0,0,0"
                         HorizontalAlignment="Left" VerticalAlignment="Center"
-                        Foreground="#F0F6FF" Background="#A8213047"
-                        BorderBrush="#557083A2" BorderThickness="1" FontSize="25"
+                        Foreground="#F0F6FF" Background="Transparent"
+                        BorderThickness="0" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Předchozí obrazovka"
                         Click="PreviousPage_Click" Style="{StaticResource IslandNavArrow}"/>
                 <Button x:Name="NextPageButton" Panel.ZIndex="10" Content="›"
                         Visibility="Collapsed" Width="31" Height="44" Margin="0,0,4,0"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Foreground="#F0F6FF" Background="#A8213047"
-                        BorderBrush="#557083A2" BorderThickness="1" FontSize="25"
+                        Foreground="#F0F6FF" Background="Transparent"
+                        BorderThickness="0" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Další obrazovka"
                         Click="NextPage_Click" Style="{StaticResource IslandNavArrow}"/>
             </Grid>

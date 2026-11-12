@@ -462,32 +462,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _dateText, value);
     }
 
+    public double ClockFontSize => ClockText.Length > 7 ? 16 : ClockText.Length > 5 ? 20 : 25;
+
+    public void RefreshClockDisplay() => UpdateClock();
+
     private void UpdateClock()
     {
         var now = DateTime.Now;
-        ClockText = now.ToString("HH:mm");
-        DateText = $"{GreetingFor(now)} · {now.ToString("ddd, d MMM", CultureInfo.CurrentCulture)}";
-    }
-
-    private static string GreetingFor(DateTime now)
-    {
-        var hour = now.Hour;
-        if (hour >= 5 && hour < 11)
-        {
-            return LanguageManager.T("Selamat pagi");
-        }
-
-        if (hour >= 11 && hour < 15)
-        {
-            return LanguageManager.T("Selamat siang");
-        }
-
-        if (hour >= 15 && hour < 19)
-        {
-            return LanguageManager.T("Selamat sore");
-        }
-
-        return LanguageManager.T("Selamat malam");
+        ClockText = now.ToString(_settings.Current.TimeFormat, CultureInfo.CurrentCulture);
+        DateText = now.ToString(_settings.Current.DateFormat, CultureInfo.CurrentCulture);
+        OnPropertyChanged(nameof(ClockFontSize));
     }
 
     // ----- Volume & power ------------------------------------------------

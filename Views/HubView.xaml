@@ -12,8 +12,8 @@
         </Grid.ColumnDefinitions>
 
         <StackPanel VerticalAlignment="Center" Width="94">
-            <TextBlock Text="{Binding ClockText}" Style="{StaticResource BigText}" FontSize="25" />
-            <TextBlock Text="{Binding DateText}" Style="{StaticResource CaptionText}" Margin="1,3,0,0" />
+            <TextBlock Text="{Binding ClockText}" Style="{StaticResource BigText}" FontSize="{Binding ClockFontSize, Mode=OneWay}" />
+            <TextBlock Text="{Binding DateText}" Style="{StaticResource CaptionText}" Margin="1,3,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding DateText}" />
         </StackPanel>
 
         <Border Grid.Column="1" Width="1" Background="{DynamicResource LineBrush}" Margin="12,2,16,2" />

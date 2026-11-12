@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,8 @@ public partial class SettingsWindow : Window
     private readonly Action? _guardGhostRefresh;
     private readonly Action<bool>? _clipboardChanged;
     private readonly Action<bool>? _miniPlayerChanged;
+    private readonly Action? _clockFormatChanged;
+    private readonly Action? _appearanceChanged;
     private bool _loading = true;
 
     public SettingsWindow(
@@ -33,7 +36,9 @@ public partial class SettingsWindow : Window
         Action<bool>? hotkeysChanged = null,
         Action? guardGhostRefresh = null,
         Action<bool>? clipboardChanged = null,
-        Action<bool>? miniPlayerChanged = null)
+        Action<bool>? miniPlayerChanged = null,
+        Action? clockFormatChanged = null,
+        Action? appearanceChanged = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _clickGuardChanged = clickGuardChanged;
@@ -43,6 +48,8 @@ public partial class SettingsWindow : Window
         _guardGhostRefresh = guardGhostRefresh;
         _clipboardChanged = clipboardChanged;
         _miniPlayerChanged = miniPlayerChanged;
+        _clockFormatChanged = clockFormatChanged;
+        _appearanceChanged = appearanceChanged;
 
         InitializeComponent();
 
@@ -66,6 +73,11 @@ public partial class SettingsWindow : Window
         var s = _settings.Current;
 
         LanguageCombo.SelectedValue = string.Equals(s.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "cs";
+        UpdateFormatExamples();
+        TimeFormatCombo.SelectedValue = s.TimeFormat;
+        DateFormatCombo.SelectedValue = s.DateFormat;
+        BlackIslandBackgroundCheck.IsChecked = s.BlackIslandBackground;
+        ShowNavigationArrowsCheck.IsChecked = s.ShowNavigationArrows;
         StartWithWindowsCheck.IsChecked = Autostart.IsEnabled();
         HotkeysCheck.IsChecked = s.EnableGlobalHotkeys;
         FullscreenCheck.IsChecked = s.FullscreenAutoHide;
@@ -91,6 +103,46 @@ public partial class SettingsWindow : Window
         ReminderBox.Text = s.WaterReminderMinutes.ToString();
     }
 
+    private void UpdateFormatExamples()
+    {
+        var sample = DateTime.Now;
+        foreach (ComboBoxItem item in TimeFormatCombo.Items)
+        {
+            if (item.Tag is string format)
+                item.Content = sample.ToString(format, CultureInfo.CurrentCulture);
+        }
+        foreach (ComboBoxItem item in DateFormatCombo.Items)
+        {
+            if (item.Tag is string format)
+                item.Content = sample.ToString(format, CultureInfo.CurrentCulture);
+        }
+    }
+
+    private void TimeFormat_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || TimeFormatCombo.SelectedValue is not string format) return;
+        _settings.Current.TimeFormat = format;
+        _settings.Save();
+        _clockFormatChanged?.Invoke();
+    }
+
+    private void DateFormat_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || DateFormatCombo.SelectedValue is not string format) return;
+        _settings.Current.DateFormat = format;
+        _settings.Save();
+        _clockFormatChanged?.Invoke();
+    }
+
+    private void Appearance_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Current.BlackIslandBackground = BlackIslandBackgroundCheck.IsChecked == true;
+        _settings.Current.ShowNavigationArrows = ShowNavigationArrowsCheck.IsChecked == true;
+        _settings.Save();
+        _appearanceChanged?.Invoke();
+    }
+
     private void SectionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (PanelUmum is null)
@@ -113,6 +165,8 @@ public partial class SettingsWindow : Window
         _settings.Current.Language = code;
         _settings.Save();
         LanguageManager.Current.SetLanguage(code);
+        UpdateFormatExamples();
+        _clockFormatChanged?.Invoke();
     }
 
     private void StartWithWindows_Toggled(object sender, RoutedEventArgs e)
@@ -491,5 +545,7 @@ public partial class SettingsWindow : Window
         _guardGhostRefresh?.Invoke();
         _clipboardChanged?.Invoke(_settings.Current.ClipboardEnabled);
         _miniPlayerChanged?.Invoke(_settings.Current.TaskbarWidget);
+        _clockFormatChanged?.Invoke();
+        _appearanceChanged?.Invoke();
     }
 }

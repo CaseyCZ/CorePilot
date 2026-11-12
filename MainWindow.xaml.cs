@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
         NextPageButton.ToolTip = LanguageManager.T("NextPage");
+        RefreshAppearanceSettings();
 
         _uiFont = TryFindResource("UiFont") as FontFamily ?? new FontFamily("Segoe UI");
         _displayFont = TryFindResource("DisplayFont") as FontFamily ?? _uiFont;
@@ -145,6 +146,25 @@ public partial class MainWindow : Window
             StopLockKeyWatcher();
             _clipboardHistory.Dispose();
         };
+    }
+
+    public void RefreshAppearanceSettings()
+    {
+        var settings = _viewModel.Settings.Current;
+        var black = settings.BlackIslandBackground;
+        Brush surface = black ? Brushes.Black
+            : (TryFindResource("IslandGlassBrush") as Brush ?? Brushes.Black);
+        Brush rim = black ? Brushes.Transparent
+            : (TryFindResource("IslandRimBrush") as Brush ?? Brushes.Transparent);
+        Notch.Fill = surface;
+        Notch.RimBrush = rim;
+        DotsBar.Background = surface;
+        DotsBar.BorderBrush = rim;
+
+        var showArrows = settings.ShowNavigationArrows
+            && _view is not (IslandView.Idle or IslandView.Peek);
+        PreviousPageButton.Visibility = showArrows ? Visibility.Visible : Visibility.Collapsed;
+        NextPageButton.Visibility = showArrows ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void OpenView(IslandView view)
@@ -347,8 +367,7 @@ public partial class MainWindow : Window
         UpdateDots();
         var expanded = view is not (IslandView.Idle or IslandView.Peek);
         SetDotsVisible(expanded, fast);
-        PreviousPageButton.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        NextPageButton.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        RefreshAppearanceSettings();
 
         if (_hwnd != IntPtr.Zero)
         {

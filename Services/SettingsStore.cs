@@ -49,6 +49,10 @@ public sealed class AppSettings
 
     public string Theme { get; set; } = "Graphite";
     public string Language { get; set; } = "cs";
+    public string TimeFormat { get; set; } = "HH:mm";
+    public string DateFormat { get; set; } = "ddd, d MMM";
+    public bool BlackIslandBackground { get; set; } = true;
+    public bool ShowNavigationArrows { get; set; } = true;
 }
 
 public sealed class SettingsStore
@@ -85,6 +89,10 @@ public sealed class SettingsStore
                 {
                     loaded.GuardOpacity = CorePilot.Infrastructure.FiniteRange.Clamp(loaded.GuardOpacity, 0.15, 1.0);
                     loaded.HoverDelayMs = Math.Clamp(loaded.HoverDelayMs, 0, 1000);
+                    if (loaded.TimeFormat is not ("HH:mm" or "HH:mm:ss" or "h:mm tt" or "h:mm:ss tt"))
+                        loaded.TimeFormat = "HH:mm";
+                    if (loaded.DateFormat is not ("ddd, d MMM" or "dd.MM.yyyy" or "d. MMMM yyyy" or "dddd, d. MMMM yyyy" or "yyyy-MM-dd"))
+                        loaded.DateFormat = "ddd, d MMM";
                     Current = loaded;
                 }
             }

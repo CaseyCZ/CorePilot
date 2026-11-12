@@ -108,7 +108,9 @@ public sealed class AppHost : IDisposable
             hotkeysChanged: enabled => _window?.SetGlobalHotkeysEnabled(enabled),
             guardGhostRefresh: () => _window?.RefreshGuardGhost(),
             clipboardChanged: enabled => _window?.SetClipboardEnabled(enabled),
-            miniPlayerChanged: _ => SyncMiniPlayer());
+            miniPlayerChanged: _ => SyncMiniPlayer(),
+            clockFormatChanged: () => _viewModel?.RefreshClockDisplay(),
+            appearanceChanged: () => _window?.RefreshAppearanceSettings());
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
