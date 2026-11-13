@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Text;
@@ -20,7 +19,9 @@ public sealed class ArtworkService
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex ArtSize = new(@"\d+x\d+bb", RegexOptions.Compiled);
 
-    private readonly ConcurrentDictionary<string, ImageSource> _cache = new(StringComparer.OrdinalIgnoreCase);
+    // 24 decoded covers (typically <= 512px square) instead of unbounded process lifetime growth.
+    private readonly BoundedLruCache<string, ImageSource> _cache =
+        new(24, StringComparer.OrdinalIgnoreCase);
 
     public bool TryGetCached(string title, string artist, out ImageSource? artwork)
     {
@@ -66,7 +67,7 @@ public sealed class ArtworkService
         var artwork = await DownloadAsync(best.ArtworkUrl, token);
         if (artwork is not null)
         {
-            _cache[cacheKey] = artwork;
+            _cache.Set(cacheKey, artwork);
         }
 
         return artwork;

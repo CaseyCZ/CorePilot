@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using CorePilot.Infrastructure;
 using CorePilot.Models;
@@ -63,6 +64,22 @@ internal static class Program
                 Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
                 AssertEqual(expected, bar.Value, "real WPF RangeBase.Value binding");
             }
+
+            var cache = new BoundedLruCache<string, string>(2, StringComparer.OrdinalIgnoreCase);
+            cache.Set("one", "A");
+            cache.Set("two", "B");
+            if (!cache.TryGetValue("ONE", out var first) || first != "A")
+                throw new InvalidOperationException("LRU case-insensitive lookup failed.");
+            cache.Set("three", "C");
+            if (cache.Count != 2 || cache.TryGetValue("two", out _) ||
+                !cache.TryGetValue("one", out _))
+                throw new InvalidOperationException("LRU did not evict the least recent entry.");
+            cache.Set("one", "Updated");
+            if (cache.Count != 2 || !cache.TryGetValue("one", out first) || first != "Updated")
+                throw new InvalidOperationException("LRU replacement produced duplicate nodes.");
+            cache.Clear();
+            if (cache.Count != 0)
+                throw new InvalidOperationException("LRU cache did not clear.");
 
             var spring = new SubtleSpringEase { EasingMode = EasingMode.EaseIn };
             AssertEqual(0, spring.Ease(0), "spring start");

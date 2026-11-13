@@ -17,6 +17,7 @@
 - Playback timeline polling slows to 2.5 seconds when not playing, and remains at 500 ms during playback.
 - Clipboard history remains opt-in and RAM-only; retained image pixel data now has a 16 MiB budget estimate.
 - Artwork decoding releases source streams and rejects oversized encoded images.
+- The online artwork cache uses a bounded 24-item LRU with regression coverage, preventing unbounded cover accumulation.
 - Win32 region replacement avoids duplicate work and checks GDI errors; event subscriptions and timers are cleaned up.
 
 ## Verification
