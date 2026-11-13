@@ -35,8 +35,7 @@ internal static class WindowStyler
                                          double windowHeightDips, double islandHeightDips,
                                          bool compact)
     {
-        var screen = Screen.PrimaryScreen;
-        if (screen is null) return;
+        var screen = Screen.FromHandle(hwnd);
         var bounds = screen.Bounds;
         var work = screen.WorkingArea;
         var dpi = NativeMethods.GetDpiForWindow(hwnd);
@@ -57,13 +56,15 @@ internal static class WindowStyler
             y = work.Top;
 
         NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndTopmost, x, y, width, height,
-            NativeMethods.SwpNoActivate | NativeMethods.SwpShowWindow | NativeMethods.SwpNoOwnerZOrder);
+            NativeMethods.SwpNoActivate | NativeMethods.SwpNoOwnerZOrder);
     }
 
-    public static bool IsCursorOverTaskbarHotspot(int x, int y)
+    public static bool IsCursorOverTaskbarHotspot(int x, int y, IntPtr islandHwnd)
     {
-        var screen = Screen.PrimaryScreen;
-        if (screen is null) return false;
+        var screen = Screen.FromHandle(islandHwnd);
+        if (!string.Equals(Screen.FromPoint(new System.Drawing.Point(x, y)).DeviceName,
+                           screen.DeviceName, StringComparison.OrdinalIgnoreCase))
+            return false;
         var bounds = screen.Bounds;
         var work = screen.WorkingArea;
         var topBand = work.Top - bounds.Top;

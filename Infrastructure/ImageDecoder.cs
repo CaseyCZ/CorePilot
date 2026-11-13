@@ -9,19 +9,19 @@ public static class ImageDecoder
 
     public static ImageSource? FromBytes(byte[] bytes)
     {
-        if (bytes.Length == 0)
+        if (bytes.Length == 0 || bytes.Length > 24 * 1024 * 1024)
         {
             return null;
         }
 
         try
         {
+            using var stream = new MemoryStream(bytes, writable: false);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
             bitmap.DecodePixelWidth = MaxDecodeWidth;
-            bitmap.StreamSource = new MemoryStream(bytes);
+            bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
             return bitmap;

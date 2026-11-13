@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text;
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -68,6 +69,7 @@ public partial class MainWindow : Window
     private bool _browserForeground;
     private bool _browserArmed;
     private long _insideSince;
+    private (int x, int y, int width, int height, int ear, int radius, int dotsX, int dotsY, int dotsWidth, int dotsHeight)? _lastWindowRegion;
     private const double CompactUiScale = 0.86;
     private const int BrowserArmHoldMs = 140;
     private const int BrowserHintDwellMs = 420;
@@ -115,14 +117,7 @@ public partial class MainWindow : Window
         _viewModel.PinRequested += OnPinRequested;
         _viewModel.AutoLyricsRequested += OnAutoLyricsRequested;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        LanguageManager.Current.LanguageChanged += (_, _) =>
-        {
-            foreach (var dot in _dots)
-                if (dot.Tag is IslandView view)
-                    dot.ToolTip = LabelFor(view);
-            PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
-            NextPageButton.ToolTip = LanguageManager.T("NextPage");
-        };
+        LanguageManager.Current.LanguageChanged += OnUiLanguageChanged;
 
         IslandHost.SizeChanged += (_, _) => UpdateWindowRegion();
         DotsBar.SizeChanged += (_, _) => UpdateWindowRegion();
@@ -135,6 +130,8 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _hoverTimer.Stop();
+            _collapseTimer.Stop();
+            _peekTimer.Stop();
             _dwellTimer?.Stop();
             _clickTimer.Stop();
             _fullscreenTimer.Stop();
@@ -142,10 +139,32 @@ public partial class MainWindow : Window
             UnregisterHotkeys();
             _hwndSource?.RemoveHook(HwndHook);
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            LanguageManager.Current.LanguageChanged -= OnUiLanguageChanged;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             StopClipboardListener();
             StopLockKeyWatcher();
             _clipboardHistory.Dispose();
         };
+    }
+
+    private void OnUiLanguageChanged(object? sender, EventArgs e)
+    {
+        foreach (var dot in _dots)
+            if (dot.Tag is IslandView view)
+                dot.ToolTip = LabelFor(view);
+        PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
+        NextPageButton.ToolTip = LanguageManager.T("NextPage");
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (_hwnd == IntPtr.Zero || !IsLoaded) return;
+            RepositionWindow();
+            UpdateWindowRegion();
+        }));
     }
 
     public void RefreshAppearanceSettings()
@@ -301,6 +320,7 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _hwnd = new WindowInteropHelper(this).Handle;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         WindowStyler.MakeOverlay(_hwnd);
         RepositionWindow();
 
@@ -503,30 +523,61 @@ public partial class MainWindow : Window
         var ear = (int)Math.Round(Notch.EarRadius * scale);
         var radius = (int)Math.Round(Notch.CornerRadius * scale);
 
-        var region = NativeMethods.CreateRoundRectRgn(
-            x + ear, y, x + width - ear + 1, y + height + 1, radius * 2, radius * 2);
-        var topHeight = ear > 0 ? ear : radius;
-        var top = NativeMethods.CreateRectRgn(x, y, x + width + 1, y + topHeight + 1);
-        NativeMethods.CombineRgn(region, region, top, NativeMethods.RgnOr);
-        NativeMethods.DeleteObject(top);
-
+        int dotsX = 0, dotsY = 0, dotsWidth = 0, dotsHeight = 0;
         if (_dotsVisible && DotsBar.ActualWidth > 0)
         {
             var dotsOrigin = DotsBar.TranslatePoint(new Point(0, 0), Root);
-            var dotsWidth = (int)Math.Ceiling(DotsBar.ActualWidth * scale);
-            var dotsHeight = (int)Math.Ceiling(DotsBar.ActualHeight * scale);
-            var dotsX = (int)Math.Round(dotsOrigin.X * scale);
-            var dotsY = (int)Math.Round(dotsOrigin.Y * scale);
-
-            var dotsRegion = NativeMethods.CreateRoundRectRgn(
-                dotsX, dotsY, dotsX + dotsWidth + 1, dotsY + dotsHeight + 1, dotsHeight, dotsHeight);
-            NativeMethods.CombineRgn(region, region, dotsRegion, NativeMethods.RgnOr);
-            NativeMethods.DeleteObject(dotsRegion);
+            dotsWidth = (int)Math.Ceiling(DotsBar.ActualWidth * scale);
+            dotsHeight = (int)Math.Ceiling(DotsBar.ActualHeight * scale);
+            dotsX = (int)Math.Round(dotsOrigin.X * scale);
+            dotsY = (int)Math.Round(dotsOrigin.Y * scale);
         }
 
-        if (NativeMethods.SetWindowRgn(_hwnd, region, true) == 0)
+        var signature = (x, y, width, height, ear, radius, dotsX, dotsY, dotsWidth, dotsHeight);
+        if (_lastWindowRegion is { } previous && previous == signature)
+            return;
+
+        var region = NativeMethods.CreateRoundRectRgn(
+            x + ear, y, x + width - ear + 1, y + height + 1, radius * 2, radius * 2);
+        if (region == IntPtr.Zero) return;
+
+        var topHeight = ear > 0 ? ear : radius;
+        var top = NativeMethods.CreateRectRgn(x, y, x + width + 1, y + topHeight + 1);
+        if (top == IntPtr.Zero)
         {
             NativeMethods.DeleteObject(region);
+            return;
         }
+
+        var combined = NativeMethods.CombineRgn(region, region, top, NativeMethods.RgnOr);
+        NativeMethods.DeleteObject(top);
+
+        if (combined == 0)
+        {
+            NativeMethods.DeleteObject(region);
+            return;
+        }
+
+        if (dotsWidth > 0 && dotsHeight > 0)
+        {
+            var dotsRegion = NativeMethods.CreateRoundRectRgn(
+                dotsX, dotsY, dotsX + dotsWidth + 1, dotsY + dotsHeight + 1, dotsHeight, dotsHeight);
+            if (dotsRegion != IntPtr.Zero)
+            {
+                combined = NativeMethods.CombineRgn(region, region, dotsRegion, NativeMethods.RgnOr);
+                NativeMethods.DeleteObject(dotsRegion);
+                if (combined == 0)
+                {
+                    NativeMethods.DeleteObject(region);
+                    return;
+                }
+            }
+        }
+
+        // On success SetWindowRgn owns the HRGN; do not delete it ourselves.
+        if (NativeMethods.SetWindowRgn(_hwnd, region, true) != 0)
+            _lastWindowRegion = signature;
+        else
+            NativeMethods.DeleteObject(region);
     }
 }

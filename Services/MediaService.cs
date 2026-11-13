@@ -20,6 +20,8 @@ public sealed class MediaService : IDisposable
     private string _artworkFetchKey = string.Empty;
     private TrackInfo _current = TrackInfo.Empty;
     private bool _disposed;
+    private int _positionRefreshQueued;
+    private long _metadataRequest;
 
     private TimeSpan _lastReportedPosition;
     private TimeSpan _clockPosition;
@@ -42,7 +44,9 @@ public sealed class MediaService : IDisposable
     {
         try
         {
-            _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            if (_disposed) return;
+            _manager = manager;
             _manager.CurrentSessionChanged += OnCurrentSessionChanged;
 
             _positionTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
@@ -96,7 +100,13 @@ public sealed class MediaService : IDisposable
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
     {
-        _dispatcher.BeginInvoke(() => Attach(sender.GetCurrentSession() ?? GetPreferredSession()));
+        if (_disposed) return;
+        _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (_disposed) return;
+            try { Attach(sender.GetCurrentSession() ?? GetPreferredSession()); }
+            catch (Exception ex) { Log.Write("Media session switch failed.", ex); }
+        }));
     }
 
     private void Attach(GlobalSystemMediaTransportControlsSession? session)
@@ -107,6 +117,7 @@ public sealed class MediaService : IDisposable
         }
 
         DetachEvents();
+        Interlocked.Increment(ref _metadataRequest);
 
         _session = session;
         _artworkKey = string.Empty;
@@ -116,6 +127,7 @@ public sealed class MediaService : IDisposable
         if (_session is null)
         {
             _current = TrackInfo.Empty;
+            UpdatePollingInterval(false);
             Changed?.Invoke();
             return;
         }
@@ -159,10 +171,27 @@ public sealed class MediaService : IDisposable
         => _ = SafeRefreshAsync();
 
     private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs args)
-        => UpdateFromSession();
+        => QueueTimelineRefresh();
 
     private void OnTimelinePropertiesChanged(GlobalSystemMediaTransportControlsSession sender, TimelinePropertiesChangedEventArgs args)
-        => UpdateFromSession();
+        => QueueTimelineRefresh();
+
+    private void QueueTimelineRefresh()
+    {
+        if (_disposed || Interlocked.Exchange(ref _positionRefreshQueued, 1) != 0) return;
+        _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            Interlocked.Exchange(ref _positionRefreshQueued, 0);
+            if (!_disposed) UpdateFromSession();
+        }));
+    }
+
+    private void UpdatePollingInterval(bool isPlaying)
+    {
+        if (_positionTimer is null) return;
+        var interval = TimeSpan.FromMilliseconds(isPlaying ? 500 : 2500);
+        if (_positionTimer.Interval != interval) _positionTimer.Interval = interval;
+    }
 
     private async Task SafeRefreshAsync()
     {
@@ -179,10 +208,8 @@ public sealed class MediaService : IDisposable
     private async Task RefreshMetadataAsync()
     {
         var session = _session;
-        if (session is null || _disposed)
-        {
-            return;
-        }
+        if (session is null || _disposed) return;
+        var request = Interlocked.Increment(ref _metadataRequest);
 
         try
         {
@@ -196,10 +223,8 @@ public sealed class MediaService : IDisposable
             var timeline = session.GetTimelineProperties();
             var status = playback?.PlaybackStatus ?? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
 
-            if (!ReferenceEquals(_session, session) || _disposed)
-            {
-                return;
-            }
+            if (!ReferenceEquals(_session, session) || _disposed ||
+                request != Interlocked.Read(ref _metadataRequest)) return;
 
             var title = properties.Title ?? string.Empty;
             var artist = properties.Artist ?? string.Empty;
@@ -237,10 +262,8 @@ public sealed class MediaService : IDisposable
                 }
             }
 
-            if (!ReferenceEquals(_session, session) || _disposed)
-            {
-                return;
-            }
+            if (!ReferenceEquals(_session, session) || _disposed ||
+                request != Interlocked.Read(ref _metadataRequest)) return;
 
             var duration = timeline is null
                 ? _current.Duration
@@ -267,6 +290,7 @@ public sealed class MediaService : IDisposable
                 Artwork = artwork
             };
 
+            UpdatePollingInterval(isPlaying);
             Changed?.Invoke();
         }
         catch (Exception ex)
@@ -472,6 +496,7 @@ public sealed class MediaService : IDisposable
             }
 
             var position = ResolvePosition(timeline, duration, isPlaying);
+            UpdatePollingInterval(isPlaying);
             if (position == _current.Position && isPlaying == _current.IsPlaying && duration == _current.Duration)
             {
                 return;

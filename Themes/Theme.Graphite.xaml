@@ -15,11 +15,16 @@
     <Color x:Key="LimeColor">#6FE7D2</Color>
     <Color x:Key="OrchidColor">#6F9AFF</Color>
 
-    <LinearGradientBrush x:Key="IslandGlassBrush" StartPoint="0,0" EndPoint="0.9,1">
-        <GradientStop Color="#E8111722" Offset="0"/>
-        <GradientStop Color="#FA060B13" Offset="1"/>
+    <!-- Optional glass mode. The default opaque-black island overrides both brushes. -->
+    <LinearGradientBrush x:Key="IslandGlassBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F0141922" Offset="0"/>
+        <GradientStop Color="#F0080B11" Offset="1"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="IslandRimBrush" Color="#4E7BA7C8"/>
+    <LinearGradientBrush x:Key="IslandRimBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#80CDE5F9" Offset="0"/>
+        <GradientStop Color="#355A7794" Offset="0.5"/>
+        <GradientStop Color="#18394F67" Offset="1"/>
+    </LinearGradientBrush>
 
     <SolidColorBrush x:Key="VoidBrush" Color="{StaticResource VoidColor}" />
     <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />

@@ -11,6 +11,18 @@ public partial class MainWindow
 {
     private void AnimateTo(IslandSpec spec, bool fast)
     {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            ++_transition;
+            ContentHost.BeginAnimation(OpacityProperty, null);
+            ContentSlide.BeginAnimation(TranslateTransform.YProperty, null);
+            ContentHost.Opacity = 1;
+            ContentSlide.Y = 0;
+            ContentHost.Content = GetView(_view);
+            SetImmediate(spec);
+            return;
+        }
+
         var generation = ++_transition;
         var fadeOutMs = fast ? 60 : 90;
         var fadeInMs = fast ? 180 : 260;
@@ -71,6 +83,12 @@ public partial class MainWindow
 
     private void ApplySpec(IslandSpec spec, bool fast)
     {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            SetImmediate(spec);
+            return;
+        }
+
         if (!IsLoaded)
         {
             SetImmediate(spec);

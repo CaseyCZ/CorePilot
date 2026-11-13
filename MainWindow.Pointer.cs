@@ -73,7 +73,7 @@ public partial class MainWindow
         }
 
         if (_view != IslandView.Idle && _hover &&
-            WindowStyler.IsCursorOverTaskbarHotspot(cursor.X, cursor.Y))
+            WindowStyler.IsCursorOverTaskbarHotspot(cursor.X, cursor.Y, _hwnd))
         {
             return true;
         }

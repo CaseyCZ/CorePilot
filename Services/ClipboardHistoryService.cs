@@ -12,6 +12,8 @@ public sealed class ClipboardHistoryService : IDisposable
     private const int MaxItems = 12;
     private const int MaxTextLength = 65536;
     private const long MaxImagePixels = 2_000_000;
+    // A per-item pixel limit is not a history-wide memory limit.
+    private const long MaxImageHistoryBytes = 16L * 1024 * 1024;
     private bool _enabled;
     private bool _skipNextUpdate;
 
@@ -59,6 +61,17 @@ public sealed class ClipboardHistoryService : IDisposable
             if (Items.Count > 0 && Items[0].Text == entry.Text && entry.Text is not null) return;
             Items.Insert(0, entry);
             while (Items.Count > MaxItems) Items.RemoveAt(Items.Count - 1);
+            long imageBytes = 0;
+            foreach (var item in Items)
+                if (item.Image is { } img)
+                    imageBytes += (long)img.PixelWidth * img.PixelHeight * 4;
+
+            for (var i = Items.Count - 1; i >= 0 && imageBytes > MaxImageHistoryBytes; i--)
+            {
+                if (Items[i].Image is not { } img) continue;
+                imageBytes -= (long)img.PixelWidth * img.PixelHeight * 4;
+                Items.RemoveAt(i);
+            }
         }
         catch (ExternalException) { } // Other process currently owns the clipboard.
         catch (Exception ex) { Log.Write("Clipboard event could not be read.", ex); }
