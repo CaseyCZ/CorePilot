@@ -192,7 +192,12 @@ public partial class MainWindow
             return BuildLyricsSpec(_browserForeground);
         }
 
-        var spec = view == IslandView.Idle ? BuildIdleSpec() : SpecFor(view);
+        var spec = view switch
+        {
+            IslandView.Idle => BuildIdleSpec(),
+            IslandView.Hub => new IslandSpec(_viewModel.HubViewWidth + 30, 88, 18, 0),
+            _ => SpecFor(view)
+        };
         if (view == IslandView.Idle || !_browserForeground)
         {
             return spec;

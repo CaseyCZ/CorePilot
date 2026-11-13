@@ -463,6 +463,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public double ClockFontSize => ClockText.Length > 7 ? 16 : ClockText.Length > 5 ? 20 : 25;
+    public double HubDateColumnWidth => Math.Clamp(DateText.Length * 6.4 + 8, 94, 178);
+    public double HubViewWidth => 380 + HubDateColumnWidth - 94;
 
     public void RefreshClockDisplay() => UpdateClock();
 
@@ -472,6 +474,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClockText = now.ToString(_settings.Current.TimeFormat, CultureInfo.CurrentCulture);
         DateText = now.ToString(_settings.Current.DateFormat, CultureInfo.CurrentCulture);
         OnPropertyChanged(nameof(ClockFontSize));
+        OnPropertyChanged(nameof(HubDateColumnWidth));
+        OnPropertyChanged(nameof(HubViewWidth));
     }
 
     // ----- Volume & power ------------------------------------------------

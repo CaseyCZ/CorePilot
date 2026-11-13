@@ -432,6 +432,14 @@ public partial class MainWindow : Window
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (_view == IslandView.Hub && e.PropertyName == nameof(MainViewModel.DateText))
+        {
+            var target = ResolveSpec(_view);
+            if (Math.Abs(target.Width - _spec.Width) > 0.5)
+                ApplySpec(target, fast: true);
+            return;
+        }
+
         if (_clickGuard && _view != IslandView.Idle && _view != IslandView.Peek &&
             e.PropertyName is nameof(MainViewModel.TrackTitle) or nameof(MainViewModel.TrackArtist)
                 or nameof(MainViewModel.HasMedia) or nameof(MainViewModel.HasLyrics)

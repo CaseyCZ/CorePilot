@@ -226,9 +226,9 @@ public sealed class MediaService : IDisposable
             if (!ReferenceEquals(_session, session) || _disposed ||
                 request != Interlocked.Read(ref _metadataRequest)) return;
 
-            var title = properties.Title ?? string.Empty;
-            var artist = properties.Artist ?? string.Empty;
-            var sourceApp = session.SourceAppUserModelId ?? string.Empty;
+            var title = SanitizeMetadata(properties.Title, 256);
+            var artist = SanitizeMetadata(properties.Artist, 160);
+            var sourceApp = SanitizeMetadata(session.SourceAppUserModelId, 256);
             var key = $"{artist}\u001f{title}";
             ImageSource? artwork = _current.Artwork;
 
@@ -248,6 +248,11 @@ public sealed class MediaService : IDisposable
                 {
                     artwork = await LoadArtworkAsync(properties);
                 }
+
+                // A newer metadata request may have arrived during artwork decoding.
+                // Do not let its predecessor start a fallback lookup or overwrite its cancellation token.
+                if (!ReferenceEquals(_session, session) || _disposed ||
+                    request != Interlocked.Read(ref _metadataRequest)) return;
 
                 if (artwork is null)
                 {
@@ -282,7 +287,7 @@ public sealed class MediaService : IDisposable
             {
                 Title = title,
                 Artist = artist,
-                Album = properties.AlbumTitle ?? string.Empty,
+                Album = SanitizeMetadata(properties.AlbumTitle, 160),
                 SourceApp = sourceApp,
                 IsPlaying = isPlaying,
                 Position = position,
@@ -346,6 +351,16 @@ public sealed class MediaService : IDisposable
         _artworkCancellation?.Dispose();
         _artworkCancellation = null;
         _artworkFetchKey = string.Empty;
+    }
+
+    private static string SanitizeMetadata(string? input, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        var text = input.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (text.Length <= maxLength) return text;
+        var length = maxLength;
+        if (char.IsHighSurrogate(text[length - 1])) --length;
+        return text[..length];
     }
 
     private static bool IsBrowserSource(string sourceApp)

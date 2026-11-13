@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Threading;
 using CorePilot.Infrastructure;
 using CorePilot.Models;
+using CorePilot.Services;
 using CorePilot.Views;
 
 namespace CorePilot.RangeRegression;
@@ -76,7 +77,19 @@ internal static class Program
             _ = new PlayerView();
             _ = new PeekView();
             _ = new WaterView();
-            Console.WriteLine("PASS: media, peek and water views load; unsafe values are rejected safely.");
+
+            // SettingsWindow is not normally displayed during startup. Construct it
+            // to detect missing XAML handlers/resources or binding initialization errors.
+            var settingsWindow = new SettingsWindow(new SettingsStore());
+            if (settingsWindow.FindName("MonitorCombo") is not ComboBox monitors ||
+                monitors.Items.Count == 0 ||
+                settingsWindow.FindName("TimeFormatCombo") is not ComboBox timeFormats ||
+                timeFormats.SelectedItem is null ||
+                settingsWindow.FindName("DateFormatCombo") is not ComboBox dateFormats ||
+                dateFormats.SelectedItem is null)
+                throw new InvalidOperationException("Settings UI failed to initialize.");
+            settingsWindow.Close();
+            Console.WriteLine("PASS: media, peek, water and Settings views load; unsafe values are rejected safely.");
             return 0;
         }
         catch (Exception ex)

@@ -83,7 +83,7 @@ public sealed class NotchShape : FrameworkElement
 
         geometry.Freeze();
         // Subtle glass outline without desktop capture or a GPU renderer.
-        var rim = new Pen(RimBrush, 0.8) { LineJoin = PenLineJoin.Round };
+        var rim = new Pen(RimBrush, 1.0) { LineJoin = PenLineJoin.Round };
         rim.Freeze();
         drawingContext.DrawGeometry(Fill, rim, geometry);
     }
