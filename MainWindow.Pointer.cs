@@ -281,6 +281,11 @@ public partial class MainWindow
 
     private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (e.Handled || e.Delta == 0 ||
+            !CorePilot.Infrastructure.WheelNavigationPolicy.ShouldNavigate(
+                e.OriginalSource as DependencyObject, IslandHost))
+            return;
+
         NavigateCarousel(e.Delta > 0 ? -1 : 1);
         e.Handled = true;
     }

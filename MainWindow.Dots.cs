@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -25,17 +26,21 @@ public partial class MainWindow
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
             };
-            var dot = new Border
+            var dot = new Button
             {
-                Width = 26, Height = 22, Background = Brushes.Transparent,
+                Width = 30, Height = 28, Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand, Tag = view, ToolTip = LabelFor(view),
-                Child = mark
+                Content = mark,
+                Style = (Style)FindResource("IslandDotButton")
             };
-            dot.MouseLeftButtonDown += (sender, e) =>
+            AutomationProperties.SetName(dot, LabelFor(view));
+            dot.Click += (sender, e) =>
             {
-                ActivateNavigationKeyboard();
+                var target = (Button)sender;
                 _collapseTimer.Stop();
-                SwitchTo((IslandView)((Border)sender).Tag, fast: true, explicitRequest: true);
+                SwitchTo((IslandView)target.Tag, fast: true, explicitRequest: true);
+                ActivateNavigationKeyboard(target);
                 e.Handled = true;
             };
             DotsPanel.Children.Add(dot);
@@ -50,7 +55,7 @@ public partial class MainWindow
         {
             var view = dot.Tag is IslandView v ? v : IslandView.Idle;
             var active = view == _view;
-            if (dot.Child is not Border mark) continue;
+            if (dot.Content is not Border mark) continue;
             mark.Width = active ? 16 : 6;
             mark.CornerRadius = new CornerRadius(4);
             mark.Background = active ? AccentFor(view) : _dotIdleBrush;
@@ -83,6 +88,7 @@ public partial class MainWindow
         {
             _dotsVisible = visible;
             DotsBar.IsHitTestVisible = visible;
+            DotsBar.IsEnabled = visible;
             if (!MotionEnabled)
             {
                 DotsSlide.BeginAnimation(TranslateTransform.YProperty, null);

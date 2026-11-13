@@ -22,15 +22,54 @@
         DragLeave="Window_DragLeave"
         Drop="Window_Drop">
     <Window.Resources>
+        <!-- Hit areas remain at least 44 DIP; no visible button fill, including hover. -->
         <Style x:Key="IslandNavArrow" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Opacity" Value="0.8" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="FocusRing" Margin="1" CornerRadius="9"
+                                    BorderBrush="#A664D2FF" BorderThickness="1"
+                                    Background="Transparent" IsHitTestVisible="False"
+                                    Visibility="Collapsed" />
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="Opacity" Value="1" />
+                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IslandDotButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="FocusRing" Margin="1" CornerRadius="8"
+                                    BorderBrush="#A664D2FF" BorderThickness="1"
+                                    Background="Transparent" IsHitTestVisible="False"
+                                    Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -53,25 +92,27 @@
                     </ContentControl.RenderTransform>
                 </ContentControl>
                 <Button x:Name="PreviousPageButton" Panel.ZIndex="10" Content="‹"
-                        Visibility="Collapsed" Width="31" Height="44" Margin="4,0,0,0"
+                        Visibility="Collapsed" Width="44" Height="44" Margin="0"
                         HorizontalAlignment="Left" VerticalAlignment="Center"
                         Foreground="#F0F6FF" Background="Transparent"
                         BorderThickness="0" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Předchozí obrazovka"
+                        AutomationProperties.Name="{Binding ToolTip, RelativeSource={RelativeSource Self}}"
                         Click="PreviousPage_Click" Style="{StaticResource IslandNavArrow}"/>
                 <Button x:Name="NextPageButton" Panel.ZIndex="10" Content="›"
-                        Visibility="Collapsed" Width="31" Height="44" Margin="0,0,4,0"
+                        Visibility="Collapsed" Width="44" Height="44" Margin="0"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Foreground="#F0F6FF" Background="Transparent"
                         BorderThickness="0" FontSize="25"
                         Padding="0" Cursor="Hand" ToolTip="Další obrazovka"
+                        AutomationProperties.Name="{Binding ToolTip, RelativeSource={RelativeSource Self}}"
                         Click="NextPage_Click" Style="{StaticResource IslandNavArrow}"/>
             </Grid>
 
             <Border x:Name="DotsBar" Margin="0,6,0,0" HorizontalAlignment="Center"
                     Background="{DynamicResource IslandGlassBrush}"
                     BorderBrush="{DynamicResource IslandRimBrush}" BorderThickness="0.7"
-                    CornerRadius="12" Padding="5,4" Opacity="0" IsHitTestVisible="False">
+                    CornerRadius="12" Padding="5,4" Opacity="0" IsHitTestVisible="False" IsEnabled="False">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="DotsSlide" />
                 </Border.RenderTransform>

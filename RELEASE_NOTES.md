@@ -1,4 +1,20 @@
-# CorePilot 2.4 — Island polish and reliability
+# CorePilot 2.4.1 — Navigation and Mini Player reliability
+
+## Interaction improvements
+- Navigation arrows retain a transparent appearance while offering 44 × 44 DIP hit areas and keyboard focus indicators.
+- Carousel navigation dots are real accessible buttons, with localized names and visible keyboard focus.
+- Wheel input over buttons, sliders, selectors and scrollable content no longer switches carousel pages.
+- The horizontal file shelf consumes vertical-wheel gestures to scroll files rather than switching pages.
+- Arrow-key page switching is confined to carousel navigation controls; active editors and sliders retain their own keyboard input.
+
+## Startup regression
+- A dedicated Mini Player regression check asserts that read-only `TrackProgress` is bound OneWay and evaluates successfully.
+
+---
+
+## Also included from CorePilot 2.4
+
+
 
 ## Personalization
 - The island now defaults to opaque black; optional Graphite/Void glass themes retain a subtle gradient and 1-DIP rim.

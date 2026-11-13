@@ -113,6 +113,7 @@
             </Grid>
 
             <ScrollViewer VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto"
+                          PreviewMouseWheel="ShelfScroller_PreviewMouseWheel"
                           Padding="0,0,0,3"
                           Visibility="{Binding HasShelfItems, Converter={StaticResource BoolVis}}">
                 <ItemsControl ItemsSource="{Binding ShelfItems}">

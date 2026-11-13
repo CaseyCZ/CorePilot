@@ -19,6 +19,11 @@ internal static class Program
         public object? Value { get; init; }
     }
 
+    private sealed class ReadOnlyProgress
+    {
+        public double TrackProgress => 0.42;
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -80,6 +85,42 @@ internal static class Program
             cache.Clear();
             if (cache.Count != 0)
                 throw new InvalidOperationException("LRU cache did not clear.");
+
+            // Wheel input navigates only on passive island space.
+            var wheelRoot = new Grid();
+            var passive = new TextBlock { Text = "Overview" };
+            var slider = new Slider();
+            var button = new Button { Content = "Play" };
+            var scroll = new ScrollViewer { Content = new TextBlock { Text = "Scroll content" } };
+            wheelRoot.Children.Add(passive);
+            wheelRoot.Children.Add(slider);
+            wheelRoot.Children.Add(button);
+            wheelRoot.Children.Add(scroll);
+            if (!WheelNavigationPolicy.ShouldNavigate(passive, wheelRoot) ||
+                !WheelNavigationPolicy.ShouldNavigate(wheelRoot, wheelRoot) ||
+                WheelNavigationPolicy.ShouldNavigate(slider, wheelRoot) ||
+                WheelNavigationPolicy.ShouldNavigate(button, wheelRoot) ||
+                WheelNavigationPolicy.ShouldNavigate(scroll, wheelRoot) ||
+                WheelNavigationPolicy.ShouldNavigate(new Button(), wheelRoot))
+                throw new InvalidOperationException("Island wheel routing is not confined to passive content.");
+
+            _ = new ShelfView();
+
+            // Regress the original startup crash: MiniPlayer's read-only TrackProgress
+            // must be bound OneWay, never via the WPF default TwoWay mode.
+            var miniPlayer = new MiniPlayerWindow(null!, () => { });
+            if (miniPlayer.Content is not Border playerFrame ||
+                playerFrame.Child is not Grid playerGrid ||
+                playerGrid.Children.OfType<ProgressBar>().SingleOrDefault() is not { } miniProgress)
+                throw new InvalidOperationException("Mini player progress bar could not be found.");
+
+            miniPlayer.DataContext = new ReadOnlyProgress();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+            var miniBinding = BindingOperations.GetBinding(miniProgress, RangeBase.ValueProperty);
+            if (miniBinding?.Mode != BindingMode.OneWay)
+                throw new InvalidOperationException("Mini player TrackProgress binding must be OneWay.");
+            AssertEqual(0.42, miniProgress.Value, "read-only Mini Player TrackProgress");
+            miniPlayer.Close();
 
             var spring = new SubtleSpringEase { EasingMode = EasingMode.EaseIn };
             AssertEqual(0, spring.Ease(0), "spring start");

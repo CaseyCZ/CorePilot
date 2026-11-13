@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -38,7 +39,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _fullscreenTimer;
     private readonly DispatcherTimer _ghostTimer;
     private readonly Dictionary<IslandView, UserControl> _viewCache = new();
-    private readonly List<Border> _dots = new();
+    private readonly List<Button> _dots = new();
     private readonly SolidColorBrush _dotIdleBrush = new(Color.FromArgb(140, 255, 255, 255));
     private readonly FontFamily _uiFont;
     private readonly FontFamily _displayFont;
@@ -150,8 +151,12 @@ public partial class MainWindow : Window
     private void OnUiLanguageChanged(object? sender, EventArgs e)
     {
         foreach (var dot in _dots)
-            if (dot.Tag is IslandView view)
-                dot.ToolTip = LabelFor(view);
+        {
+            if (dot.Tag is not IslandView view) continue;
+            var label = LabelFor(view);
+            dot.ToolTip = label;
+            AutomationProperties.SetName(dot, label);
+        }
         PreviousPageButton.ToolTip = LanguageManager.T("PreviousPage");
         NextPageButton.ToolTip = LanguageManager.T("NextPage");
     }

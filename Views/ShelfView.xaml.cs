@@ -17,6 +17,19 @@ public partial class ShelfView : UserControl
 
     private MainViewModel? Vm => DataContext as MainViewModel;
 
+    private void ShelfScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer scroll || scroll.ScrollableWidth <= 0 || e.Delta == 0)
+            return;
+
+        // The vertical mouse wheel scrolls the horizontal file shelf.
+        // The same gesture must never navigate the island carousel.
+        var target = Math.Clamp(scroll.HorizontalOffset - e.Delta * 0.8,
+                                0, scroll.ScrollableWidth);
+        scroll.ScrollToHorizontalOffset(target);
+        e.Handled = true;
+    }
+
     private void Card_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: ShelfItem item })
