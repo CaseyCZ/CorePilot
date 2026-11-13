@@ -53,6 +53,8 @@ public sealed class AppSettings
     public string DateFormat { get; set; } = "ddd, d MMM";
     public bool BlackIslandBackground { get; set; } = true;
     public bool ShowNavigationArrows { get; set; } = true;
+    public bool EnableTransitions { get; set; } = true;
+    public string MonitorDeviceName { get; set; } = string.Empty;
 }
 
 public sealed class SettingsStore

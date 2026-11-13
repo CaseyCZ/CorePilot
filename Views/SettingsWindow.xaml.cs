@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
     private readonly Action<bool>? _miniPlayerChanged;
     private readonly Action? _clockFormatChanged;
     private readonly Action? _appearanceChanged;
+    private readonly Action? _monitorChanged;
     private bool _loading = true;
 
     public SettingsWindow(
@@ -38,7 +39,8 @@ public partial class SettingsWindow : Window
         Action<bool>? clipboardChanged = null,
         Action<bool>? miniPlayerChanged = null,
         Action? clockFormatChanged = null,
-        Action? appearanceChanged = null)
+        Action? appearanceChanged = null,
+        Action? monitorChanged = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _clickGuardChanged = clickGuardChanged;
@@ -50,8 +52,10 @@ public partial class SettingsWindow : Window
         _miniPlayerChanged = miniPlayerChanged;
         _clockFormatChanged = clockFormatChanged;
         _appearanceChanged = appearanceChanged;
+        _monitorChanged = monitorChanged;
 
         InitializeComponent();
+        LoadMonitorChoices();
 
         VersionText.Text = $"CorePilot v{GetVersion()}";
 
@@ -76,6 +80,10 @@ public partial class SettingsWindow : Window
         UpdateFormatExamples();
         TimeFormatCombo.SelectedValue = s.TimeFormat;
         DateFormatCombo.SelectedValue = s.DateFormat;
+        ThemeCombo.SelectedValue = s.Theme is "Graphite" or "Void" ? s.Theme : "Graphite";
+        EnableTransitionsCheck.IsChecked = s.EnableTransitions;
+        MonitorCombo.SelectedValue = s.MonitorDeviceName;
+        if (MonitorCombo.SelectedItem is null) MonitorCombo.SelectedIndex = 0;
         BlackIslandBackgroundCheck.IsChecked = s.BlackIslandBackground;
         ShowNavigationArrowsCheck.IsChecked = s.ShowNavigationArrows;
         StartWithWindowsCheck.IsChecked = Autostart.IsEnabled();
@@ -101,6 +109,53 @@ public partial class SettingsWindow : Window
         BreakMinutesBox.Text = s.BreakMinutes.ToString();
         WaterGoalBox.Text = s.WaterGoalMl.ToString();
         ReminderBox.Text = s.WaterReminderMinutes.ToString();
+    }
+
+    private void LoadMonitorChoices()
+    {
+        MonitorCombo.Items.Clear();
+        MonitorCombo.Items.Add(new ComboBoxItem
+        {
+            Tag = string.Empty,
+            Content = LanguageManager.T("SettingsAutoMonitor")
+        });
+
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        for (var i = 0; i < screens.Length; i++)
+        {
+            var monitor = screens[i];
+            MonitorCombo.Items.Add(new ComboBoxItem
+            {
+                Tag = monitor.DeviceName,
+                Content = $"#{i + 1} — {monitor.Bounds.Width} × {monitor.Bounds.Height}"
+                    + (monitor.Primary ? " ★" : string.Empty)
+            });
+        }
+    }
+
+    private void Monitor_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || MonitorCombo.SelectedValue is not string name) return;
+        _settings.Current.MonitorDeviceName = name;
+        _settings.Save();
+        _monitorChanged?.Invoke();
+    }
+
+    private void Theme_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || ThemeCombo.SelectedValue is not string name) return;
+        if (name is not ("Graphite" or "Void")) return;
+        _settings.Current.Theme = name;
+        _settings.Save();
+        ThemeService.Apply(name);
+        _appearanceChanged?.Invoke();
+    }
+
+    private void Transitions_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Current.EnableTransitions = EnableTransitionsCheck.IsChecked == true;
+        _settings.Save();
     }
 
     private void UpdateFormatExamples()
@@ -166,6 +221,17 @@ public partial class SettingsWindow : Window
         _settings.Save();
         LanguageManager.Current.SetLanguage(code);
         UpdateFormatExamples();
+        _loading = true;
+        try
+        {
+            var selectedMonitor = MonitorCombo.SelectedValue as string ?? string.Empty;
+            LoadMonitorChoices();
+            MonitorCombo.SelectedValue = selectedMonitor;
+        }
+        finally
+        {
+            _loading = false;
+        }
         _clockFormatChanged?.Invoke();
     }
 
@@ -525,6 +591,7 @@ public partial class SettingsWindow : Window
 
         _settings.ResetToDefaults();
         LanguageManager.Current.SetLanguage(_settings.Current.Language);
+        ThemeService.Apply(_settings.Current.Theme);
 
         Autostart.SetEnabled(_settings.Current.StartWithWindows);
 
@@ -547,5 +614,6 @@ public partial class SettingsWindow : Window
         _miniPlayerChanged?.Invoke(_settings.Current.TaskbarWidget);
         _clockFormatChanged?.Invoke();
         _appearanceChanged?.Invoke();
+        _monitorChanged?.Invoke();
     }
 }

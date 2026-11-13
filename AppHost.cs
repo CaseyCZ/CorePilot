@@ -110,7 +110,8 @@ public sealed class AppHost : IDisposable
             clipboardChanged: enabled => _window?.SetClipboardEnabled(enabled),
             miniPlayerChanged: _ => SyncMiniPlayer(),
             clockFormatChanged: () => _viewModel?.RefreshClockDisplay(),
-            appearanceChanged: () => _window?.RefreshAppearanceSettings());
+            appearanceChanged: () => _window?.RefreshAppearanceSettings(),
+            monitorChanged: () => _window?.RefreshDisplaySettings());
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();

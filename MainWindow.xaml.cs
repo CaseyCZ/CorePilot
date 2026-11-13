@@ -156,6 +156,12 @@ public partial class MainWindow : Window
         NextPageButton.ToolTip = LanguageManager.T("NextPage");
     }
 
+    public void RefreshDisplaySettings()
+    {
+        RepositionWindow();
+        UpdateWindowRegion();
+    }
+
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
@@ -345,7 +351,7 @@ public partial class MainWindow : Window
             _hwnd,
             ActualWidth > 0 ? ActualWidth : Width,
             ActualHeight > 0 ? ActualHeight : Height,
-            _spec.Height, _view == IslandView.Idle);
+            _spec.Height, _view == IslandView.Idle, _viewModel.Settings.Current.MonitorDeviceName);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)

@@ -217,6 +217,23 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="{loc:Tr Key=SettingsMonitor}" FontSize="12.5"
+                               Foreground="{DynamicResource InkBrush}" Width="185" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="MonitorCombo" Width="155" Height="31" SelectedValuePath="Tag"
+                              SelectionChanged="Monitor_Changed" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="{loc:Tr Key=SettingsTheme}" FontSize="12.5"
+                               Foreground="{DynamicResource InkBrush}" Width="185" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ThemeCombo" Width="155" Height="31" SelectedValuePath="Tag"
+                              SelectionChanged="Theme_Changed">
+                        <ComboBoxItem Tag="Graphite" Content="Graphite" />
+                        <ComboBoxItem Tag="Void" Content="Void" />
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="{loc:Tr Key=SettingsTimeFormat}" FontSize="12.5"
                                Foreground="{DynamicResource InkBrush}" Width="185" VerticalAlignment="Center"/>
                     <ComboBox x:Name="TimeFormatCombo" Width="155" Height="31" SelectedValuePath="Tag"
@@ -241,6 +258,9 @@
                     </ComboBox>
                 </StackPanel>
 
+                <CheckBox x:Name="EnableTransitionsCheck" Content="{loc:Tr Key=SettingsTransitions}"
+                          Style="{StaticResource SettingCheck}"
+                          Checked="Transitions_Toggled" Unchecked="Transitions_Toggled" />
                 <CheckBox x:Name="BlackIslandBackgroundCheck" Content="{loc:Tr Key=SettingsBlackBackground}"
                           Style="{StaticResource SettingCheck}"
                           Checked="Appearance_Toggled" Unchecked="Appearance_Toggled" />

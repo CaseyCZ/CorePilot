@@ -9,9 +9,12 @@ namespace CorePilot;
 
 public partial class MainWindow
 {
+    private bool MotionEnabled =>
+        _viewModel.Settings.Current.EnableTransitions && SystemParameters.ClientAreaAnimation;
+
     private void AnimateTo(IslandSpec spec, bool fast)
     {
-        if (!SystemParameters.ClientAreaAnimation)
+        if (!MotionEnabled)
         {
             ++_transition;
             ContentHost.BeginAnimation(OpacityProperty, null);
@@ -83,7 +86,7 @@ public partial class MainWindow
 
     private void ApplySpec(IslandSpec spec, bool fast)
     {
-        if (!SystemParameters.ClientAreaAnimation)
+        if (!MotionEnabled)
         {
             SetImmediate(spec);
             return;

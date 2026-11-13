@@ -54,8 +54,16 @@ public partial class MainWindow
             mark.Width = active ? 16 : 6;
             mark.CornerRadius = new CornerRadius(4);
             mark.Background = active ? AccentFor(view) : _dotIdleBrush;
-            mark.BeginAnimation(OpacityProperty, new DoubleAnimation(
-                active ? 1.0 : 0.65, TimeSpan.FromMilliseconds(160)));
+            if (MotionEnabled)
+            {
+                mark.BeginAnimation(OpacityProperty, new DoubleAnimation(
+                    active ? 1.0 : 0.65, TimeSpan.FromMilliseconds(160)));
+            }
+            else
+            {
+                mark.BeginAnimation(OpacityProperty, null);
+                mark.Opacity = active ? 1.0 : 0.65;
+            }
         }
     }
 
@@ -75,6 +83,16 @@ public partial class MainWindow
         {
             _dotsVisible = visible;
             DotsBar.IsHitTestVisible = visible;
+            if (!MotionEnabled)
+            {
+                DotsSlide.BeginAnimation(TranslateTransform.YProperty, null);
+                DotsBar.BeginAnimation(OpacityProperty, null);
+                DotsSlide.Y = 0;
+                DotsBar.Opacity = visible ? 1 : 0;
+                UpdateWindowRegion();
+                return;
+            }
+
             var beginTime = visible ? TimeSpan.FromMilliseconds(fast ? 40 : 190) : TimeSpan.Zero;
             var duration = TimeSpan.FromMilliseconds(visible ? 220 : 140);
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };

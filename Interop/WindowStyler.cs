@@ -33,9 +33,11 @@ internal static class WindowStyler
     /// </summary>
     public static void PositionByTaskbar(IntPtr hwnd, double windowWidthDips,
                                          double windowHeightDips, double islandHeightDips,
-                                         bool compact)
+                                         bool compact, string? monitorDeviceName = null)
     {
-        var screen = Screen.FromHandle(hwnd);
+        var screen = Screen.AllScreens.FirstOrDefault(display =>
+            string.Equals(display.DeviceName, monitorDeviceName, StringComparison.OrdinalIgnoreCase))
+            ?? Screen.FromHandle(hwnd);
         var bounds = screen.Bounds;
         var work = screen.WorkingArea;
         var dpi = NativeMethods.GetDpiForWindow(hwnd);
