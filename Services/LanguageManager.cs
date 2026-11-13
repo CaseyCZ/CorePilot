@@ -91,6 +91,7 @@ public sealed class LanguageManager : INotifyPropertyChanged
         ["SettingsMonitor"] = new("Monitor ostrůvku", "Island display"),
         ["SettingsAutoMonitor"] = new("Automaticky", "Automatic"),
         ["SettingsTheme"] = new("Barevné téma", "Color theme"),
+        ["SettingsLatestRelease"] = new("Nejnovější verze CorePilotu", "Latest CorePilot release"),
         ["Overview"] = new("Přehled", "Overview"),
         ["PreviousPage"] = new("Předchozí obrazovka", "Previous view"),
         ["NextPage"] = new("Další obrazovka", "Next view"),

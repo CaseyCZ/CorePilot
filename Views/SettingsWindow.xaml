@@ -436,7 +436,7 @@
 
             <StackPanel x:Name="PanelTentang" Visibility="Collapsed">
                 <TextBlock Text="{loc:Tr Key=X006}" Style="{StaticResource SectionTitle}" />
-                <TextBlock x:Name="VersionText" Text="CorePilot v1.3.0"
+                <TextBlock x:Name="VersionText" Text="CorePilot v2.4.0"
                            Style="{StaticResource RowLabel}" Margin="0,8,0,0" />
                 <TextBlock Text="{loc:Tr Key=X036}"
                            Style="{StaticResource SectionNote}" Margin="0,6,0,0" />
@@ -447,9 +447,9 @@
                     <TextBlock VerticalAlignment="Center" Margin="18,0,0,0">
                         <Hyperlink Foreground="{DynamicResource CyanBrush}"
                                    TextDecorations="Underline"
-                                   NavigateUri="https://github.com/Pidzzzz/nusa-lite/releases"
+                                   NavigateUri="https://github.com/CaseyCZ/CorePilot/releases/latest"
                                    RequestNavigate="ReleaseLink_RequestNavigate">
-                            Lihat rilis terbaru
+                            <Run Text="{loc:Tr Key=SettingsLatestRelease}" />
                         </Hyperlink>
                     </TextBlock>
                 </StackPanel>

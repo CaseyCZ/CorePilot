@@ -1,5 +1,5 @@
 #define AppName "CorePilot"
-#define AppVersion "2.3.0"
+#define AppVersion "2.4.0"
 #define AppPublisher "CaseyCZ"
 
 [Setup]
@@ -21,7 +21,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0
+MinVersion=10.0.19041
 UninstallDisplayIcon={app}\CorePilot.exe
 CloseApplications=yes
 RestartApplications=no

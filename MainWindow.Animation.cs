@@ -74,7 +74,7 @@ public partial class MainWindow
             var slideIn = new DoubleAnimation(7, 0, TimeSpan.FromMilliseconds(fast ? 220 : 320))
             {
                 BeginTime = beginTime,
-                EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut },
+                EasingFunction = new CorePilot.Infrastructure.SubtleSpringEase { EasingMode = EasingMode.EaseIn },
                 FillBehavior = FillBehavior.Stop
             };
             ContentSlide.BeginAnimation(TranslateTransform.YProperty, slideIn);

@@ -64,6 +64,16 @@ internal static class Program
                 AssertEqual(expected, bar.Value, "real WPF RangeBase.Value binding");
             }
 
+            var spring = new SubtleSpringEase { EasingMode = EasingMode.EaseIn };
+            AssertEqual(0, spring.Ease(0), "spring start");
+            AssertEqual(1, spring.Ease(1), "spring end");
+            for (var t = 0.0; t <= 1.0; t += 0.01)
+            {
+                var value = spring.Ease(t);
+                if (!double.IsFinite(value) || value < -0.01 || value > 1.07)
+                    throw new InvalidOperationException("Spring easing exceeds its bounded overshoot.");
+            }
+
             AssertEqual(0.15, FiniteRange.Clamp(double.NaN, 0.15, 1.0), "NaN guard opacity");
             AssertEqual(0.15, FiniteRange.Clamp(double.PositiveInfinity, 0.15, 1.0), "nonfinite guard opacity");
             AssertEqual(1.0, FiniteRange.Clamp(12.0, 0.15, 1.0), "clamped guard opacity");

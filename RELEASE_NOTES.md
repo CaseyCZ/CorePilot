@@ -1,17 +1,29 @@
-# CorePilot 2.3 — Improved reliability and refined glass appearance
+# CorePilot 2.4 — Island polish and reliability
 
-## Stability
-- Adds defensive validation for all progress values coming from Windows media sessions and user settings. Undefined or infinite values can no longer reach WPF progress controls.
-- Guards saved opacity settings against invalid values.
-- Improves startup diagnostics, including the underlying exception when a window fails to load.
-- Updates the Windows startup smoke test to **reject error dialog windows** rather than passing just because the process is still running.
-- Includes Windows regression tests that feed NaN, infinities and out-of-range numbers to real WPF progress controls and load the actual media/peek/water views.
+## Personalization
+- The island now defaults to opaque black; optional Graphite/Void glass themes retain a subtle gradient and 1-DIP rim.
+- Navigation arrows no longer have a filled background.
+- The overview shows date only, without time-of-day greetings.
+- Content slide transitions use a subtly damped spring easing function, while HWND sizes remain non-overshooting.
+- Date and time formats are configurable, previewed in CZ/EN, persisted locally and refreshed immediately.
+- Longer date formats increase the overview width rather than clipping the date.
+- Settings now includes monitor selection, theme selection and transition animation controls. System-wide reduced-motion settings are respected.
 
-## Design
-- Adds a restrained dark, translucent gradient and thin glass rim to the main Dynamic Island.
-- Refines the graphite theme with cool mint/blue accents and a matching compact navigation strip.
-- Inspired by V-Notch's clean desktop aesthetic; this is **not** its DirectX 11 Liquid Glass/refraction engine.
+## Stability and performance
+- Per-monitor island placement replaces the primary-screen-only assumption; display changes trigger safe repositioning.
+- Position updates no longer force hidden fullscreen overlays to show.
+- Windows media session updates marshal back to the WPF Dispatcher and coalesce pending timeline refreshes.
+- Media metadata refreshes reject stale asynchronous results; external metadata is length-limited.
+- Playback timeline polling slows to 2.5 seconds when not playing, and remains at 500 ms during playback.
+- Clipboard history remains opt-in and RAM-only; retained image pixel data now has a 16 MiB budget estimate.
+- Artwork decoding releases source streams and rejects oversized encoded images.
+- Win32 region replacement avoids duplicate work and checks GDI errors; event subscriptions and timers are cleaned up.
 
-CorePilot remains docked in its compact overview within a top/bottom Windows taskbar when inactive. Expanded views, left/right arrows, clickable dots and keyboard navigation are preserved. Czech and English remain available.
+## Verification
+- CI builds the .NET 10 WPF app for Windows x64, runs progress/visual-load regression tests, launches the published executable, installs the Inno Setup EXE silently and verifies installed startup.
+- The settings window is included in the regression coverage, including the new format/display selectors.
+- Manual validation is still required for mixed-DPI, monitor unplug, exclusive fullscreen games, sleep/resume and accessibility.
 
-Windows 10 and 11, x64. The installer is unsigned. Includes required MIT license and attribution for the NusaLite base.
+## Compatibility
+Windows 10 build 19041 (2004) or later, Windows 11, x64. The installer is unsigned; SmartScreen may warn.
+MIT license and attribution for the NusaLite open-source base remain included.
